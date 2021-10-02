@@ -4,31 +4,40 @@ using System.Drawing;
 using System.Windows.Forms;
 
 public class AutoForm : Form {
-    public AutoForm( bool hasMenu = true, Form mdiParent = null, Panel layoutPanel = null ) {
+    public AutoForm(
+        bool hasMenu = true,
+        bool isMdiContainer = false,
+        Form mdiParent = null,
+        Panel layoutPanel = null
+    ) {
         SuspendLayout();
 
         // Font = new Font( new FontFamily( "Microsoft Sans Serif" ), 8f );
 
         MdiParent = mdiParent;
+        IsMdiContainer = isMdiContainer;
 
         // MinimumSize = new( Width, Height );
-        Rectangle rect = Screen.FromControl( this ).Bounds;
+        Rectangle rect = Screen.PrimaryScreen.Bounds;
+        // not Screen.FromControl( this ).Bounds due to handle creation error (?)
         MaximumSize = new( rect.Width, rect.Height );
 
-        this.layoutPanel = layoutPanel ?? new() {
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Dock = DockStyle.Top,
-            AutoScroll = true
-        };
+        this.layoutPanel = ( layoutPanel != null || IsMdiContainer )
+            ? layoutPanel
+            : new FlowLayoutPanel() {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+            };
 
-        Controls.Add( this.layoutPanel );
+        if ( this.layoutPanel != null ) {
+            Controls.Add( this.layoutPanel );
+        }
 
         if ( hasMenu ) {
             menuStrip = new() {
                 RenderMode = ToolStripRenderMode.System,
                 Dock = DockStyle.Top,
-                Visible = mdiParent == null
+                Visible = ( mdiParent == null ),
             };
             MainMenuStrip = menuStrip;
             Controls.Add( MainMenuStrip ); // has to be added last to order the docks properly
@@ -54,6 +63,15 @@ public class AutoForm : Form {
     public new Form MdiParent {
         get => base.MdiParent;
         private init => base.MdiParent = value;
+    }
+
+    // ReSharper disable once InconsistentNaming
+    /// <summary>
+    ///     added to encapsulate the setter for consistency
+    /// </summary>
+    public new bool IsMdiContainer {
+        get => base.IsMdiContainer;
+        private init => base.IsMdiContainer = value;
     }
 
     public void add( params Control[] items ) {

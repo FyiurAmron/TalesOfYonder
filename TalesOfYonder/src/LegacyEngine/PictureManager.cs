@@ -22,7 +22,7 @@ public sealed class PictureManager : IDisposable {
         managedPictures.forEach( list
                                      => list.forEach( picture
                                                           => picture.Dispose() ) );
-        pictureFileStream.Dispose();
+        pictureFileStream?.Dispose();
     }
 
     private void init() {
@@ -32,7 +32,7 @@ public sealed class PictureManager : IDisposable {
         pictureFileStream = new( App.ASSET_PATH + fileName, FileMode.Open );
     }
 
-    private List<Picture> loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
+    private (List<Picture>,string) loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
         int width = pictureGroupDescriptor.picWidth;
         int height = pictureGroupDescriptor.picHeight;
         List<Picture> pictures = new();
@@ -55,7 +55,7 @@ public sealed class PictureManager : IDisposable {
 
         managedPictures.Add( pictures );
 
-        return pictures;
+        return (pictures, pictureGroupDescriptor.description);
     }
 
     private void end() {
@@ -70,11 +70,11 @@ public sealed class PictureManager : IDisposable {
 
     public void processAllPictureGroups(
         IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors,
-        Action<List<Picture>> pictureListAction
+        Action<(List<Picture> pictures,string description)> action
     ) {
         init();
         
-        pictureGroupDescriptors.Select( loadPictureGroup ).forEach( pictureListAction );
+        pictureGroupDescriptors.Select( loadPictureGroup ).forEach( action );
         
         end();
     }
