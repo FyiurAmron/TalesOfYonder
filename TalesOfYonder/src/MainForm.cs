@@ -1,7 +1,6 @@
 ﻿namespace TalesOfYonder {
 
 using System.Collections.Generic;
-using System.Linq;
 using System.Windows.Forms;
 using LegacyEngine;
 using Vax.FormUtils;
@@ -25,7 +24,7 @@ public partial class MainForm : AutoForm {
     private static Control[] createPictureControls( List<Picture> pictures ) {
         Control[] controls = new Control[pictures.Count];
         foreach ( int i in ..pictures.Count ) {
-            var picture = pictures[i];
+            Picture picture = pictures[i];
             PictureBox pb = new() {
                 Image = picture.bitmap,
                 SizeMode = PictureBoxSizeMode.AutoSize
@@ -39,21 +38,18 @@ public partial class MainForm : AutoForm {
     }
 
     private void loadAllPictures() {
-        pictureManager.init();
-
         // [InstantHandle]
-        Const.yt2PictureGroupDescriptors
-             .Select( pgd => pictureManager.loadPicturePack( pgd ) )
-             .forEach( pictureList => {
-                 FlowLayoutPanel panel = new() {
-                     AutoSize = true,
-                     AutoSizeMode = AutoSizeMode.GrowAndShrink
-                 };
-                 panel.Controls.AddRange( createPictureControls( pictureList ) );
-                 add( panel );
-             } );
-
-        pictureManager.end();
+        pictureManager.processAllPictureGroups(
+            Const.yt2PictureGroupDescriptors,
+            pictureList => {
+                FlowLayoutPanel panel = new() {
+                    AutoSize = true,
+                    AutoSizeMode = AutoSizeMode.GrowAndShrink
+                };
+                panel.Controls.AddRange( createPictureControls( pictureList ) );
+                add( panel );
+            }
+        );
     }
 
     /// <summary>

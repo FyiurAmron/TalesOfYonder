@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
 using Vax.Reversing.Utils;
 
@@ -11,7 +12,7 @@ public sealed class PictureManager : IDisposable {
     public readonly string fileName;
     public readonly PaletteManager paletteManager = new( App.ASSET_PATH );
     public readonly List<List<Picture>> managedPictures = new();
-    
+
     public Palette defaultPalette;
     public FileStream pictureFileStream;
 
@@ -24,14 +25,14 @@ public sealed class PictureManager : IDisposable {
         pictureFileStream.Dispose();
     }
 
-    public void init() {
+    private void init() {
         paletteManager.add( Const.paletteFilenames );
         defaultPalette = paletteManager[Const.DEFAULT_PALETTE_NAME];
 
         pictureFileStream = new( App.ASSET_PATH + fileName, FileMode.Open );
     }
 
-    public List<Picture> loadPicturePack( PictureGroupDescriptor pictureGroupDescriptor ) {
+    private List<Picture> loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
         int width = pictureGroupDescriptor.picWidth;
         int height = pictureGroupDescriptor.picHeight;
         List<Picture> pictures = new();
@@ -57,7 +58,7 @@ public sealed class PictureManager : IDisposable {
         return pictures;
     }
 
-    public void end() {
+    private void end() {
         if ( pictureFileStream.Position != pictureFileStream.Length ) {
             MessageBox.Show( "not all data has been read:"
                              + $" pos {pictureFileStream.Position}"
@@ -65,6 +66,17 @@ public sealed class PictureManager : IDisposable {
         }
 
         pictureFileStream.Dispose();
+    }
+
+    public void processAllPictureGroups(
+        IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors,
+        Action<List<Picture>> pictureListAction
+    ) {
+        init();
+        
+        pictureGroupDescriptors.Select( loadPictureGroup ).forEach( pictureListAction );
+        
+        end();
     }
 }
 
