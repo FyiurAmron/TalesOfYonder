@@ -11,7 +11,7 @@ public sealed class ByteBackedBitmap : IDisposable {
     public ByteBackedBitmap( int width, int height, PixelFormat pixelFormat, byte[] bytes = null ) {
         bitsPerPixel = ( (uint) pixelFormat << 16 ) >> 24;
         stride = Misc.roundUp( (uint) width * bitsPerPixel, 4 * 8 ) / 8;
-        // stride = 318;
+
         this.bytes = bytes ?? new byte[height * stride];
 
         pinnedBytes = GCHandle.Alloc( bytes, GCHandleType.Pinned );
@@ -27,7 +27,7 @@ public sealed class ByteBackedBitmap : IDisposable {
 
     public void Dispose() {
         bitmap?.Dispose();
-        // pinnedBytes.Free();
+        pinnedBytes.Free();
     }
 
     public void setPalette( Color[] palette ) {
@@ -38,7 +38,7 @@ public sealed class ByteBackedBitmap : IDisposable {
         ColorPalette cp = bitmap.Palette;
         Color[] cpEntries = cp.Entries;
 
-        for ( short i = 0; i < cpEntries.Length; i++ ) { // max palette size is 1 << 8 (256) per def
+        foreach ( int i in ..cpEntries.Length ) { // max palette size is 1 << 8 (256) per def
             cpEntries[i] = setter( (byte) i );
         }
 

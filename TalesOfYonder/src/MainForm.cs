@@ -1,41 +1,101 @@
 ﻿namespace TalesOfYonder {
 
+using System;
+using System.Collections.Generic;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Windows.Forms;
+using LegacyEngine;
+using Vax.FormUtils;
 using Vax.Reversing.Utils;
 
-public partial class MainForm : Form {
-    private const int IMG_WIDTH = 318;
-    private const int IMG_HEIGHT = 198;
+public partial class MainForm : AutoForm {
+    private readonly List<IDisposable> disposables = new();
 
-    // private const int IMG_SIZE = IMG_WIDTH * IMG_HEIGHT; // 62964 XD
+    private readonly PaletteManager paletteManager = new( App.ASSET_PATH );
+    private Palette defaultPalette;
 
-    private const string ASSET_PATH = "asset/";
-
-    public MainForm() {
+    public MainForm() : base( layoutPanel:
+                              new TableLayoutPanel() {
+                                  // BackColor = System.Drawing.Color.Black,
+                                  AutoSize = true,
+                                  Dock = DockStyle.Fill,
+                                  AutoScroll = true
+                              } ) {
         InitializeComponent();
 
-        openPictures( "YT2_PICTURES.VGA" );
+        loadAllPictures( Const.YT2_PICTURE_FILENAME );
     }
 
-    private void openPictures( string fileName ) {
-        int actualWidth = Misc.roundUp( IMG_WIDTH, 4 );
-        byte[] imgBuf = new byte[actualWidth * IMG_HEIGHT];
-        using FileStream fileStream = new( ASSET_PATH + fileName, FileMode.Open );
-        for ( int y = 0; y < IMG_HEIGHT; y++ ) {
-            fileStream.Read( imgBuf, y * actualWidth, IMG_WIDTH );
+    private Control[] loadPicturePack(
+        FileStream fileStream, PictureGroupDescriptor pictureGroupDescriptor
+    ) {
+        int width = pictureGroupDescriptor.picWidth;
+        int height = pictureGroupDescriptor.picHeight;
+        List<Control> controls = new();
+        int actualWidth = Misc.roundUp( width, 4 );
+        foreach ( int i in ..pictureGroupDescriptor.picCount ) {
+            byte[] imgBuf = new byte[actualWidth * height];
+            foreach ( int y in ..height ) {
+                if ( fileStream.Read( imgBuf, y * actualWidth, width ) != width ) {
+                    throw new EndOfStreamException();
+                }
+            }
+
+            ByteBackedBitmap bmp = new( width, height, PixelFormat.Format8bppIndexed, imgBuf );
+            disposables.Add( bmp );
+
+            bmp.setPalette( ( paletteManager[pictureGroupDescriptor.getPaletteName( i )] ?? defaultPalette ).entries );
+
+            PictureBox pb = new() {
+                Image = bmp.bitmap,
+                SizeMode = PictureBoxSizeMode.AutoSize
+            };
+
+            controls.Add( pb );
         }
 
-        ByteBackedBitmap bmp = new( IMG_WIDTH, IMG_HEIGHT, PixelFormat.Format8bppIndexed, imgBuf );
-        // note: don't dispose this ^ before disposing the form! 
+        return controls.ToArray();
+    }
 
-        PictureBox pb = new() {
-            Image = bmp.bitmap,
-            SizeMode = PictureBoxSizeMode.AutoSize
-        };
+    private void loadAllPictures( string fileName ) {
+        using FileStream assetFileStream = new( App.ASSET_PATH + fileName, FileMode.Open );
 
-        Controls.Add( pb );
+        paletteManager.add( Const.paletteFilenames );
+        defaultPalette = paletteManager[Const.DEFAULT_PALETTE_NAME];
+
+        // [InstantHandle]
+        Const.yt2PictureGroupDescriptors
+             .Select( pgd => loadPicturePack( assetFileStream, pgd ) )
+             .forEach( controls => {
+                 FlowLayoutPanel panel = new() {
+                     AutoSize = true,
+                     AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                 };
+                 panel.Controls.AddRange( controls );
+                 add( panel );
+             } );
+
+        if ( assetFileStream.Position != assetFileStream.Length ) {
+            MessageBox.Show( "not all data has been read:"
+                             + $" pos {assetFileStream.Position}"
+                             + $" vs len {assetFileStream.Length}" );
+        }
+    }
+
+    /// <summary>
+    ///     Clean up any resources being used.
+    /// </summary>
+    /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+    protected override void Dispose( bool disposing ) {
+        if ( disposing && components != null ) {
+            components.Dispose();
+        }
+
+        disposables.forEach( d => d.Dispose() );
+
+        base.Dispose( disposing );
     }
 }
 

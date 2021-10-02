@@ -6,18 +6,6 @@ partial class MainForm {
     /// </summary>
     private System.ComponentModel.IContainer components = null;
 
-    /// <summary>
-    ///  Clean up any resources being used.
-    /// </summary>
-    /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
-    protected override void Dispose( bool disposing ) {
-        if ( disposing && ( components != null ) ) {
-            components.Dispose();
-        }
-
-        base.Dispose( disposing );
-    }
-
     #region Windows Form Designer generated code
 
     /// <summary>
@@ -26,9 +14,9 @@ partial class MainForm {
     /// </summary>
     private void InitializeComponent() {
         this.components = new System.ComponentModel.Container();
-        this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-        this.ClientSize = new System.Drawing.Size( 800, 450 );
-        this.Text = "Form1";
+        // this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+        this.ClientSize = new System.Drawing.Size( 800, 600 );
+        this.Text = App.NAME;
     }
 
     #endregion

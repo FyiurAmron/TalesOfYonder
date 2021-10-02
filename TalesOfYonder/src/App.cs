@@ -1,21 +1,20 @@
 namespace TalesOfYonder {
 
 using System;
-using System.Drawing.Imaging;
-using System.IO;
 using System.Windows.Forms;
-using Vax.Reversing.Utils;
 
-internal static class Program {
-    private const int IMG_WIDTH = 318;
-    private const int IMG_HEIGHT = 198;
-    private const int IMG_SIZE = IMG_WIDTH * IMG_HEIGHT;
+public static class App {
+    public const string NAME = "Tales of Yonder";
+
+    public const string ASSET_PATH = "asset/";
 
     /// <summary>
     ///     The main entry point for the application.
     /// </summary>
     [STAThread]
     private static void Main() {
+        // Palette.convert( ASSET_PATH + "webfoot.pal" );
+
         Application.SetHighDpiMode( HighDpiMode.SystemAware );
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault( false );
