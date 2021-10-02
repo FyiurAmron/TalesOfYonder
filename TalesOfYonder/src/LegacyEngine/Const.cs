@@ -1,7 +1,7 @@
 namespace TalesOfYonder.LegacyEngine {
 
 public class Const {
-    public const string YT2_PICTURE_FILENAME = "YT2_PICTURES.VGA";
+    public const string YT2_PICTURE_FILENAME = "PICTURES.VGA";
     public const string DEFAULT_PALETTE_NAME = "game.pal";
 
     public static readonly string[] paletteFilenames = {
