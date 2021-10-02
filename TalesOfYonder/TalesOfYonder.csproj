@@ -17,4 +17,8 @@
             <SubType>Form</SubType>
         </Compile>
     </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\VaxReversing\VaxReversing.csproj" />
+    </ItemGroup>
 </Project>
