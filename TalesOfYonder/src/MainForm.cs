@@ -37,6 +37,7 @@ public partial class MainForm : AutoForm {
         int actualWidth = Misc.roundUp( width, 4 );
         foreach ( int i in ..pictureGroupDescriptor.picCount ) {
             byte[] imgBuf = new byte[actualWidth * height];
+            string tooltipCaption = $"{fileStream.Position}";
             foreach ( int y in ..height ) {
                 if ( fileStream.Read( imgBuf, y * actualWidth, width ) != width ) {
                     throw new EndOfStreamException();
@@ -52,6 +53,7 @@ public partial class MainForm : AutoForm {
                 Image = bmp.bitmap,
                 SizeMode = PictureBoxSizeMode.AutoSize
             };
+            new ToolTip().SetToolTip( pb, tooltipCaption );
 
             controls.Add( pb );
         }
