@@ -68,15 +68,22 @@ public sealed class PictureManager : IDisposable {
         pictureFileStream.Dispose();
     }
 
-    public void processAllPictureGroups(
+    public IEnumerable<(List<Picture>, string)> processAllPictureGroups(
         IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors,
-        Action<(List<Picture> pictures,string description)> action
+        Action<(List<Picture> pictures,string description)> action = null
     ) {
         init();
-        
-        pictureGroupDescriptors.Select( loadPictureGroup ).forEach( action );
-        
+
+        // forced evaluation
+        List<(List<Picture>, string)> ret = pictureGroupDescriptors.Select( loadPictureGroup ).ToList();
+
+        if ( action != null ) {
+            ret.forEach( action );
+        }
+
         end();
+
+        return ret;
     }
 }
 
