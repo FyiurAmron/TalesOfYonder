@@ -14,6 +14,9 @@ public class ExternHelper {
         AllocConsole();
     }
 
+    [DllImport( "kernel32.dll" )]
+    public static extern void RtlMoveMemory( IntPtr dest, IntPtr src, uint count );
+
     public static void aboutDialog(
         string appName = "", string additionalDesc = "", IntPtr? hWnd = null, IntPtr? hIcon = null ) {
         if ( ShellAbout( hWnd ?? IntPtr.Zero, appName, additionalDesc, hIcon ?? IntPtr.Zero ) == 0 ) {

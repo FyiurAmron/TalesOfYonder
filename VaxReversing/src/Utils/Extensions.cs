@@ -6,6 +6,7 @@ namespace Vax.Reversing.Utils {
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -101,6 +102,16 @@ public static class ArrayExtensions {
 public static class ListExtensions {
     public static void add<T>( this List<T> list, params T[] elems ) =>
         list.AddRange( elems );
+}
+
+public static class BitmapDataExtensions {
+    public static void copyTo( this BitmapData src, BitmapData dst, uint? count = null) {
+        ExternHelper.RtlMoveMemory(
+            dst.Scan0,
+            src.Scan0,
+            count ?? (uint) ( src.Stride * src.Height )
+        );
+    }
 }
 
 public static class BinaryReaderExtensions {
