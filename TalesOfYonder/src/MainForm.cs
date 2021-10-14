@@ -59,7 +59,7 @@ ToolStripMenuItemEx fileOpenModelMenuItem = new( fileOpenModelEventHandler ) {
         ms.MdiWindowListItem = windowMenu;
 
         ToolStripMenuItemEx aboutMenuItem = new(
-                ( _, _ ) => ExternHelper.aboutDialog( App.NAME ) ) {
+                ( _, _ ) => ExternHelper.showShellAboutDialog( App.NAME ) ) {
                 Text = @"&About...",
                 ShortcutKeys = Keys.Control | Keys.A,
             }
