@@ -11,6 +11,14 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 
+public static class NumericExtensions {
+    public static uint roundUp( this uint n, uint multiple )
+        => ( n + ( multiple - 1 ) ) / multiple * multiple;
+
+    public static int roundUp( this int n, int multiple )
+        => ( n + ( multiple - 1 ) ) / multiple * multiple;
+}
+
 public static class RangeExtensions {
     public static Enumerator GetEnumerator( this Range range ) => new( range );
 
