@@ -3,6 +3,17 @@ namespace TalesOfYonder.LegacyEngine {
 public class Const {
     public const string YT2_PICTURE_FILENAME = "PICTURES.VGA";
     public const string DEFAULT_PALETTE_NAME = "game.pal";
+    public const string DEFAULT_WORLD_DAT_FILENAME = "YT2_WORLD.DAT";
+    public const string DEFAULT_TILE_DESCRIPTORS_JSON_FILENAME = "asset/TileDescriptors.json";
+    
+    public const int MAP_X_COUNT = 20;
+    public const int MAP_Y_COUNT = 6;
+    public const int TILES_X_PER_MAP = 40;
+    public const int TILES_Y_PER_MAP = 24;
+    public static readonly int TILES_X = MAP_X_COUNT * TILES_X_PER_MAP;
+    public static readonly int TILES_Y = MAP_Y_COUNT * TILES_Y_PER_MAP;
+    public const int MAP_NAME_COUNT = 70;
+    public const int MAP_NAME_LENGTH = 20;
 
     public static readonly string[] paletteFilenames = {
         DEFAULT_PALETTE_NAME,
