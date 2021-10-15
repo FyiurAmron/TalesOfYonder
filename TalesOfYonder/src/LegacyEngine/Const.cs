@@ -21,6 +21,7 @@ public class Const {
         "webfoot.pal",
     };
 
+    // TODO refactor to JSON
     public static readonly PictureGroupDescriptor[] yt2PictureGroupDescriptors = {
         new() {
             description = "full-screen UI/intro pics",
@@ -52,13 +53,13 @@ public class Const {
             picCount = 162,
         },
         new() {
-            description = "ground textures",
+            description = "bottom (ground) textures",
             picWidth = 224,
             picHeight = 74,
             picCount = 18,
         },
         new() {
-            description = "ceiling textures",
+            description = "top (ceiling/sky) textures",
             picWidth = 224,
             picHeight = 62,
             picCount = 12,
