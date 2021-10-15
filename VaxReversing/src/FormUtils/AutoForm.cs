@@ -77,8 +77,17 @@ public class AutoForm : Form {
     }
 
     public void add( params Control[] items ) {
-        ( layoutPanel != null ? layoutPanel.Controls : Controls )
-            .AddRange( items );
+        add( (IEnumerable<Control>) items );
+    }
+
+    public void add( IEnumerable<Control> controls ) {
+        Control.ControlCollection targetControls = ( layoutPanel != null ) ? layoutPanel.Controls : Controls;
+        targetControls.Owner.SuspendLayout();
+        try {
+            controls.forEach( control => targetControls.Add( control ) );
+        } finally {
+            targetControls.Owner.ResumeLayout( true );
+        }
     }
 }
 
