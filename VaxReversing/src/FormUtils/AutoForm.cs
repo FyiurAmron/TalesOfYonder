@@ -1,9 +1,39 @@
 namespace Vax.FormUtils {
 
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Reversing.Utils;
 
 public class AutoForm : Form {
+    public sealed override bool AutoSize {
+        get => base.AutoSize;
+        set => base.AutoSize = value;
+    }
+
+    // ReSharper disable once InconsistentNaming
+    /// <summary>
+    ///     added to encapsulate the setter for consistency
+    /// </summary>
+    public new Form MdiParent {
+        get => base.MdiParent;
+        private init => base.MdiParent = value;
+    }
+
+    // ReSharper disable once InconsistentNaming
+    /// <summary>
+    ///     added to encapsulate the setter for consistency
+    /// </summary>
+    public new bool IsMdiContainer {
+        get => base.IsMdiContainer;
+        private init => base.IsMdiContainer = value;
+    }
+    
+    public Control.ControlCollection autoControls => layoutPanel?.Controls;
+
+    public MenuStrip menuStrip { get; }
+    public Panel layoutPanel { get; protected set; }
+
     public AutoForm(
         bool hasMenu = true,
         bool isMdiContainer = false,
@@ -44,34 +74,6 @@ public class AutoForm : Form {
         }
 
         ResumeLayout();
-    }
-
-    public sealed override bool AutoSize {
-        get => base.AutoSize;
-        set => base.AutoSize = value;
-    }
-
-    public Control.ControlCollection autoControls => layoutPanel?.Controls;
-
-    public MenuStrip menuStrip { get; }
-    public Panel layoutPanel { get; protected set; }
-
-    // ReSharper disable once InconsistentNaming
-    /// <summary>
-    ///     added to encapsulate the setter for consistency
-    /// </summary>
-    public new Form MdiParent {
-        get => base.MdiParent;
-        private init => base.MdiParent = value;
-    }
-
-    // ReSharper disable once InconsistentNaming
-    /// <summary>
-    ///     added to encapsulate the setter for consistency
-    /// </summary>
-    public new bool IsMdiContainer {
-        get => base.IsMdiContainer;
-        private init => base.IsMdiContainer = value;
     }
 
     public void add( params Control[] items ) {
