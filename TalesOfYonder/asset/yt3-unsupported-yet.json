@@ -1,0 +1,14 @@
+{
+  "picturesVgaFilename": "YT3_PICTURES.VGA",
+  "pictureGroupDescriptorsJsonFilename": "PictureGroupDescriptors.json",
+  "worldDatFilename": "YT3_WORLD.DAT",
+  "mainPaletteFilename": "game.pal",
+  "terrainDescriptorsJsonFilename": "TerrainDescriptors.json",
+  "objectDescriptorsJsonFilename": "ObjectDescriptors.json",
+  "mapsX": 20,
+  "mapsY": 6,
+  "tilesPerMapX": 40,
+  "tilesPerMapY": 24,
+  "mapNameCount": 70,
+  "mapNameLength": 20
+}

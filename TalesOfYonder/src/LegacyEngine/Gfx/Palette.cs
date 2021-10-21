@@ -1,4 +1,4 @@
-namespace TalesOfYonder.LegacyEngine {
+namespace TalesOfYonder.LegacyEngine.Gfx {
 
 using System.Drawing;
 using System.IO;

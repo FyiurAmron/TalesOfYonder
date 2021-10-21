@@ -2,11 +2,14 @@ namespace TalesOfYonder {
 
 using System;
 using System.Windows.Forms;
+using LegacyEngine;
 
 public static class App {
     public const string NAME = "Tales of Yonder";
 
     public const string ASSET_PATH = "asset/";
+    
+    public static readonly Engine engine = new( "yt2.json" );
 
     /// <summary>
     ///     The main entry point for the application.

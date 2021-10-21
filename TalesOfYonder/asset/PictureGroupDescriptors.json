@@ -1,0 +1,79 @@
+[
+  {
+    "description": "full-screen UI/intro pics",
+    "picWidth": 318,
+    "picHeight": 198,
+    "picCount": 23,
+    "paletteSelector": {
+      "0": "logo.pal",
+      "16": "webfoot.pal"
+    },
+    "paletteSelectorTmp": {
+      "11": "TODO extract palette",
+      "12": "TODO extract palette",
+      "15": "TODO extract palette"
+    }
+  },
+  {
+    "description": "large 'pane style' UI pics",
+    "picWidth": 210,
+    "picHeight": 105,
+    "picCount": 101,
+    "paletteSelectorTmp": {
+      "73": "6 pictures from cutscene of a guy opening a door",
+      "74": "6 pictures from cutscene of a guy opening a door",
+      "75": "6 pictures from cutscene of a guy opening a door",
+      "76": "6 pictures from cutscene of a guy opening a door",
+      "77": "6 pictures from cutscene of a guy opening a door",
+      "78": "6 pictures from cutscene of a guy opening a door"
+    }
+  },
+  {
+    "description": "'tall' enemies",
+    "picWidth": 140,
+    "picHeight": 155,
+    "picCount": 215
+  },
+  {
+    "description": "'wide' enemies",
+    "picWidth": 190,
+    "picHeight": 110,
+    "picCount": 162
+  },
+  {
+    "description": "bottom (ground) textures",
+    "picWidth": 224,
+    "picHeight": 74,
+    "picCount": 18
+  },
+  {
+    "description": "top (ceiling/sky) textures",
+    "picWidth": 224,
+    "picHeight": 62,
+    "picCount": 12
+  },
+  {
+    "description": "PC paperdolls & misc vertical gfx",
+    "picWidth": 56,
+    "picHeight": 136,
+    "picCount": 55
+  },
+  {
+    "description": "spell & shop icons, faces, paperdoll equips",
+    "picWidth": 32,
+    "picHeight": 32,
+    "picCount": 270
+  },
+  {
+    "description": "UI & inventory icons",
+    "picWidth": 16,
+    "picHeight": 16,
+    "picCount": 510
+  },
+  {
+    "description": "map & status icons + rings (inv/paperdoll)",
+    "picWidth": 8,
+    "picHeight": 8,
+    "picCount": 576
+  }
+]

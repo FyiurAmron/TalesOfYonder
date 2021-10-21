@@ -1,20 +1,73 @@
 ﻿namespace TalesOfYonder {
 
 using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
-using LegacyEngine;
+using LegacyEngine.Gfx;
 using Vax.FormUtils;
 using Vax.Reversing.Utils;
 
 public partial class MainForm : AutoForm {
-    private readonly PictureManager pictureManager = new( Const.YT2_PICTURE_FILENAME );
 
     public MainForm() : base( isMdiContainer: true ) {
         InitializeComponent();
 
         addMenus( menuStrip );
 
-        loadAllPictures();
+        loadAllPictures( /*true*/ );
+
+        loadWorldData();
+    }
+
+    private void loadWorldData() {
+        List<Bitmap> maps = App.engine.loadWorldData();
+        IEnumerable<PictureBox> pictureBoxes = maps.Select(
+            ( bitmap ) => new PictureBox() {
+                Image = bitmap,
+                SizeMode = PictureBoxSizeMode.AutoSize,
+            } );
+
+        AutoForm mapMdiChildForm = new( mdiParent: this ) {
+            Text = "MegaMap",
+            // WindowState = FormWindowState.Minimized,
+        };
+        mapMdiChildForm.add( pictureBoxes );
+        mapMdiChildForm.Show();
+    }
+
+    private static Control[] createPictureControls( List<Picture> pictures ) {
+        Control[] controls = new Control[pictures.Count];
+        foreach ( int i in ..pictures.Count ) {
+            Picture picture = pictures[i];
+            PictureBox pb = new() {
+                Image = picture.bitmap,
+                SizeMode = PictureBoxSizeMode.AutoSize,
+            };
+            new ToolTip().SetToolTip( pb, picture.description );
+
+            controls[i] = pb;
+        }
+
+        return controls;
+    }
+
+    private void loadAllPictures( bool createPreviewForms = false ) {
+        SuspendLayout();
+        // [InstantHandle]
+        App.engine.processAllPictureGroups(
+            createPreviewForms
+                ? tuple => {
+                    AutoForm mdiChildForm = new( mdiParent: this ) {
+                        Text = tuple.description,
+                        WindowState = FormWindowState.Minimized,
+                    };
+                    mdiChildForm.add( createPictureControls( tuple.pictures ) );
+                    mdiChildForm.Show();
+                }
+                : null
+        );
+        ResumeLayout();
     }
 
     private void addMenus( MenuStrip ms ) {
@@ -77,38 +130,6 @@ ToolStripMenuItemEx fileOpenModelMenuItem = new( fileOpenModelEventHandler ) {
         ResumeLayout();
     }
 
-    private static Control[] createPictureControls( List<Picture> pictures ) {
-        Control[] controls = new Control[pictures.Count];
-        foreach ( int i in ..pictures.Count ) {
-            Picture picture = pictures[i];
-            PictureBox pb = new() {
-                Image = picture.bitmap,
-                SizeMode = PictureBoxSizeMode.AutoSize,
-            };
-            new ToolTip().SetToolTip( pb, picture.description );
-
-            controls[i] = pb;
-        }
-
-        return controls;
-    }
-
-    private void loadAllPictures() {
-        SuspendLayout();
-        // [InstantHandle]
-        pictureManager.processAllPictureGroups(
-            Const.yt2PictureGroupDescriptors, tuple => {
-                AutoForm mdiChildForm = new( mdiParent: this ) {
-                    Text = tuple.description,
-                    WindowState = FormWindowState.Minimized,
-                };
-                mdiChildForm.add( createPictureControls( tuple.pictures ) );
-                mdiChildForm.Show();
-            }
-        );
-        ResumeLayout();
-    }
-
     /// <summary>
     ///     Clean up any resources being used.
     /// </summary>
@@ -118,7 +139,7 @@ ToolStripMenuItemEx fileOpenModelMenuItem = new( fileOpenModelEventHandler ) {
             components.Dispose();
         }
 
-        pictureManager.Dispose();
+        App.engine.Dispose();
 
         base.Dispose( disposing );
     }

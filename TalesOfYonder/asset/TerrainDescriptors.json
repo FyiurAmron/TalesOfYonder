@@ -1,0 +1,297 @@
+[
+  {
+    "mapIcon": "Water1",
+    "topTexture": "Sky1",
+    "bottomTexture": "Water1"
+  },
+  {
+    "mapIcon": "Water2",
+    "topTexture": "Sky2",
+    "bottomTexture": "Water2"
+  },
+  {
+    "mapIcon": "Stone",
+    "wallTexture": "StoneWall"
+  },
+  {
+    "mapIcon": "Brick",
+    "wallTexture": "BrickWall"
+  },
+  {
+    "mapIcon": "CaveRock",
+    "wallTexture": "CaveWall"
+  },
+  {
+    "mapIcon": "Quartz",
+    "wallTexture": "QuartzWall"
+  },
+  {
+    "mapIcon": "Door",
+    "wallTexture": "StoneDoorClosed"
+  },
+  {
+    "mapIcon": "Stone",
+    "wallTexture": "StoneSecretDoorClosed"
+  },
+  {
+    "mapIcon": "Door",
+    "wallTexture": "BrickDoorClosed"
+  },
+  {
+    "mapIcon": "Brick",
+    "wallTexture": "BrickSecretDoorClosed"
+  },
+  {
+    "mapIcon": "DoorBlack",
+    "wallTexture": "CaveDoorClosed"
+  },
+  {
+    "mapIcon": "Door",
+    "wallTexture": "QuartzDoorClosed"
+  },
+  {
+    "mapIcon": "Stone",
+    "wallTexture": "StoneWall",
+    "comment": "glitchy wall, unused"
+  },
+  {
+    "mapIcon": "Brick",
+    "wallTexture": "BrickWall",
+    "comment": "glitchy wall, used once in Halfling Challenge"
+  },
+  {
+    "mapIcon": "CaveRock",
+    "wallTexture": "CaveWall",
+    "comment": "glitchy wall, unused"
+  },
+  {
+    "mapIcon": "Quartz",
+    "wallTexture": "QuartzWall",
+    "comment": "glitchy wall, unused"
+  },
+  {
+    "mapIcon": "Dirt1",
+    "topTexture": "Sky1",
+    "bottomTexture": "Dirt1"
+  },
+  {
+    "mapIcon": "Dirt2",
+    "topTexture": "Sky2",
+    "bottomTexture": "Dirt2"
+  },
+  {
+    "mapIcon": "Grass1",
+    "topTexture": "Sky1",
+    "bottomTexture": "Grass1"
+  },
+  {
+    "mapIcon": "Grass2",
+    "topTexture": "Sky2",
+    "bottomTexture": "Grass2"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Sky1",
+    "bottomTexture": "Terracotta1"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Sky2",
+    "bottomTexture": "Terracotta2"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Sky1",
+    "bottomTexture": "Wood1"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Sky2",
+    "bottomTexture": "Wood2"
+  },
+  {
+    "mapIcon": "StoneMoss1",
+    "topTexture": "Sky1",
+    "bottomTexture": "StoneMoss1"
+  },
+  {
+    "mapIcon": "StoneMoss2",
+    "topTexture": "Sky2",
+    "bottomTexture": "StoneMoss2"
+  },
+  {
+    "mapIcon": "Dirt1",
+    "topTexture": "Cave1",
+    "bottomTexture": "Dirt1"
+  },
+  {
+    "mapIcon": "Dirt2",
+    "topTexture": "Cave2",
+    "bottomTexture": "Dirt2"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Cave1",
+    "bottomTexture": "Wood1"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Cave2",
+    "bottomTexture": "Wood2"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Cave1",
+    "bottomTexture": "Terracotta1"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Cave2",
+    "bottomTexture": "Terracotta2"
+  },
+  {
+    "mapIcon": "StoneMoss1",
+    "topTexture": "Cave1",
+    "bottomTexture": "StoneMoss1"
+  },
+  {
+    "mapIcon": "StoneMoss2",
+    "topTexture": "Cave2",
+    "bottomTexture": "StoneMoss2"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Wood1",
+    "bottomTexture": "Wood1"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Wood2",
+    "bottomTexture": "Wood2"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Wood1",
+    "bottomTexture": "Terracotta1"
+  },
+  {
+    "mapIcon": "Terracotta",
+    "topTexture": "Wood2",
+    "bottomTexture": "Terracotta2"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Sky1",
+    "bottomTexture": "Grate1"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Sky2",
+    "bottomTexture": "Grate2"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Cave1",
+    "bottomTexture": "Grate1"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Cave2",
+    "bottomTexture": "Grate2"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Wood1",
+    "bottomTexture": "Dirt1",
+    "comment": "actually unused"
+  },
+  {
+    "mapIcon": "Grate",
+    "topTexture": "Wood2",
+    "bottomTexture": "Dirt2",
+    "comment": "actually unused"
+  },
+  {
+    "mapIcon": "Dirt1",
+    "topTexture": "Terracotta1",
+    "bottomTexture": "Dirt1"
+  },
+  {
+    "mapIcon": "Dirt2",
+    "topTexture": "Terracotta2",
+    "bottomTexture": "Dirt2"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Terracotta1",
+    "bottomTexture": "Wood1"
+  },
+  {
+    "mapIcon": "Wood",
+    "topTexture": "Terracotta2",
+    "bottomTexture": "Wood2"
+  },
+  {
+    "mapIcon": "StoneMoss1",
+    "topTexture": "Terracotta1",
+    "bottomTexture": "StoneMoss1"
+  },
+  {
+    "mapIcon": "StoneMoss2",
+    "topTexture": "Terracotta2",
+    "bottomTexture": "StoneMoss2"
+  },
+  {
+    "mapIcon": "Dirt1",
+    "topTexture": "Grate1",
+    "bottomTexture": "Dirt1"
+  },
+  {
+    "mapIcon": "Dirt2",
+    "topTexture": "Grate2",
+    "bottomTexture": "Dirt2"
+  },
+  {
+    "mapIcon": "QuartzFloor",
+    "topTexture": "Quartz1",
+    "bottomTexture": "Quartz1"
+  },
+  {
+    "mapIcon": "QuartzFloor",
+    "topTexture": "Quartz2",
+    "bottomTexture": "Quartz2"
+  },
+  {
+    "mapIcon": "Lava1",
+    "topTexture": "Cave1",
+    "bottomTexture": "Lava1"
+  },
+  {
+    "mapIcon": "Lava2",
+    "topTexture": "Cave2",
+    "bottomTexture": "Lava2"
+  },
+  {
+    "mapIcon": "Lava1",
+    "topTexture": "Sky1",
+    "bottomTexture": "Lava1"
+  },
+  {
+    "mapIcon": "Lava2",
+    "topTexture": "Sky2",
+    "bottomTexture": "Lava2"
+  },
+  {
+    "mapIcon": "Dirt1",
+    "topTexture": "Sky1",
+    "bottomTexture": "Dirt1",
+    "comment": "first tile of totally unused block (IMO still valid)"
+  },
+  null,
+  null,
+  {
+    "mapIcon": "Door",
+    "wallTexture": "BrickDoorOpen",
+    "comment": "unused but seemingly working; nothing usable until 0x4D, later entries cause out-of-mem crashes"
+  }
+]

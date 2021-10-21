@@ -1,4 +1,5 @@
-namespace TalesOfYonder.LegacyEngine {
+// ReSharper disable UnassignedField.Global
+namespace TalesOfYonder.LegacyEngine.Gfx {
 
 using System.Collections.Generic;
 

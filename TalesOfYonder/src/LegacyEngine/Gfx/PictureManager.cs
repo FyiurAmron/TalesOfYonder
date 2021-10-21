@@ -1,7 +1,8 @@
-namespace TalesOfYonder.LegacyEngine {
+namespace TalesOfYonder.LegacyEngine.Gfx {
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
@@ -9,34 +10,42 @@ using System.Windows.Forms;
 using Vax.Reversing.Utils;
 
 public sealed class PictureManager : IDisposable {
-    public readonly string fileName;
-    public readonly PaletteManager paletteManager = new( App.ASSET_PATH );
-    public readonly List<List<Picture>> managedPictures = new();
+    private readonly List<List<Picture>> managedPictures = new();
 
-    public Palette defaultPalette;
-    public FileStream pictureFileStream;
+    private readonly string assetPath;
+    private readonly string fileName;
+    private readonly IEnumerable<string> paletteFilenames;
 
-    public PictureManager( string fileName ) => this.fileName = fileName;
+    private readonly PaletteManager paletteManager;
 
-    public void Dispose() {
-        managedPictures.forEach( list
-                                     => list.forEach( picture
-                                                          => picture.Dispose() ) );
-        pictureFileStream?.Dispose();
+    private Palette defaultPalette;
+    private FileStream pictureFileStream;
+
+    public PictureManager( string assetPath, string fileName, IEnumerable<string> paletteFilenames ) {
+        this.assetPath = assetPath;
+        this.fileName = fileName;
+        this.paletteFilenames = paletteFilenames;
+        paletteManager = new( assetPath );
     }
+
+    public List<Picture> getPictureGroup( int groupNr )
+        => managedPictures[groupNr];
+    
+    public IEnumerable<Bitmap> getBitmaps( int groupNr )
+        => getPictureGroup( groupNr ).Select( picture => picture.bitmap );
 
     private void init() {
-        paletteManager.add( Const.paletteFilenames );
-        defaultPalette = paletteManager[Const.DEFAULT_PALETTE_NAME];
+        paletteManager.add( paletteFilenames );
+        defaultPalette = paletteManager[paletteFilenames.First()];
 
-        pictureFileStream = new( App.ASSET_PATH + fileName, FileMode.Open );
+        pictureFileStream = new( Path.Combine( assetPath, fileName ), FileMode.Open );
     }
 
-    private (List<Picture>,string) loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
+    private (List<Picture>, string) loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
         int width = pictureGroupDescriptor.picWidth;
         int height = pictureGroupDescriptor.picHeight;
         List<Picture> pictures = new();
-        int actualWidth = Misc.roundUp( width, 4 );
+        int actualWidth = width.roundUp( 4 );
         foreach ( int i in ..pictureGroupDescriptor.picCount ) {
             byte[] imgBuf = new byte[actualWidth * height];
             string description = $"{pictureFileStream.Position}";
@@ -48,14 +57,16 @@ public sealed class PictureManager : IDisposable {
 
             ByteBackedBitmap bmp = new( width, height, PixelFormat.Format8bppIndexed, imgBuf );
 
-            bmp.setPalette( ( paletteManager[pictureGroupDescriptor.getPaletteName( i )] ?? defaultPalette ).entries );
+            bmp.setPalette(
+                ( paletteManager[pictureGroupDescriptor.getPaletteName( i )] ?? defaultPalette ).entries
+            );
 
             pictures.Add( new( bmp, description ) );
         }
 
         managedPictures.Add( pictures );
 
-        return (pictures, pictureGroupDescriptor.description);
+        return ( pictures, pictureGroupDescriptor.description );
     }
 
     private void end() {
@@ -70,7 +81,7 @@ public sealed class PictureManager : IDisposable {
 
     public IEnumerable<(List<Picture>, string)> processAllPictureGroups(
         IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors,
-        Action<(List<Picture> pictures,string description)> action = null
+        Action<(List<Picture> pictures, string description)> action = null
     ) {
         init();
 
@@ -84,6 +95,11 @@ public sealed class PictureManager : IDisposable {
         end();
 
         return ret;
+    }
+
+    public void Dispose() {
+        managedPictures.forEach( list => list.forEach( picture => picture.Dispose() ) );
+        pictureFileStream?.Dispose();
     }
 }
 
