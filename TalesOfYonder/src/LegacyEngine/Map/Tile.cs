@@ -1,6 +1,6 @@
 namespace TalesOfYonder.LegacyEngine.Map {
 
-public record WorldTile(
+public record Tile(
     byte terrainType,
     byte passthroughFlag,
     byte objectType,

@@ -26,7 +26,7 @@ public class Engine : IDisposable {
     protected TerrainDescriptor[] terrainDescriptors;
     protected ObjectDescriptor[] objectDescriptors;
 
-    protected WorldTile[] worldTiles;
+    protected TileContainer tiles;
 
     public Engine( string rootJsonFilename, string assetPath = App.ASSET_PATH ) {
         this.assetPath = assetPath;
@@ -83,7 +83,7 @@ public class Engine : IDisposable {
 
         using BinaryReader reader = new( fs );
 
-        worldTiles = new WorldTile[config.tilesTotal];
+        tiles = new( config.tilesX, config.tilesY );
 
         int[] terrainIndexBuckets = new int[256];
         int[] passthroughFlagBucket = new int[256];
@@ -98,14 +98,10 @@ public class Engine : IDisposable {
                 passthroughFlagBucket[passthroughFlag]++;
                 byte objectIndex = reader.ReadByte(); // <0,67>
                 objectIndexBuckets[objectIndex]++;
-                if ( objectIndex != 0 ) {
-                }
-
                 byte unusedFlag = reader.ReadByte(); // == 0 (both YT2 & YT3)
                 unusedFlagBucket[unusedFlag]++;
 
-                worldTiles[y * config.tilesY + x] =
-                    new( terrainIndex, passthroughFlag, objectIndex, unusedFlag );
+                tiles[x, y] = new( terrainIndex, passthroughFlag, objectIndex, unusedFlag );
             }
         }
 
@@ -187,8 +183,9 @@ public class Engine : IDisposable {
 
         foreach ( int y in ..config.tilesY ) {
             foreach ( int x in ..config.tilesX ) {
-                terrainBitmap.setTile( x, y, terrainToIconMap[worldTiles[y * config.tilesY + x].terrainType] );
-                // objectBitmap.setTile( x, y, objectToIconMap[worldTiles[y * config.tilesY + x].objectType] );
+                Tile tile = tiles[x, y];
+                terrainBitmap.setTile( x, y, terrainToIconMap[tile.terrainType] );
+                // objectBitmap.setTile( x, y, objectToIconMap[tile.objectType] );
             }
         }
 
