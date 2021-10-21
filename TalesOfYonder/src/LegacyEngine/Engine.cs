@@ -26,6 +26,8 @@ public class Engine : IDisposable {
     protected TerrainDescriptor[] terrainDescriptors;
     protected ObjectDescriptor[] objectDescriptors;
 
+    protected WorldTile[] worldTiles;
+
     public Engine( string rootJsonFilename, string assetPath = App.ASSET_PATH ) {
         this.assetPath = assetPath;
         config = readJson<Config>( rootJsonFilename );
@@ -56,7 +58,7 @@ public class Engine : IDisposable {
 
     private static Dictionary<byte, int> createIconMap( IEnumerable<IMappable> mappables ) {
         Dictionary<byte, int> iconMap = new();
-        
+
         byte i = 0;
         foreach ( IMappable mappable in mappables ) {
             if ( mappable != null ) {
@@ -73,37 +75,25 @@ public class Engine : IDisposable {
         return iconMap;
     }
 
-    public List<Bitmap> loadWorldData() {
+    public void loadWorldData() {
         terrainDescriptors = readJson<TerrainDescriptor[]>( config.terrainDescriptorsJsonFilename );
         objectDescriptors = readJson<ObjectDescriptor[]>( config.objectDescriptorsJsonFilename );
-        terrainToIconMap = createIconMap( terrainDescriptors );
-        objectToIconMap = createIconMap( objectDescriptors );
-
-        Size mapTileSize = new( 8, 8 );
-        TiledBitmap terrainBitmap = new(
-            pictureManager.getBitmaps( 9 ).ToList(),
-            mapTileSize,
-            config.tilesX,
-            config.tilesY
-        );
-        List<Bitmap> maps = new() {
-            terrainBitmap.bitmap,
-        };
 
         using FileStream fs = new( Path.Combine( App.ASSET_PATH, config.worldDatFilename ), FileMode.Open );
 
         using BinaryReader reader = new( fs );
 
-        WorldTile[] worldTiles = new WorldTile[config.tilesTotal];
+        worldTiles = new WorldTile[config.tilesTotal];
+
         int[] terrainIndexBuckets = new int[256];
         int[] passthroughFlagBucket = new int[256];
         int[] objectIndexBuckets = new int[256];
         int[] unusedFlagBucket = new int[256];
+
         foreach ( int y in ..config.tilesY ) {
             foreach ( int x in ..config.tilesX ) {
                 byte terrainIndex = reader.ReadByte();
                 terrainIndexBuckets[terrainIndex]++;
-                terrainBitmap.setTile( x, y, terrainToIconMap[terrainIndex] );
                 byte passthroughFlag = reader.ReadByte(); // == 0 in YT2, 0 (block) or 1 (passthrough) in YT3
                 passthroughFlagBucket[passthroughFlag]++;
                 byte objectIndex = reader.ReadByte(); // <0,67>
@@ -121,7 +111,7 @@ public class Engine : IDisposable {
                 unusedFlagBucket[unusedFlag]++;
 
                 worldTiles[y * config.tilesY + x] =
-                    new( objectIndex, passthroughFlag, objectIndex, unusedFlag );
+                    new( terrainIndex, passthroughFlag, objectIndex, unusedFlag );
             }
         }
 
@@ -181,8 +171,28 @@ public class Engine : IDisposable {
 
             validMapDescriptors.add( md );
         }
+    }
 
-        // validMapDescriptors.forEach( Console.WriteLine );
+    public List<Bitmap> createOverheadMaps() {
+        terrainToIconMap = createIconMap( terrainDescriptors );
+        objectToIconMap = createIconMap( objectDescriptors );
+
+        Size mapTileSize = new( 8, 8 );
+        TiledBitmap terrainBitmap = new(
+            pictureManager.getBitmaps( 9 ).ToList(),
+            mapTileSize,
+            config.tilesX,
+            config.tilesY
+        );
+        List<Bitmap> maps = new() {
+            terrainBitmap.bitmap,
+        };
+
+        foreach ( int y in ..config.tilesY ) {
+            foreach ( int x in ..config.tilesX ) {
+                terrainBitmap.setTile( x, y, terrainToIconMap[worldTiles[y * config.tilesY + x].terrainType] );
+            }
+        }
 
         return maps;
     }

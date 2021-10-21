@@ -21,7 +21,8 @@ public partial class MainForm : AutoForm {
     }
 
     private void loadWorldData() {
-        List<Bitmap> maps = App.engine.loadWorldData();
+        App.engine.loadWorldData();
+        List<Bitmap> maps = App.engine.createOverheadMaps();
         IEnumerable<PictureBox> pictureBoxes = maps.Select(
             ( bitmap ) => new PictureBox() {
                 Image = bitmap,
