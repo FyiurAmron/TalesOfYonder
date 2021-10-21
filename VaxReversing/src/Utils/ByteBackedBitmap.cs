@@ -8,26 +8,23 @@ using System.Runtime.InteropServices;
 public sealed class ByteBackedBitmap : IDisposable {
     private GCHandle pinnedBytes;
 
+    public Bitmap bitmap { get; }
+    public byte[] bytes { get; }
+
+    public int stride { get; }
+
+    public ByteBackedBitmap( Size size, PixelFormat pixelFormat, byte[] bytes = null )
+        : this( size.Width, size.Height, pixelFormat, bytes ) {
+    }
+
     public ByteBackedBitmap( int width, int height, PixelFormat pixelFormat, byte[] bytes = null ) {
-        bitsPerPixel = ( (uint) pixelFormat << 16 ) >> 24;
-        stride = Misc.roundUp( (uint) width * bitsPerPixel, 4 * 8 ) / 8;
+        stride = pixelFormat.calcStride( width );
 
         this.bytes = bytes ?? new byte[height * stride];
 
         pinnedBytes = GCHandle.Alloc( bytes, GCHandleType.Pinned );
 
-        bitmap = new( width, height, (int) stride, pixelFormat, pinnedBytes.AddrOfPinnedObject() );
-    }
-
-    public Bitmap bitmap { get; }
-    public byte[] bytes { get; }
-
-    public uint stride { get; }
-    public uint bitsPerPixel { get; }
-
-    public void Dispose() {
-        bitmap?.Dispose();
-        pinnedBytes.Free();
+        bitmap = new( width, height, stride, pixelFormat, pinnedBytes.AddrOfPinnedObject() );
     }
 
     public void setPalette( Color[] palette ) {
@@ -43,6 +40,11 @@ public sealed class ByteBackedBitmap : IDisposable {
         }
 
         bitmap.Palette = cp;
+    }
+
+    public void Dispose() {
+        bitmap?.Dispose();
+        pinnedBytes.Free();
     }
 }
 
