@@ -1,10 +1,10 @@
 {
   "picturesVgaFilename": "YT2_PICTURES.VGA",
-  "pictureGroupDescriptorsJsonFilename": "PictureGroupDescriptors.json",
+  "pictureGroupDescriptorsJsonFilename": "YT2_PictureGroupDescriptors.json",
   "worldDatFilename": "YT2_WORLD.DAT",
   "mainPaletteFilename": "game.pal",
-  "terrainDescriptorsJsonFilename": "TerrainDescriptors.json",
-  "objectDescriptorsJsonFilename": "ObjectDescriptors.json",
+  "terrainDescriptorsJsonFilename": "YT2_TerrainDescriptors.json",
+  "objectDescriptorsJsonFilename": "YT2_ObjectDescriptors.json",
   "mapsX": 20,
   "mapsY": 6,
   "tilesPerMapX": 40,

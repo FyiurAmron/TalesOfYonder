@@ -9,7 +9,7 @@ public static class App {
 
     public const string ASSET_PATH = "asset/";
     
-    public static readonly Engine engine = new( "yt2.json" );
+    public static readonly Engine engine = new( "YT2.json" );
 
     /// <summary>
     ///     The main entry point for the application.
