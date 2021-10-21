@@ -21,6 +21,18 @@ public static class NumericExtensions {
         => ( n + ( multiple - 1 ) ) / multiple * multiple;
 }
 
+public static class PixelFormatExtensions {
+    public static uint getBitsPerPixel( this PixelFormat pixelFormat )
+        => ( (uint) pixelFormat << 16 ) >> 24;
+
+    public static int calcStride( this PixelFormat pixelFormat, int width )
+        => (int) (
+            ( (uint) width * pixelFormat.getBitsPerPixel() )
+            .roundUp( STRIDE_BYTES_ROUNDING * BITS_PER_BYTE )
+            / BITS_PER_BYTE
+        );
+}
+
 public static class RangeExtensions {
     public static Enumerator GetEnumerator( this Range range ) => new( range );
 
