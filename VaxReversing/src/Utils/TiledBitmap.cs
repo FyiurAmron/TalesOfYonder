@@ -7,26 +7,25 @@ using System.Drawing.Imaging;
 
 public class TiledBitmap {
     public readonly Bitmap bitmap;
-    public readonly IList<Bitmap> tiles;
 
-    private readonly Size tileSize;
+    private readonly Config config;
     private readonly PixelFormat pixelFormat;
+    
     private readonly Rectangle entireTileRectangle;
     private readonly int stride;
 
-    public TiledBitmap( IList<Bitmap> tiles,
-                        Size tileSize, int tilesX, int tilesY, PixelFormat? pixelFormat = null ) {
-        this.tiles = tiles;
-        this.tileSize = tileSize;
-        this.pixelFormat = pixelFormat ?? tiles[0].PixelFormat;
-        entireTileRectangle = new( new( 0, 0 ), tileSize );
+    private Size tileSize => config.tileSize; 
 
-        int width = tilesX * tileSize.Width;
-        int height = tilesY * tileSize.Height;
-        bitmap = new( width, height, this.pixelFormat );
-        bitmap.Palette = tiles[0].Palette;
+    public TiledBitmap( Config config, PixelFormat? pixelFormat = null) {
+        this.config = config;
+        Bitmap firstTile = config.tiles[0];
+        this.pixelFormat = pixelFormat ?? firstTile.PixelFormat;
+        entireTileRectangle = new( new( 0, 0 ), config.tileSize );
 
-        stride = this.pixelFormat.calcStride( width );
+        bitmap = new( config.width, config.height, this.pixelFormat );
+        bitmap.Palette = firstTile.Palette;
+
+        stride = this.pixelFormat.calcStride( config.width );
     }
 
     public void setTile( int rasterX, int rasterY, int tileIndex ) {
@@ -34,7 +33,7 @@ public class TiledBitmap {
     }
 
     public void setTile( Point rasterCoords, int tileIndex ) {
-        Bitmap tile = tiles[tileIndex];
+        Bitmap tile = config.tiles[tileIndex];
 
         BitmapData bitmapDataSrc = tile.LockBits(
             entireTileRectangle,
@@ -42,7 +41,7 @@ public class TiledBitmap {
             pixelFormat
         );
         BitmapData bitmapDataDst = bitmap.LockBits(
-            new( xyFromRasterCoords( rasterCoords ), tileSize ),
+            new( config.xyFromRasterCoords( rasterCoords ), tileSize ),
             ImageLockMode.WriteOnly,
             pixelFormat
         );
@@ -61,8 +60,18 @@ public class TiledBitmap {
         tile.UnlockBits( bitmapDataSrc );
     }
 
-    protected Point xyFromRasterCoords( Point rasterCoords ) =>
-        new( rasterCoords.X * tileSize.Width, rasterCoords.Y * tileSize.Height );
+    public record Config(
+        IList<Bitmap> tiles,
+        Size tileSize,
+        int tilesX,
+        int tilesY
+    ) {
+        public int width => tilesX * tileSize.Width;
+        public int height => tilesY * tileSize.Height;
+        
+        public Point xyFromRasterCoords( Point rasterCoords ) =>
+            new( rasterCoords.X * tileSize.Width, rasterCoords.Y * tileSize.Height );
+    }
 }
 
 }

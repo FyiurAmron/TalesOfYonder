@@ -30,7 +30,7 @@ public sealed class PictureManager : IDisposable {
 
     public List<Picture> getPictureGroup( int groupNr )
         => managedPictures[groupNr];
-    
+
     public IEnumerable<Bitmap> getBitmaps( int groupNr )
         => getPictureGroup( groupNr ).Select( picture => picture.bitmap );
 
@@ -41,7 +41,7 @@ public sealed class PictureManager : IDisposable {
         pictureFileStream = new( Path.Combine( assetPath, fileName ), FileMode.Open );
     }
 
-    private (List<Picture>, string) loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
+    private PictureGroup loadPictureGroup( PictureGroupDescriptor pictureGroupDescriptor ) {
         int width = pictureGroupDescriptor.picWidth;
         int height = pictureGroupDescriptor.picHeight;
         List<Picture> pictures = new();
@@ -66,7 +66,7 @@ public sealed class PictureManager : IDisposable {
 
         managedPictures.Add( pictures );
 
-        return ( pictures, pictureGroupDescriptor.description );
+        return new( pictureGroupDescriptor, pictures );
     }
 
     private void end() {
@@ -79,19 +79,12 @@ public sealed class PictureManager : IDisposable {
         pictureFileStream.Dispose();
     }
 
-    public IEnumerable<(List<Picture>, string)> processAllPictureGroups(
-        IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors,
-        Action<(List<Picture> pictures, string description)> action = null
+    public IReadOnlyList<PictureGroup> processAllPictureGroups(
+        IEnumerable<PictureGroupDescriptor> pictureGroupDescriptors
     ) {
         init();
-
         // forced evaluation
-        List<(List<Picture>, string)> ret = pictureGroupDescriptors.Select( loadPictureGroup ).ToList();
-
-        if ( action != null ) {
-            ret.forEach( action );
-        }
-
+        List<PictureGroup> ret = pictureGroupDescriptors.Select( loadPictureGroup ).ToList();
         end();
 
         return ret;

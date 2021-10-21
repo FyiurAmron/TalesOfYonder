@@ -100,12 +100,6 @@ public class Engine : IDisposable {
                 objectIndexBuckets[objectIndex]++;
                 if ( objectIndex != 0 ) {
                 }
-                // tiledBitmap.setTile(
-                // x, y,
-                // objectIndex == 0
-                // ? terrainTileIndexToIconIndex( tileIndex )
-                // : objectTileIndexToIconIndex( objectIndex )
-                // );
 
                 byte unusedFlag = reader.ReadByte(); // == 0 (both YT2 & YT3)
                 unusedFlagBucket[unusedFlag]++;
@@ -173,34 +167,36 @@ public class Engine : IDisposable {
         }
     }
 
-    public List<Bitmap> createOverheadMaps() {
+    public IReadOnlyList<Bitmap> createOverheadMaps() {
         terrainToIconMap = createIconMap( terrainDescriptors );
         objectToIconMap = createIconMap( objectDescriptors );
 
         Size mapTileSize = new( 8, 8 );
-        TiledBitmap terrainBitmap = new(
+        TiledBitmap.Config tbc = new(
             pictureManager.getBitmaps( 9 ).ToList(),
             mapTileSize,
             config.tilesX,
             config.tilesY
         );
+        TiledBitmap terrainBitmap = new( tbc );
+        TiledBitmap objectBitmap = new( tbc );
         List<Bitmap> maps = new() {
             terrainBitmap.bitmap,
+            objectBitmap.bitmap,
         };
 
         foreach ( int y in ..config.tilesY ) {
             foreach ( int x in ..config.tilesX ) {
                 terrainBitmap.setTile( x, y, terrainToIconMap[worldTiles[y * config.tilesY + x].terrainType] );
+                // objectBitmap.setTile( x, y, objectToIconMap[worldTiles[y * config.tilesY + x].objectType] );
             }
         }
 
         return maps;
     }
 
-    public IEnumerable<(List<Picture>, string)> processAllPictureGroups(
-        Action<(List<Picture> pictures, string description)> action = null
-    ) =>
-        pictureManager.processAllPictureGroups( pictureGroupDescriptors, action );
+    public IReadOnlyList<PictureGroup> processAllPictureGroups() =>
+        pictureManager.processAllPictureGroups( pictureGroupDescriptors );
 
     public void Dispose() {
         pictureManager.Dispose();

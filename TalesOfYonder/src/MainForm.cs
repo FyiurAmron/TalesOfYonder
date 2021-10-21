@@ -22,7 +22,7 @@ public partial class MainForm : AutoForm {
 
     private void loadWorldData() {
         App.engine.loadWorldData();
-        List<Bitmap> maps = App.engine.createOverheadMaps();
+        IReadOnlyList<Bitmap> maps = App.engine.createOverheadMaps();
         IEnumerable<PictureBox> pictureBoxes = maps.Select(
             ( bitmap ) => new PictureBox() {
                 Image = bitmap,
@@ -56,18 +56,18 @@ public partial class MainForm : AutoForm {
     private void loadAllPictures( bool createPreviewForms = false ) {
         SuspendLayout();
         // [InstantHandle]
-        App.engine.processAllPictureGroups(
-            createPreviewForms
-                ? tuple => {
+        IReadOnlyList<PictureGroup> pictureGroups = App.engine.processAllPictureGroups();
+        if ( createPreviewForms ) {
+            pictureGroups.forEach( pictureGroup => {
                     AutoForm mdiChildForm = new( mdiParent: this ) {
-                        Text = tuple.description,
+                        Text = pictureGroup.pictureGroupDescriptor.description,
                         WindowState = FormWindowState.Minimized,
                     };
-                    mdiChildForm.add( createPictureControls( tuple.pictures ) );
+                    mdiChildForm.add( createPictureControls( pictureGroup.pictures ) );
                     mdiChildForm.Show();
                 }
-                : null
-        );
+            );
+        }
         ResumeLayout();
     }
 
