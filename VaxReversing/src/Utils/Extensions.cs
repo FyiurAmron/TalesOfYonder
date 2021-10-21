@@ -11,6 +11,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
+using static Misc;
 
 public static class NumericExtensions {
     public static uint roundUp( this uint n, uint multiple )
@@ -59,7 +60,7 @@ public static class IntExtensions {
 
 public static class StringExtensions {
     public static byte[] toBytes( this string s, Encoding encoding = null )
-        => ( encoding ?? Misc.defaultEncoding ).GetBytes( s );
+        => ( encoding ?? defaultEncoding ).GetBytes( s );
 
     public static string join( this IEnumerable<string> strings, string separator )
         => string.Join( separator, strings );
@@ -93,7 +94,7 @@ public static class IEnumerableExtensions {
 
 public static class ArrayExtensions {
     public static string toString( this byte[] bytes, Encoding encoding = null )
-        => ( encoding ?? Misc.defaultEncoding ).GetString( bytes );
+        => ( encoding ?? defaultEncoding ).GetString( bytes );
 
     public static short getShort( this byte[] bytes, int pos )
         => (short) ( bytes[pos] | ( bytes[pos + 1] << 8 ) );
@@ -105,7 +106,7 @@ public static class ListExtensions {
 }
 
 public static class BitmapDataExtensions {
-    public static void copyTo( this BitmapData src, BitmapData dst, uint? count = null) {
+    public static void copyTo( this BitmapData src, BitmapData dst, uint? count = null ) {
         ExternHelper.RtlMoveMemory(
             dst.Scan0,
             src.Scan0,
