@@ -8,6 +8,10 @@ namespace TalesOfYonder.LegacyEngine.Map {
 public class ObjectDescriptor : IMappable {
     public string[][] objectTextures; // open/closed, N/E/S/W
     public string mapIcon { get; set; }
+    public string facing { get; set; } // Direction
+    public bool open { get; set; }
+    // TODO blocking
+    // TODO bind with obj gfx/logic
 }
 
 }
