@@ -1,3 +1,270 @@
 [
-  
+  null,
+  {
+    "mapIcon": "StoneObject"
+  },
+  {
+    "mapIcon": "ChestHoriz",
+    "open": false,
+    "facing": "SOUTH"
+  },
+  {
+    "mapIcon": "ChestHoriz",
+    "open": true,
+    "facing": "SOUTH"
+  },
+  {
+    "mapIcon": "ChestHoriz",
+    "open": false,
+    "facing": "NORTH"
+  },
+  {
+    "mapIcon": "ChestHoriz",
+    "open": true,
+    "facing": "NORTH"
+  },
+  {
+    "mapIcon": "ChestVert",
+    "open": false,
+    "facing": "WEST"
+  },
+  {
+    "mapIcon": "ChestVert",
+    "open": true,
+    "facing": "WEST"
+  },
+  {
+    "mapIcon": "ChestVert",
+    "open": false,
+    "facing": "EAST"
+  },
+  {
+    "mapIcon": "ChestVert",
+    "open": true,
+    "facing": "EAST"
+  },
+  {
+    "mapIcon": "Barrel",
+    "open": false
+  },
+  {
+    "mapIcon": "Barrel",
+    "open": true
+  },
+  {
+    "mapIcon": "Table"
+  },
+  {
+    "mapIcon": "BedN",
+    "facing": "NORTH"
+  },
+  {
+    "mapIcon": "BedS",
+    "facing": "SOUTH"
+  },
+  {
+    "mapIcon": "BedW",
+    "facing": "WEST"
+  },
+  {
+    "mapIcon": "BedE",
+    "facing": "EAST"
+  },
+  {
+    "mapIcon": "Spikes",
+    "trap": "Spike"
+  },
+  {
+    "mapIcon": "Goo",
+    "trap": "Poison"
+  },
+  {
+    "mapIcon": "Flame",
+    "trap": "Fire"
+  },
+  {
+    "mapIcon": "MagicGlow",
+    "trap": "Magic"
+  },
+  {
+    "mapIcon": "WireBox",
+    "open": false
+  },
+  {
+    "mapIcon": "WireBox",
+    "open": true
+  },
+  {
+    "mapIcon": "StoneUp",
+    "exitDirection": "UP"
+  },
+  {
+    "mapIcon": "StoneDown",
+    "exitDirection": "DOWN"
+  },
+  {
+    "mapIcon": "Door",
+    "exitDirection": "OUTSIDE"
+  },
+  {
+    "mapIcon": "PortalBlue",
+    "exitDirection": "PORTAL"
+  },
+  {
+    "mapIcon": "BrickUp",
+    "exitDirection": "UP"
+  },
+  {
+    "mapIcon": "BrickDown",
+    "exitDirection": "DOWN"
+  },
+  {
+    "mapIcon": "PortalBlue",
+    "exitDirection": "PORTAL"
+  },
+  {
+    "mapIcon": "CaveUp",
+    "exitDirection": "UP"
+  },
+  {
+    "mapIcon": "CaveHole",
+    "exitDirection": "OUTSIDE"
+  },
+  {
+    "mapIcon": "PortalBlue",
+    "exitDirection": "PORTAL"
+  },
+  {
+    "mapIcon": "PortalPink",
+    "typeTODO": "Quartz",
+    "exitDirection": "PORTAL"
+  },
+  {
+    "mapIcon": "MountainBrownHole",
+    "exitDirection": "INSIDE"
+  },
+  {
+    "mapIcon": "MountainBlackHole",
+    "exitDirection": "INSIDE"
+  },
+  {
+    "mapIcon": "TreeSingle"
+  },
+  {
+    "mapIcon": "TreeForest"
+  },
+  {
+    "mapIcon": "TreeDeadSwamp"
+  },
+  {
+    "mapIcon": "MountainBrown1"
+  },
+  {
+    "mapIcon": "MountainBrown2"
+  },
+  {
+    "mapIcon": "MountainBlack1"
+  },
+  {
+    "mapIcon": "MountainBlack2"
+  },
+  {
+    "mapIcon": "PillarWood"
+  },
+  {
+    "mapIcon": "PillarStone"
+  },
+  {
+    "mapIcon": "Stalagmite",
+    "typeTODO": "Stalagmite"
+  },
+  {
+    "mapIcon": "Stalagmite",
+    "typeTODO": "StalagmiteStalactite"
+  },
+  {
+    "mapIcon": "TorchS"
+  },
+  {
+    "mapIcon": "TorchN"
+  },
+  {
+    "mapIcon": "TorchW"
+  },
+  {
+    "mapIcon": "TorchE"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Inn"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Supplies"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Weapons"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Smith"
+  },
+  {
+    "mapIcon": "Guild",
+    "typeTODO": "RedGuild"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Healer"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Alchemist"
+  },
+  {
+    "mapIcon": "Guild",
+    "typeTODO": "BlueGuild"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Jeweller"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Enchanter"
+  },
+  {
+    "mapIcon": "Shop",
+    "typeTODO": "Trainer"
+  },
+  {
+    "mapIcon": "ChallengeHut",
+    "typeTODO": "Trainer"
+  },
+  {
+    "mapIcon": "MagicGlow",
+    "trap": "Magic",
+    "typeTODO": "HMM"
+  },
+  {
+    "mapIcon": "Goo",
+    "trap": "Poison",
+    "typeTODO": "HMM"
+  },
+  {
+    "mapIcon": "EMPTY",
+    "teleport": "HMM",
+    "typeTODO": "HMM"
+  },
+  {
+    "mapIcon": "EMPTY",
+    "teleport": "HMM",
+    "typeTODO": "HMM"
+  },
+  {
+    "mapIcon": "EMPTY",
+    "teleport": "HMM",
+    "typeTODO": "HMM"
+  }
 ]
