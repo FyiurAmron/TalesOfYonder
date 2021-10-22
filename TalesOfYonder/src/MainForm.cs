@@ -9,7 +9,6 @@ using Vax.FormUtils;
 using Vax.Reversing.Utils;
 
 public partial class MainForm : AutoForm {
-
     public MainForm() : base( isMdiContainer: true ) {
         InitializeComponent();
 
@@ -23,17 +22,23 @@ public partial class MainForm : AutoForm {
     private void loadWorldData() {
         App.engine.loadWorldData();
         IReadOnlyList<Bitmap> maps = App.engine.createOverheadMaps();
-        IEnumerable<PictureBox> pictureBoxes = maps.Select(
+        List<PictureBox> pictureBoxes = maps.Select(
             ( bitmap ) => new PictureBox() {
                 Image = bitmap,
                 SizeMode = PictureBoxSizeMode.AutoSize,
-            } );
+                BackColor = Color.Transparent,
+            } ).ToList();
+        pictureBoxes.forEach( pictureBox => {
+            if ( pictureBox != pictureBoxes[0] ) {
+                pictureBox.Parent = pictureBoxes[0];
+            }
+        } );
 
         AutoForm mapMdiChildForm = new( mdiParent: this ) {
             Text = "MegaMap",
             // WindowState = FormWindowState.Minimized,
         };
-        mapMdiChildForm.add( pictureBoxes );
+        mapMdiChildForm.add( pictureBoxes[0] );
         mapMdiChildForm.Show();
     }
 
