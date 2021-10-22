@@ -122,9 +122,17 @@ public static class BitmapDataExtensions {
         ExternHelper.RtlMoveMemory(
             dst.Scan0,
             src.Scan0,
-            count ?? (uint) ( src.Stride * src.Height )
+            count ?? (uint) src.length()
         );
     }
+
+    public static int length( this BitmapData bitmapData )
+        => bitmapData.Stride * bitmapData.Height;
+}
+
+public static class SizeExtensions {
+    public static int area( this Size size )
+        => size.Width * size.Height;
 }
 
 public static class BinaryReaderExtensions {
