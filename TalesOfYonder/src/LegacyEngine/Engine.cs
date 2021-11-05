@@ -52,7 +52,7 @@ public class Engine : IDisposable {
     private T readJson<T>( string filename ) =>
         JsonSerializer.Deserialize<T>(
             File.ReadAllText( Path.Combine( assetPath, filename ) ),
-            new() {
+            new JsonSerializerOptions() {
                 IncludeFields = true,
             } );
 
