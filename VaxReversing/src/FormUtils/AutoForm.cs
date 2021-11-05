@@ -36,6 +36,7 @@ public class AutoForm : Form {
 
     public AutoForm(
         bool hasMenu = true,
+        bool hasLayout = true,
         bool isMdiContainer = false,
         Form mdiParent = null,
         Panel layoutPanel = null
@@ -52,12 +53,14 @@ public class AutoForm : Form {
         // not Screen.FromControl( this ).Bounds due to handle creation error (?)
         MaximumSize = new( rect.Width, rect.Height );
 
-        this.layoutPanel = ( layoutPanel != null || IsMdiContainer )
-            ? layoutPanel
-            : new FlowLayoutPanel() {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-            };
+        if ( hasLayout ) {
+            this.layoutPanel = ( layoutPanel != null || IsMdiContainer )
+                ? layoutPanel
+                : new FlowLayoutPanel() {
+                    Dock = DockStyle.Fill,
+                    AutoScroll = true,
+                };
+        }
 
         if ( this.layoutPanel != null ) {
             Controls.Add( this.layoutPanel );
