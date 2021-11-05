@@ -117,6 +117,24 @@ public static class ListExtensions {
         list.AddRange( elems );
 }
 
+public static class BitmapExtensions {
+    public static int fill( this Bitmap bitmap, Rectangle rectangle, byte? filler = null ) {
+        BitmapData bitmapData = bitmap.LockBits(
+            rectangle,
+            ImageLockMode.WriteOnly,
+            bitmap.PixelFormat
+        );
+        
+        if ( filler != null ) {
+            ExternHelper.RtlFillMemory( bitmapData.Scan0, (uint) bitmapData.length(), filler.Value );
+        }
+
+        bitmap.UnlockBits( bitmapData );
+
+        return bitmapData.Stride;
+    }
+}
+
 public static class BitmapDataExtensions {
     public static void copyTo( this BitmapData src, BitmapData dst, uint? count = null ) {
         ExternHelper.RtlMoveMemory(

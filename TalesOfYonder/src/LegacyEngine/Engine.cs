@@ -13,6 +13,8 @@ using Vax.Reversing.Utils;
 public class Engine : IDisposable {
     public readonly PictureManager pictureManager;
 
+    public const byte TRANSPARENT_INDEX = 0xFF;
+
     protected readonly string assetPath;
     protected readonly Config config;
     protected readonly PictureGroupDescriptor[] pictureGroupDescriptors;
@@ -96,7 +98,7 @@ public class Engine : IDisposable {
                 terrainIndexBuckets[terrainIndex]++;
                 byte passthroughFlag = reader.ReadByte(); // == 0 in YT2, 0 (block) or 1 (passthrough) in YT3
                 passthroughFlagBucket[passthroughFlag]++;
-                byte objectIndex = reader.ReadByte(); // <0,67>
+                byte objectIndex = reader.ReadByte(); // <0,67> (0x43) ; >= 0x40 are invisible teleports 
                 objectIndexBuckets[objectIndex]++;
                 byte unusedFlag = reader.ReadByte(); // == 0 (both YT2 & YT3)
                 unusedFlagBucket[unusedFlag]++;
@@ -174,8 +176,8 @@ public class Engine : IDisposable {
             config.tilesX,
             config.tilesY
         );
-        TiledBitmap terrainBitmap = new( tbc );
-        TiledBitmap objectBitmap = new( tbc );
+        TiledBitmap terrainBitmap = new( tbc, TRANSPARENT_INDEX );
+        TiledBitmap objectBitmap = new( tbc, TRANSPARENT_INDEX );
         List<Bitmap> maps = new() {
             terrainBitmap.bitmap,
             objectBitmap.bitmap,
@@ -184,8 +186,15 @@ public class Engine : IDisposable {
         foreach ( int y in ..config.tilesY ) {
             foreach ( int x in ..config.tilesX ) {
                 Tile tile = tiles[x, y];
+                
                 terrainBitmap.setTile( x, y, terrainToIconMap[tile.terrainType] );
-                // objectBitmap.setTile( x, y, objectToIconMap[tile.objectType] );
+                
+                if ( tile.objectType != 0 ) {
+                    int tileIndex = objectToIconMap[tile.objectType];
+                    if ( tileIndex != (int) Icon8x8Enum.EMPTY ) {
+                        objectBitmap.setTile( x, y, tileIndex );
+                    }
+                }
             }
         }
 
