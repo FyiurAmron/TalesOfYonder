@@ -12,7 +12,10 @@ public class ExternHelper {
     public static extern bool AllocConsole();
 
     [DllImport( "kernel32.dll" )]
-    public static extern void RtlMoveMemory( IntPtr dest, IntPtr src, /*size_t*/ uint count );
+    public static extern void RtlMoveMemory( IntPtr destination, IntPtr src, /*size_t*/ uint count );
+
+    [DllImport( "kernel32.dll" )]
+    public static extern void RtlFillMemory( IntPtr destination, /*size_t*/ uint length, byte fill );
 
     public static void showShellAboutDialog(
         string appName = "", string additionalDesc = "", IntPtr? hWnd = null, IntPtr? hIcon = null ) {
