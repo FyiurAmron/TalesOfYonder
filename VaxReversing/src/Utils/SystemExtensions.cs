@@ -6,12 +6,10 @@ namespace Vax.Reversing.Utils {
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Text;
-using static Misc;
 
 public static class NumericExtensions {
     public static uint roundUp( this uint n, uint multiple )
@@ -19,18 +17,6 @@ public static class NumericExtensions {
 
     public static int roundUp( this int n, int multiple )
         => ( n + ( multiple - 1 ) ) / multiple * multiple;
-}
-
-public static class PixelFormatExtensions {
-    public static uint getBitsPerPixel( this PixelFormat pixelFormat )
-        => ( (uint) pixelFormat << 16 ) >> 24;
-
-    public static int calcStride( this PixelFormat pixelFormat, int width )
-        => (int) (
-            ( (uint) width * pixelFormat.getBitsPerPixel() )
-            .roundUp( STRIDE_BYTES_ROUNDING * BITS_PER_BYTE )
-            / BITS_PER_BYTE
-        );
 }
 
 public static class RangeExtensions {
@@ -72,7 +58,7 @@ public static class IntExtensions {
 
 public static class StringExtensions {
     public static byte[] toBytes( this string s, Encoding encoding = null )
-        => ( encoding ?? defaultEncoding ).GetBytes( s );
+        => ( encoding ?? EncodingHelper.defaultEncoding ).GetBytes( s );
 
     public static string join( this IEnumerable<string> strings, string separator )
         => string.Join( separator, strings );
@@ -106,7 +92,7 @@ public static class IEnumerableExtensions {
 
 public static class ArrayExtensions {
     public static string toString( this byte[] bytes, Encoding encoding = null )
-        => ( encoding ?? defaultEncoding ).GetString( bytes );
+        => ( encoding ?? EncodingHelper.defaultEncoding ).GetString( bytes );
 
     public static short getShort( this byte[] bytes, int pos )
         => (short) ( bytes[pos] | ( bytes[pos + 1] << 8 ) );
@@ -115,37 +101,6 @@ public static class ArrayExtensions {
 public static class ListExtensions {
     public static void add<T>( this List<T> list, params T[] elems ) =>
         list.AddRange( elems );
-}
-
-public static class BitmapExtensions {
-    public static int fill( this Bitmap bitmap, Rectangle rectangle, byte? filler = null ) {
-        BitmapData bitmapData = bitmap.LockBits(
-            rectangle,
-            ImageLockMode.WriteOnly,
-            bitmap.PixelFormat
-        );
-        
-        if ( filler != null ) {
-            ExternHelper.RtlFillMemory( bitmapData.Scan0, (uint) bitmapData.length(), filler.Value );
-        }
-
-        bitmap.UnlockBits( bitmapData );
-
-        return bitmapData.Stride;
-    }
-}
-
-public static class BitmapDataExtensions {
-    public static void copyTo( this BitmapData src, BitmapData dst, uint? count = null ) {
-        ExternHelper.RtlMoveMemory(
-            dst.Scan0,
-            src.Scan0,
-            count ?? (uint) src.length()
-        );
-    }
-
-    public static int length( this BitmapData bitmapData )
-        => bitmapData.Stride * bitmapData.Height;
 }
 
 public static class SizeExtensions {
