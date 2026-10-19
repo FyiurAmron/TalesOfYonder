@@ -1,0 +1,11 @@
+#!/bin/sh
+# _ref/ is the read-only reference: nothing under it may change in a commit.
+# Copy what you need into the working project (asm/) instead.
+head_ref=$(git rev-parse --verify --quiet 'HEAD:_ref' || true)
+index_ref=$(git rev-parse --verify --quiet "$(git write-tree):_ref" 2>/dev/null || true)
+if [ "$head_ref" != "$index_ref" ]; then
+    echo "pre-commit: refusing to change _ref/ (read-only reference)." >&2
+    git diff --cached --name-status -- _ref/ >&2
+    echo "If you really mean it: git commit --no-verify" >&2
+    exit 1
+fi

@@ -1,3 +1,15 @@
+# --- build artifacts ---
+*.obj
+*.lst
+*.map
+*.pkl
+*.pyc
+__pycache__/
+
+# stray asm outputs (real builds go to build/)
+/asm/src/SWREG.EXE
+
+build/
 bin/
 obj/
 /packages/
