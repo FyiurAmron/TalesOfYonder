@@ -66,5 +66,7 @@ adds agent-specific operational rules.
 Check `docs/porting.md` §10 before acting. As of the last update: M1 is done — the EMS manager /
 picture cache, the DOS file service, the palette service and the video boundary (draw segment,
 mode sets, VBE bank switch) are annotated; `docs/asm-style.md` is in place and the byte gate is
-green after each batch. Next: the input wrappers (keyboard/mouse) or the optional M1b boundary
-spike (see §10).
+green after each batch. The optional M1b boundary spike is done as well: a `-DSTREAM` build
+streams mode-13h dirty rows and palette writes to `STREAM.BIN`, and `harness/stream_client.py`
+replays them (see `docs/stream.md`). Next: the input wrappers (keyboard/mouse) or the start of M2
+(C core + platform layer).
