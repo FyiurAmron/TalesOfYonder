@@ -10,17 +10,17 @@ pipeline that produced these sources, and the toolchain evidence stay in the rea
 
 ## Building
 
-`asm/tools/build.sh` / `asm/tools/build.bat` assemble `asm/src/swreg.asm` with `-mz` (the header comes
-from `OPTION MZ:1Eh:200h:0:0FFFFh`) and `asm/tools/fixhdr.py` sets the one header word UASM cannot
+`engine/asm/swreg/tools/build.sh` / `engine/asm/swreg/tools/build.bat` assemble `engine/asm/swreg/src/swreg.asm` with `-mz` (the header comes
+from `OPTION MZ:1Eh:200h:0:0FFFFh`) and `engine/asm/swreg/tools/fixhdr.py` sets the one header word UASM cannot
 write (offset 0x1C). Five `cmp r8,r8` instructions use macros because UASM encodes them differently from ML.
 
-Outputs go to `<repo>/build/uasm/`; the build also stages the minimum game files there (copied from
+Outputs go to `<repo>/build/swreg/oracle/`; the build also stages the minimum game files there (copied from
 `_ref/orig-bin/`) so the built game runs as-is.
 
 ## Verifying
 
-`asm/tools/verify.sh` assembles and then runs `asm/tools/verify_asm.py` (with its decode helpers
-`asm/tools/trace.py` / `asm/tools/load.py`) against the reference: every instruction must match. The reference is found automatically
+`engine/asm/swreg/tools/verify.sh` assembles and then runs `engine/asm/swreg/tools/verify_asm.py` (with its decode helpers
+`engine/asm/swreg/tools/trace.py` / `engine/asm/swreg/tools/load.py`) against the reference: every instruction must match. The reference is found automatically
 (`_ref/orig-bin/SWREG.EXE`) or via `$SWREG_EXE`.
 
 ## Layout
