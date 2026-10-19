@@ -56,7 +56,7 @@ loc_00036:
     and word ptr [v_505E], 7FFFh
     or word ptr [v_5064], 1
     call far ptr fn_01BE8
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00050
     jmp near ptr loc_00139
 loc_00050:
@@ -65,14 +65,14 @@ loc_00055:
     test word ptr [v_5064], 1000h
     je loc_0006C
     call far ptr fn_06382
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_0006C
     jmp near ptr loc_00139
 loc_0006C:
     test word ptr [v_5062], 20h
     je loc_0008F
     call far ptr fn_13056
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00083
     jmp near ptr loc_00139
 loc_00083:
@@ -85,30 +85,32 @@ loc_0008F:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
 loc_000A1:
-    call far ptr fn_0D0FE
+    ; shared v_50CC slot, here the input event code: 0 none, 1 ASCII key,
+    ; 2 extended key, 3/6 left press/hold, 7/0Ah right press/hold.
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_00055
-    cmp word ptr [v_50CC], 1
+    cmp word ptr [v_50CC], 1         ; ASCII key
     je loc_000E3
-    cmp word ptr [v_50CC], 2
+    cmp word ptr [v_50CC], 2         ; extended key (scancode)
     je loc_0010E
-    cmp word ptr [v_50CC], 3
+    cmp word ptr [v_50CC], 3         ; left button press
     jne loc_000C5
     jmp near ptr loc_0016B
 loc_000C5:
-    cmp word ptr [v_50CC], 6
+    cmp word ptr [v_50CC], 6         ; left button held
     jne loc_000CF
     jmp near ptr loc_0033F
 loc_000CF:
-    cmp word ptr [v_50CC], 7
+    cmp word ptr [v_50CC], 7         ; right button press
     jne loc_000D9
     jmp near ptr loc_00368
 loc_000D9:
-    cmp word ptr [v_50CC], 0Ah
+    cmp word ptr [v_50CC], 0Ah       ; right button held
     jne loc_0006C
     jmp near ptr loc_0052C
 loc_000E3:
-    mov bl, byte ptr [v_0B9A]
+    mov bl, byte ptr [v_KeyCode]
     cmp bl, 20h
     jge loc_000EF
     jmp near ptr loc_00055
@@ -120,7 +122,7 @@ loc_000F7:
     xor bh, bh
     sub bx, 20h
     shl bx, 1
-    add bx, 81Ah
+    add bx, 81Ah            ; tbl_KeyDispatch
     mov ax, word ptr cs:[bx]
     or ax, ax
     jne loc_0010C
@@ -128,7 +130,7 @@ loc_000F7:
 loc_0010C:
     jmp ax
 loc_0010E:
-    mov bl, byte ptr [v_0B9A]
+    mov bl, byte ptr [v_KeyCode]
     cmp bl, 3Bh
     jge loc_0011A
     jmp near ptr loc_00055
@@ -140,7 +142,7 @@ loc_00122:
     xor bh, bh
     sub bx, 3Bh
     shl bx, 1
-    add bx, 8DAh
+    add bx, 8DAh            ; tbl_ScanDispatch
     mov ax, word ptr cs:[bx]
     or ax, ax
     jne loc_00137
@@ -162,8 +164,8 @@ loc_00139:
 loc_00168:
     jmp near ptr loc_00799
 loc_0016B:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -195,8 +197,8 @@ loc_001AF:
     je loc_001B7
     jmp near ptr loc_00055
 loc_001B7:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6420h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -205,32 +207,32 @@ loc_001B7:
 loc_001CE:
     cmp ax, 1
     jne loc_001DB
-    mov byte ptr [v_0B9A], 4Bh
+    mov byte ptr [v_KeyCode], 4Bh
     jmp near ptr loc_00782
 loc_001DB:
     cmp ax, 2
     jne loc_001E8
-    mov byte ptr [v_0B9A], 48h
+    mov byte ptr [v_KeyCode], 48h
     jmp near ptr loc_00782
 loc_001E8:
     cmp ax, 3
     jne loc_001F5
-    mov byte ptr [v_0B9A], 4Dh
+    mov byte ptr [v_KeyCode], 4Dh
     jmp near ptr loc_00782
 loc_001F5:
     cmp ax, 4
     jne loc_00202
-    mov byte ptr [v_0B9A], 73h
+    mov byte ptr [v_KeyCode], 73h
     jmp near ptr loc_00782
 loc_00202:
     cmp ax, 5
     jne loc_0020F
-    mov byte ptr [v_0B9A], 50h
+    mov byte ptr [v_KeyCode], 50h
     jmp near ptr loc_00782
 loc_0020F:
     cmp ax, 6
     jne loc_0021C
-    mov byte ptr [v_0B9A], 74h
+    mov byte ptr [v_KeyCode], 74h
     jmp near ptr loc_00782
 loc_0021C:
     jmp near ptr loc_00055
@@ -260,7 +262,7 @@ loc_00268:
     call far ptr fn_117AC
 loc_00272:
     mov ax, 2
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1A6B5
     jmp near ptr loc_00055
 loc_00282:
@@ -288,8 +290,8 @@ loc_002CA:
     call far ptr fn_1270C
     jmp short loc_00268
 loc_002DD:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5B2Eh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -314,7 +316,7 @@ loc_0030C:
 loc_00314:
     jmp near ptr loc_00055
 loc_00317:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_00337
     call far ptr fn_08D3F
     cmp word ptr [v_50CC], 0
@@ -339,8 +341,8 @@ loc_00356:
     call far ptr fn_1A6B5
     jmp near ptr loc_00055
 loc_00368:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -378,9 +380,9 @@ loc_003D0:
     je loc_003DF
     jmp near ptr loc_00055
 loc_003DF:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_19B42
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_0042F
     jmp near ptr loc_00139
 loc_003F3:
@@ -413,13 +415,13 @@ loc_00432:
     mov ax, word ptr [si + 4]
     call far ptr fn_0795E
     pop ax
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_0045B
     and word ptr [v_946F], 0EFFFh
     or word ptr [v_946F], ax
     jmp short loc_00465
 loc_0045B:
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00465
     jmp near ptr loc_00139
 loc_00465:
@@ -431,7 +433,7 @@ loc_00465:
     cmp word ptr [v_50CC], 2
     jne loc_00492
     call far ptr fn_19B42
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00492
     jmp near ptr loc_00139
 loc_00492:
@@ -442,12 +444,12 @@ loc_0049A:
     cmp word ptr [v_50CC], 0
     jne loc_004B7
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, word ptr [si + 4]
     call far ptr fn_0A4B6
 loc_004B7:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     jmp near ptr loc_00055
 loc_004C5:
     and word ptr [v_50F6], 9FFFh
@@ -471,21 +473,21 @@ loc_004FB:
 loc_00503:
     jmp near ptr loc_00055
 loc_00506:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5D64h
     call far ptr fn_0D1DE
     cmp ax, 0
     je loc_00503
     call far ptr fn_19299
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00529
     jmp near ptr loc_00139
 loc_00529:
     jmp near ptr loc_00055
 loc_0052C:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -520,10 +522,10 @@ loc_00585:
     call far ptr fn_13E2F
     jmp near ptr loc_00055
 loc_00593:
-    call far ptr fn_13AC6
-    call far ptr fn_18A06
+    call far ptr fn_HideMouse
+    call far ptr fn_MusicStop
     mov ax, word ptr [v_5142]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, word ptr [v_5560]
     inc word ptr [bx + 2]
     call far ptr fn_10E6A
@@ -547,11 +549,11 @@ loc_005E4:
     or word ptr [v_505E], 0FEh
     and word ptr [v_50F6], 9FFFh
     call far ptr fn_0EBD6
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00605
     jmp near ptr loc_00139
 loc_00605:
-    cmp byte ptr [v_0B9A], 0FEh
+    cmp byte ptr [v_KeyCode], 0FEh
     jne loc_00614
     call far ptr fn_0F2C0
     jmp near ptr loc_00055
@@ -606,12 +608,12 @@ loc_006B0:
 loc_006CD:
     jmp near ptr loc_00055
 loc_006D0:
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     call far ptr fn_06EA4
     and word ptr [v_505E], 0DFFFh
     and word ptr [v_50F6], 9FFFh
     call far ptr fn_0D36C
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     je loc_006FA
     call far ptr fn_0F2C0
     jmp near ptr loc_00055
@@ -619,7 +621,7 @@ loc_006FA:
     jmp near ptr loc_00139
 loc_006FD:
     call far ptr fn_0E7B2
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_0070C
     jmp near ptr loc_00139
 loc_0070C:
@@ -630,7 +632,7 @@ loc_0070F:
     call far ptr fn_0CE82
     cmp word ptr [v_5110], 0
     je loc_00739
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 2Fh
     call far ptr fn_02262
     call far ptr fn_19CD2
@@ -645,7 +647,7 @@ loc_0073C:
     jmp near ptr loc_00055
 loc_00758:
     call far ptr fn_0DE48
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00767
     jmp near ptr loc_00139
 loc_00767:
@@ -661,24 +663,24 @@ loc_0077A:
 loc_00782:
     call far ptr fn_06EA4
     call far ptr fn_00FBA
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_00796
     jmp near ptr loc_00139
 loc_00796:
     jmp near ptr loc_00055
 loc_00799:
-    call far ptr fn_0FE45
-    call far ptr fn_18A06
+    call far ptr fn_TickRestore
+    call far ptr fn_MusicStop
     mov ax, 0
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
     call far ptr fn_PaletteFade
     call far ptr fn_1A0A0
-    call far ptr fn_188F9
+    call far ptr fn_SoundShutdown
     call far ptr fn_EMSClose
     mov ax, 0
-    int 33h
+    int 33h                 ; SEAM MOUSE: 00h - reset driver (hide cursor on exit)
     mov ax, 3
     int 10h                 ; SEAM VIDEO: mode 3 (text, exit)
     mov dx, 8E91h
@@ -708,7 +710,8 @@ loc_00809:
     jmp near ptr loc_00055
 loc_00817:
     jmp near ptr loc_00055
-tbl_0081A:
+; ASCII key dispatch: event code 1, index = key - 20h (0 = unhandled).
+tbl_KeyDispatch:                        ; 081Ah
     dw offset loc_003F3
     dw offset loc_00817
     dw 0h
@@ -805,7 +808,8 @@ tbl_0081A:
     dw 0h
     dw offset loc_00817
     dw 0h
-tbl_008DA:
+; Extended-key dispatch: event code 2, index = scancode - 3Bh (0 = unhandled).
+tbl_ScanDispatch:                       ; 08DAh
     dw offset loc_00356
     dw offset loc_00356
     dw offset loc_00356
@@ -889,8 +893,8 @@ fn_00952:
     mov word ptr [v_50E8], ax
 loc_00981:
     or word ptr [v_5064], 8
-    call far ptr fn_18A06
-    call far ptr fn_13AC6
+    call far ptr fn_MusicStop
+    call far ptr fn_HideMouse
     call far ptr fn_FadeOut
     call far ptr fn_04F2A
     mov ax, word ptr [v_WorkSeg]
@@ -1247,9 +1251,9 @@ loc_00DEB:
     call far ptr fn_03000
     jmp near ptr loc_009D7
 loc_00DF8:
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     call far ptr fn_FadeOut
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_04C46
     mov ax, 4424h
     mov bx, 9093h
@@ -1421,19 +1425,19 @@ fn_00FBA:
     xor cx, cx
     xor dx, dx
     and word ptr [v_505E], 0E7FFh
-    cmp byte ptr [v_0B9A], 48h
+    cmp byte ptr [v_KeyCode], 48h
     je loc_01040
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     je loc_00FF8
-    cmp byte ptr [v_0B9A], 4Bh
+    cmp byte ptr [v_KeyCode], 4Bh
     jne loc_00FE1
     jmp near ptr loc_01088
 loc_00FE1:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_00FEB
     jmp near ptr loc_010D6
 loc_00FEB:
-    cmp byte ptr [v_0B9A], 73h
+    cmp byte ptr [v_KeyCode], 73h
     jne loc_00FF5
     jmp near ptr loc_01124
 loc_00FF5:
@@ -1670,7 +1674,7 @@ loc_01286:
     je loc_01295
 loc_0128D:
     mov ax, word ptr [v_5148]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_01295:
     mov ax, word ptr [v_50DC]
     mov word ptr [v_0CCA], ax
@@ -1729,11 +1733,11 @@ loc_0131F:
     call far ptr fn_13056
     call far ptr fn_10E42
     call far ptr fn_12A96
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_013D4
 loc_0135E:
     call far ptr fn_09F1C
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_013D4
     call far ptr fn_12602
     call far ptr fn_1A6B5
@@ -1783,10 +1787,10 @@ sub_013DB:
     pop ax
     ret
 sub_013FF:
-    cmp byte ptr [v_0B9A], 48h
+    cmp byte ptr [v_KeyCode], 48h
     je loc_01410
     mov ax, word ptr [v_5142]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_01467
 loc_01410:
     mov ax, 0Ch
@@ -1817,7 +1821,7 @@ loc_01410:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, word ptr [v_5142]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_01467:
     mov ax, word ptr [v_0B9C]
     add word ptr [v_94E7], ax
@@ -1835,8 +1839,8 @@ fn_01488:
     or word ptr [v_5064], 8
     mov ax, 1
     mov word ptr [v_511A], ax
-    call far ptr fn_18800
-    call far ptr fn_13AC6
+    call far ptr fn_PlayMusic
+    call far ptr fn_HideMouse
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
@@ -1920,7 +1924,7 @@ loc_01564:
     mov cx, word ptr [si + 2]
     call sub_016EC
     add si, 6
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_01564
 loc_015C2:
     call sub_01702
@@ -1936,18 +1940,18 @@ loc_015C2:
     call far ptr fn_FileRead
     call far ptr fn_18F17
     call far ptr fn_FadeOut
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     and word ptr [v_5064], 0FFF7h
     retf
 sub_0160C:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_01624
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_01624
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
 loc_01624:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     ret
 sub_0162A:
     mov es, word ptr [v_WorkSeg]
@@ -2065,7 +2069,7 @@ fn_0171C:
     mov ax, 0Ah
     call far ptr fn_DelayTicks
     mov ax, 14h
-    call far ptr fn_18800
+    call far ptr fn_PlayMusic
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov ax, word ptr [v_WorkSeg]
@@ -2108,7 +2112,7 @@ fn_0171C:
     mov ax, 12Ch
     call far ptr fn_DelayTicks
     mov ax, 0Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     and word ptr [v_50F6], 0EFFFh
     call sub_01BCA
     mov word ptr [v_94F1], 1E0h
@@ -2241,7 +2245,7 @@ fn_0171C:
     call far ptr fn_PaletteFade
     mov ax, 64h
     call far ptr fn_DelayTicks
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_01A5D
 loc_01A56:
     cmp byte ptr [v_0C2C], 0
@@ -2305,11 +2309,11 @@ sub_01B28:
     mov cx, 0FFFFh
     call sub_01BBA
     mov ax, 47h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 0FFFFh
     call sub_01BBA
     mov ax, 48h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     ret
 sub_01B45:
     test word ptr [v_505E], 400h
@@ -2318,11 +2322,11 @@ sub_01B45:
     loop sub_01B45
     ret
 sub_01B56:
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     je loc_01B69
     cmp ax, -1
     je loc_01B69
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     ret
 loc_01B69:
     cmp bx, 0
@@ -2356,7 +2360,7 @@ loc_01BB1:
     inc word ptr [v_50FE]
     ret
 sub_01BBA:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_01BC9
     cmp cx, -1
     je loc_01BC9
@@ -2380,7 +2384,7 @@ fn_01BE8:
     call far ptr fn_EMSInit
     call far ptr fn_CacheInit
     call far ptr fn_18F17
-    call sub_01D7E
+    call sub_FlushKeyboard
     call sub_01DFC
     call sub_0222C
     mov word ptr [v_9095], ds
@@ -2411,20 +2415,20 @@ loc_01C36:
     call sub_02001
     call sub_02032
     call sub_02189
-    call far ptr fn_13AEE
-    call far ptr fn_18954
+    call far ptr fn_MouseInit
+    call far ptr fn_SoundInit
     mov word ptr [v_94D7], 5
     call sub_021BA
     call far ptr fn_FadeOut
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     test word ptr [v_505E], 8000h
     jne loc_01CEE
     call far ptr fn_11B00
-    call far ptr fn_0FE05
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_TickInit
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_01CB2
     call far ptr fn_050C4
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_01CB2
     mov ax, 14h
     call far ptr fn_0617A
@@ -2433,25 +2437,25 @@ loc_01CB2:
     je loc_01CCC
     cmp byte ptr [v_0C2C], 0
     je loc_01CCC
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     mov word ptr [v_511A], 0
 loc_01CCC:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call sub_021BA
     call far ptr fn_FadeOut
     test word ptr [v_505E], 4000h
     jne loc_01D0D
     call far ptr fn_0D36C
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_01D0D
     retf
 loc_01CEE:
-    call far ptr fn_0FE05
-    call far ptr fn_13BE3
+    call far ptr fn_TickInit
+    call far ptr fn_ShowMouse
     test word ptr [v_505E], 4000h
     jne loc_01D0D
     call far ptr fn_0D36C
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_01D0D
     retf
 loc_01D0D:
@@ -2478,16 +2482,22 @@ loc_01D5B:
     and word ptr [v_50F6], 1FFFh
     call far ptr fn_1A6B5
     call far ptr fn_0EBD6
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_01D73
     retf
 loc_01D73:
     call far ptr fn_0F2C0
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     retf
-sub_01D7E:
+; ---------------------------------------------------------------------------
+; sub_FlushKeyboard (0x01D7E) - discard pending DOS keyboard input.
+; in:  -
+; out: -
+; Notes: called during init after the EMS/cache setup.
+; ---------------------------------------------------------------------------
+sub_FlushKeyboard:
     mov ax, 0C00h
-    int 21h
+    int 21h                 ; SEAM INPUT: DOS 0Ch - flush keyboard typeahead
     ret
 sub_01D84:
     mov bx, 907Ch
@@ -3366,7 +3376,7 @@ fn_02892:
     je loc_028A9
     call sub_02B67
 loc_028A9:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_028A9
     cmp word ptr [v_50CC], 3
@@ -3394,14 +3404,14 @@ loc_028EE:
     call sub_02B67
     jmp short loc_028A9
 loc_028FD:
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     je loc_02973
-    cmp byte ptr [v_0B9A], 20h
+    cmp byte ptr [v_KeyCode], 20h
     je loc_02973
     jmp short loc_028A9
 loc_0290D:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 68D8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -3421,8 +3431,8 @@ loc_02934:
     call far ptr fn_1A6B5
     jmp short loc_02996
 loc_0294C:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 68D8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -3519,11 +3529,11 @@ sub_02A6A:
     cmp word ptr [v_0B84], 0
     je loc_02A89
     mov ax, word ptr [v_0B88]
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_02A89
-    cmp byte ptr [v_0B9A], 48h
+    cmp byte ptr [v_KeyCode], 48h
     je loc_02A90
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     je loc_02ABB
 loc_02A89:
     mov word ptr [v_50CC], 0
@@ -3567,16 +3577,16 @@ loc_02ADC:
 sub_02AE6:
     cmp word ptr [v_0B84], 0
     je loc_02B60
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_02B04
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     je loc_02B1D
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_02B41
     jmp short loc_02B60
 loc_02B04:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6966h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -3839,7 +3849,7 @@ fn_02D6C:
     call sub_03215
     call far ptr fn_1A6B5
 loc_02D79:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02D79
     cmp word ptr [v_50CC], 3
@@ -3863,19 +3873,19 @@ loc_02DBB:
     call sub_03532
     call far ptr fn_1A6B5
 loc_02DC6:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02DC6
     cmp word ptr [v_50CC], 3
     jg loc_02DC6
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 697Ch
     call far ptr fn_0D1DE
     cmp ax, 0
     je loc_02E15
-    mov word ptr [v_0F08], 0
-    mov word ptr [v_0F0A], 0
+    mov word ptr [v_MouseLeftX], 0
+    mov word ptr [v_MouseLeftY], 0
     and word ptr [v_509A], 1Fh
     dec ax
     mov cx, ax
@@ -3922,7 +3932,7 @@ loc_02E6E:
 loc_02E71:
     call far ptr fn_1A6B5
 loc_02E76:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02E76
     cmp word ptr [v_50CC], 3
@@ -3946,19 +3956,19 @@ loc_02EB8:
     call sub_0360E
     call far ptr fn_1A6B5
 loc_02EC3:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02EC3
     cmp word ptr [v_50CC], 3
     jg loc_02EC3
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 697Ch
     call far ptr fn_0D1DE
     cmp ax, 0
     je loc_02F12
-    mov word ptr [v_0F08], 0
-    mov word ptr [v_0F0A], 0
+    mov word ptr [v_MouseLeftX], 0
+    mov word ptr [v_MouseLeftY], 0
     and word ptr [v_509A], 1Fh
     dec ax
     mov cx, ax
@@ -3991,7 +4001,7 @@ fn_02F24:
     call sub_03988
     call far ptr fn_1A6B5
 loc_02F61:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02F61
     cmp word ptr [v_50CC], 3
@@ -4006,20 +4016,20 @@ fn_02F86:
     call sub_03E18
     call far ptr fn_1A6B5
 loc_02F91:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02F91
     cmp word ptr [v_50CC], 3
     jg loc_02F91
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 697Ch
     call far ptr fn_0D1DE
     cmp ax, 0
     je loc_02FBB
     call sub_03F6B
 loc_02FBB:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_02F91
     retf
 fn_02FC3:
@@ -4031,7 +4041,7 @@ loc_02FC6:
     call far ptr fn_04A81
     call far ptr fn_1A6B5
 loc_02FDB:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_02FC6
     cmp word ptr [v_50CC], 3
@@ -4055,7 +4065,7 @@ loc_03006:
     call far ptr fn_04A81
     call far ptr fn_1A6B5
 loc_03030:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_03030
     cmp word ptr [v_50CC], 3
@@ -4073,19 +4083,19 @@ fn_0305C:
     mov word ptr [v_50D6], 1
     call sub_030BD
     call far ptr fn_FadeIn
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0306F:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0306F
     cmp word ptr [v_50CC], 3
     jg loc_0306F
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_030BC
     cmp word ptr [v_50CC], 3
     jne loc_030AB
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 687Ch
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -4124,7 +4134,7 @@ fn_03100:
     call sub_03CE1
     call far ptr fn_1A6B5
 loc_0310D:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0310D
     cmp word ptr [v_50CC], 3
@@ -4174,16 +4184,16 @@ sub_03132:
     add di, 8
     ret
 sub_0319D:
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_031B4
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     je loc_031CD
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_031E5
     jmp short loc_0320E
 loc_031B4:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6966h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -4235,7 +4245,7 @@ sub_03215:
     mov bx, 8A57h
     call far ptr fn_13E74
     mov word ptr [v_50E6], 5Fh
-    mov byte ptr [v_0B9A], 32h
+    mov byte ptr [v_KeyCode], 32h
     call sub_0339A
     mov word ptr [v_0B24], 3Bh
     mov word ptr [v_0CCA], 0F1h
@@ -4246,7 +4256,7 @@ sub_03215:
     mov bx, 8B24h
     call far ptr fn_13E74
     mov word ptr [v_50E6], 5Fh
-    mov byte ptr [v_0B9A], 34h
+    mov byte ptr [v_KeyCode], 34h
     call sub_0339A
     mov word ptr [v_0B24], 4Dh
     mov word ptr [v_0CCA], 0F3h
@@ -4257,7 +4267,7 @@ sub_03215:
     mov bx, 8B2Ch
     call far ptr fn_13E74
     mov word ptr [v_50E6], 53h
-    mov byte ptr [v_0B9A], 36h
+    mov byte ptr [v_KeyCode], 36h
     call sub_0339A
     mov word ptr [v_0B24], 5Fh
     mov word ptr [v_0CCA], 0F0h
@@ -4268,7 +4278,7 @@ sub_03215:
     mov bx, 8B32h
     call far ptr fn_13E74
     mov word ptr [v_50E6], 53h
-    mov byte ptr [v_0B9A], 31h
+    mov byte ptr [v_KeyCode], 31h
     call sub_033E2
     mov word ptr [v_0B24], 71h
     mov word ptr [v_0CCA], 0F2h
@@ -4279,7 +4289,7 @@ sub_03215:
     mov bx, 8B38h
     call far ptr fn_13E74
     mov word ptr [v_50E6], 71h
-    mov byte ptr [v_0B9A], 33h
+    mov byte ptr [v_KeyCode], 33h
     call sub_033E2
     mov word ptr [v_0B24], 83h
     mov word ptr [v_0CCA], 0F4h
@@ -4290,7 +4300,7 @@ sub_03215:
     mov bx, 8B43h
     call far ptr fn_13E74
     mov word ptr [v_50E6], 4Dh
-    mov byte ptr [v_0B9A], 35h
+    mov byte ptr [v_KeyCode], 35h
     call sub_033E2
     ret
 sub_0339A:
@@ -4299,7 +4309,7 @@ sub_0339A:
     call far ptr fn_13E74
     add word ptr [v_50E6], 60h
     mov word ptr [v_0CC6], 59h
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     call far ptr fn_1A03C
     add word ptr [v_50E6], 6
     mov word ptr [v_0CC6], 0Ah
@@ -4316,7 +4326,7 @@ sub_033E2:
     call far ptr fn_13E74
     add word ptr [v_50E6], 60h
     mov word ptr [v_0CC6], 59h
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     call far ptr fn_1A03C
     add word ptr [v_50E6], 6
     mov word ptr [v_0CC6], 0Ah
@@ -5499,7 +5509,7 @@ loc_0445B:
     mov ax, word ptr es:[si + 5Ch]
     or ax, ax
     je loc_04493
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_04493
 loc_04471:
     cmp word ptr [v_50D4], 4Fh
@@ -5567,7 +5577,7 @@ loc_04549:
     call sub_04022
     call far ptr fn_04A81
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     or word ptr [v_50F6], 8000h
     and word ptr [v_505E], 0FBFFh
     ret
@@ -5896,7 +5906,7 @@ S0493 segment byte use16
     db 0h
 fn_04932:
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov word ptr [v_50E6], 23h
     mov word ptr [v_50FE], 10h
     mov word ptr [v_0CC6], 59h
@@ -6062,20 +6072,20 @@ loc_04B5B:
     loop loc_04B5B
     retf
 fn_04B70:
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_04BD8
     mov word ptr [v_0BA4], 8
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_04B87
     jmp near ptr loc_04C11
 loc_04B87:
     mov word ptr [v_0BA4], 1
-    cmp byte ptr [v_0B9A], 4Bh
+    cmp byte ptr [v_KeyCode], 4Bh
     je loc_04BF8
     mov word ptr [v_0BA4], 9
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     je loc_04C07
-    cmp byte ptr [v_0B9A], 9
+    cmp byte ptr [v_KeyCode], 9
     jne loc_04BBA
     and word ptr [v_5066], 0FF9Fh
     push cs
@@ -6083,12 +6093,12 @@ loc_04B87:
     mov word ptr [v_0BA4], 0FFFFh
     jmp near ptr loc_04C45
 loc_04BBA:
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     jl loc_04C3F
-    cmp byte ptr [v_0B9A], 40h
+    cmp byte ptr [v_KeyCode], 40h
     jg loc_04C3F
     xor ah, ah
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     sub ax, 3Bh
     add ax, 2
     mov word ptr [v_0BA4], ax
@@ -6096,8 +6106,8 @@ loc_04BBA:
 loc_04BD8:
     cmp word ptr [v_50CC], 3
     jne loc_04C3F
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 687Ch
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -6127,7 +6137,7 @@ loc_04C1A:
     and word ptr [v_5066], 1FFh
     or word ptr [v_5066], bx
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_04C45
 loc_04C3A:
     inc dx
@@ -6302,10 +6312,10 @@ fn_04C9A:
     push word ptr [v_0CCA]
     push word ptr [v_0CCC]
     push word ptr [v_50CC]
-    mov ax, word ptr [v_40E0]
+    mov ax, word ptr [v_MouseCursor]
     mov word ptr [v_0CCA], ax
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     pop word ptr [v_50CC]
     pop word ptr [v_0CCC]
     pop word ptr [v_0CCA]
@@ -6337,7 +6347,7 @@ fn_04E04:
     mov ax, word ptr [v_0B26]
     stosw
     xor ah, ah
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     stosw
     mov ax, word ptr [v_0BA4]
     stosw
@@ -6375,7 +6385,7 @@ fn_04E04:
     stosw
     mov ax, word ptr [v_0E00]
     stosw
-    mov ax, word ptr [v_40E0]
+    mov ax, word ptr [v_MouseCursor]
     stosw
     mov ax, word ptr [v_40E2]
     stosw
@@ -6560,8 +6570,8 @@ loc_04FF4:
     call far ptr fn_FadeOut
 loc_050AE:
     mov word ptr [v_0CCA], 1Dh
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     pop ds
     pop di
     pop si
@@ -6572,24 +6582,24 @@ S0493 ends
 S050C segment byte use16
 fn_050C4:
     call sub_05D5B
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_050DB
     call sub_052BF
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_050DB
     call sub_054B1
 loc_050DB:
     call sub_050FD
     retf
 sub_050DF:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_050F7
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_050F7
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
 loc_050F7:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     ret
 sub_050FD:
     call far ptr fn_FadeOut
@@ -6612,15 +6622,15 @@ sub_050FD:
 loc_05148:
     call far ptr fn_FadeOut
     call sub_05177
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_0516C
     cmp byte ptr [v_0C2C], 0
     je loc_0516C
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     mov ax, 14h
     call far ptr fn_DelayTicks
 loc_0516C:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     and word ptr [v_5064], 0FFF7h
     ret
 sub_05177:
@@ -6759,7 +6769,7 @@ loc_052C8:
     inc di
     loop loc_052C8
     mov ax, 12h
-    call far ptr fn_18800
+    call far ptr fn_PlayMusic
     or word ptr [v_5062], 800h
     call far ptr fn_1A6B5
     mov cx, 3Fh
@@ -7108,7 +7118,7 @@ loc_056B0:
     ret
 loc_05700:
     mov ax, 11h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     or word ptr [v_5062], 800h
     mov dx, 0B0h
     call sub_06070
@@ -7128,7 +7138,7 @@ loc_0571D:
     call sub_0614B
     call sub_0615B
     mov ax, 12h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1A6B5
     mov ax, 5
     mov bx, 3Fh
@@ -7142,7 +7152,7 @@ loc_05770:
     mov cx, 0FFFFh
     call sub_0614B
     mov ax, 13h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     and word ptr [v_5062], 0F7FFh
     call sub_060DA
     call sub_060CD
@@ -7194,7 +7204,7 @@ loc_057EC:
     mov cx, 0FFFFh
     call sub_0614B
     mov ax, 18h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_050DF
     jne loc_0583E
     ret
@@ -7202,7 +7212,7 @@ loc_0583E:
     mov cx, 19h
     call sub_0614B
     mov ax, 19h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_060CD
     and word ptr [v_5062], 0F7FFh
     mov ax, 0
@@ -7343,7 +7353,7 @@ loc_05A4B:
     mov cx, 0FFFFh
     call sub_0614B
     mov ax, 12h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_05177
     call sub_050DF
     jne loc_05A6B
@@ -7450,14 +7460,14 @@ loc_05B98:
     ret
 loc_05BA4:
     mov ax, 16h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 0FFFFh
     call sub_0614B
     call sub_050DF
     jne loc_05BB8
     ret
 loc_05BB8:
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     jne loc_05BCE
     mov es, word ptr [v_5058]
     mov di, 8C0h
@@ -7468,7 +7478,7 @@ loc_05BCE:
     mov cx, 3
     call sub_06097
     mov ax, 1Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 2
     call sub_06097
     mov ax, 0
@@ -7507,7 +7517,7 @@ loc_05C50:
     mov cx, 0FFFFh
     call sub_0614B
     mov ax, 1Bh
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_060DA
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
@@ -7534,7 +7544,7 @@ loc_05C9C:
     ret
 loc_05CAE:
     mov ax, 1Bh
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov si, 6DDEh
     or word ptr [si], 0C000h
     call sub_05185
@@ -7561,7 +7571,7 @@ loc_05CEE:
     mov cx, 0FFFFh
     call sub_0614B
     mov ax, 5
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 5
     call sub_06097
     mov cx, 0FFFFh
@@ -7590,7 +7600,7 @@ sub_05D5B:
     or word ptr [v_5064], 8
     cmp byte ptr [v_0C2C], 0
     je loc_05D74
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     mov ax, 14h
     call far ptr fn_DelayTicks
 loc_05D74:
@@ -7729,7 +7739,7 @@ loc_05E4C:
     call sub_05185
     or word ptr [v_50F6], 8000h
     and word ptr [v_505E], 0FBFFh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     ret
 sub_05FC7:
     push cx
@@ -7861,11 +7871,11 @@ sub_060DA:
     call sub_0607B
     ret
 sub_060E7:
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     je loc_060FA
     cmp ax, -1
     je loc_060FA
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     ret
 loc_060FA:
     cmp bx, 0
@@ -7899,7 +7909,7 @@ loc_06142:
     inc word ptr [v_50FE]
     ret
 sub_0614B:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_0615A
     cmp cx, -1
     je loc_0615A
@@ -7924,13 +7934,13 @@ fn_0617A:
     mov word ptr [v_50DA], ax
     push word ptr [v_50F6]
     call sub_06280
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_061E2
     mov word ptr [v_0CCA], 11h
     mov cx, 6
 loc_06194:
     call sub_0622A
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_061E2
     inc word ptr [v_0CCA]
     loop loc_06194
@@ -7953,20 +7963,20 @@ loc_061E2:
     pop word ptr [v_50F6]
     retf
 sub_061EA:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_06202
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_06202
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
 loc_06202:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     ret
 sub_06208:
     call far ptr fn_FadeOut
     call sub_0621C
     and word ptr [v_5062], 0F7FFh
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_0621C:
     mov es, word ptr [v_WorkSeg]
@@ -8008,13 +8018,13 @@ sub_06280:
     call far ptr fn_FadeOut
     cmp byte ptr [v_0C2C], 0
     je loc_0629E
-    cmp word ptr [v_0C40], 1
+    cmp word ptr [v_MusicId], 1
     je loc_0629E
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
 loc_0629E:
     mov ax, 1
     mov word ptr [v_511A], ax
-    call far ptr fn_1888A
+    call far ptr fn_MusicService
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
@@ -8025,7 +8035,7 @@ loc_0629E:
     call far ptr fn_FadeOut
     call sub_0621C
     or word ptr [v_50F6], 8000h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     ret
 fn_062DD:
     test word ptr [v_505E], 400h
@@ -8086,44 +8096,56 @@ loc_0633A:
     mov word ptr [v_50CC], 0
     retf
 S0632 ends
+; ---------------------------------------------------------------------------
+; Keyboard input: blocking wait (S0634).
+; Polls DOS int 21h 06h until a key or a mouse button is available. A left
+; button returns 0 (accept), a right button 1Bh (cancel); the mouse latches are
+; cleared and the DOS typeahead is flushed before returning. Sound is serviced
+; through fn_MusicService while waiting.
+; ---------------------------------------------------------------------------
 S0634 segment byte use16
     db 0h
-fn_06342:
+; ---------------------------------------------------------------------------
+; fn_WaitKey (0x06342) - block until a key or a mouse button.
+; in:  -
+; out: v_KeyCode = ASCII key; 0 for a left click, 1Bh for a right click
+; ---------------------------------------------------------------------------
+fn_WaitKey:
 IFDEF STREAM
     call far ptr fn_StreamPresent
 ENDIF
-    call far ptr fn_1888A
+    call far ptr fn_MusicService    ; service sound while waiting
     mov ah, 6
     mov dl, 0FFh
-    int 21h
-    je loc_06354
-    mov byte ptr [v_0B9A], al
+    int 21h                 ; SEAM INPUT: DOS 06h - poll console input (non-blocking)
+    je loc_06354            ; no key pending
+    mov byte ptr [v_KeyCode], al
     jmp short loc_06376
 loc_06354:
-    test word ptr [v_40F6], 2400h
-    je fn_06342
-    mov byte ptr [v_0B9A], 0
-    test word ptr [v_40F6], 2000h
+    test word ptr [v_MouseState], 2400h    ; left (2000h) or right (0400h) button
+    je fn_WaitKey
+    mov byte ptr [v_KeyCode], 0      ; left button: accept
+    test word ptr [v_MouseState], 2000h
     jne loc_06376
-    mov byte ptr [v_0B9A], 1Bh
-    test word ptr [v_40F6], 400h
-    je fn_06342
+    mov byte ptr [v_KeyCode], 1Bh    ; right button: cancel
+    test word ptr [v_MouseState], 400h
+    je fn_WaitKey
 loc_06376:
-    and word ptr [v_40F6], 80FFh
+    and word ptr [v_MouseState], 80FFh     ; clear mouse event latches
     mov ax, 0C00h
-    int 21h
+    int 21h                 ; SEAM INPUT: DOS 0Ch - flush keyboard typeahead
     retf
 S0634 ends
 S0638 segment byte use16
 fn_06382:
     and word ptr [v_5062], 0FFDFh
     call far ptr fn_12FC6
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     or word ptr [v_505E], 1800h
     mov word ptr [v_94AD], 28h
     call far ptr fn_0A14B
     and word ptr [v_505E], 0F7FFh
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_063B0
     retf
 loc_063B0:
@@ -8142,15 +8164,15 @@ loc_063D4:
     test word ptr [bx + 6], 8000h
     je loc_063EB
     call sub_0690D
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_06403
     jmp short loc_06401
 loc_063EB:
     call sub_06493
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_06401
     call far ptr fn_15FBC
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_06403
 loc_06401:
     pop ax
@@ -8164,7 +8186,7 @@ loc_06403:
     call far ptr fn_13056
     call far ptr fn_10E42
     call far ptr fn_12A96
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_06401
     jmp short loc_063C7
 loc_0642C:
@@ -8200,7 +8222,7 @@ sub_06493:
     mov si, word ptr [bx]
     test word ptr [si + 1Ch], 1C40h
     je loc_064B4
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_064B4:
     mov word ptr [v_5070], si
@@ -8225,7 +8247,7 @@ loc_064E5:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
 loc_064F7:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_064E5
     cmp word ptr [v_50CC], 1
@@ -8253,40 +8275,40 @@ loc_0653C:
     and word ptr [v_5062], 0FFDFh
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_06552:
-    cmp byte ptr [v_0B9A], 41h
+    cmp byte ptr [v_KeyCode], 41h
     jne loc_0655C
     jmp near ptr loc_06799
 loc_0655C:
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     jne loc_06566
     jmp near ptr loc_0687D
 loc_06566:
-    cmp byte ptr [v_0B9A], 44h
+    cmp byte ptr [v_KeyCode], 44h
     jne loc_06570
     jmp near ptr loc_06885
 loc_06570:
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     jne loc_0657A
     jmp near ptr loc_068C3
 loc_0657A:
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jl loc_0658D
-    cmp byte ptr [v_0B9A], 34h
+    cmp byte ptr [v_KeyCode], 34h
     jg loc_0658D
     call far ptr fn_16044
 loc_0658D:
     test word ptr [v_505E], 8000h
     je loc_0659E
-    cmp byte ptr [v_0B9A], 9
+    cmp byte ptr [v_KeyCode], 9
     jne loc_0659E
     jmp short loc_0653C
 loc_0659E:
     test word ptr [v_505E], 8000h
     je loc_065B0
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     jne loc_065B0
     jmp near ptr loc_06901
 loc_065B0:
@@ -8301,8 +8323,8 @@ loc_065C2:
     or word ptr [v_505E], 400h
     jmp near ptr loc_064BE
 loc_065D0:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -8315,8 +8337,8 @@ loc_065EC:
 loc_065EF:
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -8338,18 +8360,18 @@ loc_06635:
     call far ptr fn_1789B
     cmp word ptr [v_50CC], 2
     jne loc_06618
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_19B42
     test word ptr [v_5062], 20h
     je loc_0665B
     mov ax, 0Ah
     call far ptr fn_DelayTicks
 loc_0665B:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_064BE
 loc_06663:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 669Eh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -8378,7 +8400,7 @@ loc_066A5:
 loc_066AC:
     cmp ax, 6
     jne loc_066D1
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_066C0
     call far ptr fn_16044
     jmp near ptr loc_064BE
@@ -8390,8 +8412,8 @@ loc_066C0:
 loc_066D1:
     jmp near ptr loc_064BE
 loc_066D4:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5B2Eh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -8412,8 +8434,8 @@ loc_066FB:
 loc_06703:
     jmp near ptr loc_064DD
 loc_06706:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6606h
     call far ptr fn_0D1DE
     mov bx, 51BCh
@@ -8491,17 +8513,17 @@ loc_06799:
     call far ptr fn_15D89
     cmp word ptr [v_0C36], 0
     jne loc_06804
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_06802
     mov ax, word ptr [v_515A]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_06802:
     jmp short loc_0683F
 loc_06804:
     call far ptr fn_18C1C
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_06835
     mov si, word ptr [v_5070]
     mov ax, word ptr [si + 142h]
@@ -8510,7 +8532,7 @@ loc_06804:
     mov ax, word ptr [bx + 0Ah]
     or ax, ax
     je loc_06835
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_06835:
     mov ax, word ptr [v_0C36]
     mov di, word ptr [v_51BA]
@@ -8538,11 +8560,11 @@ loc_06885:
     or word ptr [v_505E], 5Eh
     and word ptr [v_50F6], 9FFFh
     call far ptr fn_0EBD6
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     jne loc_068A3
     ret
 loc_068A3:
-    cmp byte ptr [v_0B9A], 0FEh
+    cmp byte ptr [v_KeyCode], 0FEh
     jne loc_068B0
     call far ptr fn_0F2C0
     ret
@@ -8563,7 +8585,7 @@ loc_068DE:
     cmp word ptr [v_50CC], 2
     jne loc_068F9
     call far ptr fn_19B42
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_068F9:
     call far ptr fn_135B2
     jmp near ptr loc_064BE
@@ -8572,7 +8594,7 @@ loc_06901:
     mov word ptr [si + 10h], 0
     jmp near ptr loc_0653C
 sub_0690D:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov word ptr [v_0C34], 0
     mov word ptr [v_0C38], 0
     mov word ptr [v_0C36], 0
@@ -8623,18 +8645,18 @@ loc_06982:
     call sub_06C82
     cmp word ptr [v_0C36], 0
     je loc_069F2
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_069C9
     mov si, word ptr [v_50A0]
     mov ax, word ptr [si + 5Ch]
     or ax, ax
     je loc_069C9
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_069C9:
     mov ax, word ptr [si + 52h]
     mov word ptr [v_555C], ax
     call far ptr fn_08172
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_069DC
     ret
 loc_069DC:
@@ -8646,7 +8668,7 @@ loc_069E7:
     call far ptr fn_0AD9D
     jmp near ptr loc_06AAA
 loc_069F2:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_06A04
 loc_069F9:
     mov ax, 0Ch
@@ -8657,7 +8679,7 @@ loc_06A04:
     mov ax, word ptr [si + 5Eh]
     cmp ax, 0
     je loc_069F9
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_06AAA
 loc_06A18:
     push bp
@@ -8686,13 +8708,13 @@ loc_06A2D:
     test word ptr [v_5062], 4
     jne loc_06A7B
     or word ptr [v_5062], 4
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_06A7B
     mov si, word ptr [v_50A0]
     mov ax, word ptr [si + 5Ch]
     or ax, ax
     je loc_06A7B
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_06A7B:
     pop cx
     add bp, 2
@@ -8708,7 +8730,7 @@ loc_06A92:
     mov ax, word ptr [si + 52h]
     mov word ptr [v_555C], ax
     call far ptr fn_08172
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_06AAA
     ret
 loc_06AAA:
@@ -9078,7 +9100,15 @@ loc_06E69:
     ret
 S0638 ends
 S06E7 segment byte use16
-fn_06E76:
+; ---------------------------------------------------------------------------
+; fn_SpeakerBeep (0x06E76) - PC speaker beep, the no-SFX fallback.
+; in:  -
+; out: -
+; Notes: PIT channel 2 divisor = 1234DEh / 708h = 296h (~1.8 kHz); gates the
+;        speaker on via port 61h, waits 4 BIOS ticks and gates it off. Called
+;        by fn_PlaySFX for effect 3 when sound effects are disabled.
+; ---------------------------------------------------------------------------
+fn_SpeakerBeep:
     push ax
     push bx
     push cx
@@ -9087,17 +9117,17 @@ fn_06E76:
     mov dx, 12h
     mov ax, 34DEh
     div cx
-    out 42h, al
+    out 42h, al             ; SEAM SOUND: PIT ch2 divisor low
     mov al, ah
-    out 42h, al
-    in al, 61h
+    out 42h, al             ; SEAM SOUND: PIT ch2 divisor high
+    in al, 61h              ; SEAM SOUND: speaker gate (port 61h)
     or al, 3
-    out 61h, al
+    out 61h, al             ; SEAM SOUND: speaker on
     mov ax, 4
     call far ptr fn_DelayTicks
-    in al, 61h
+    in al, 61h              ; SEAM SOUND: speaker gate (port 61h)
     and al, 0FCh
-    out 61h, al
+    out 61h, al             ; SEAM SOUND: speaker off
     pop dx
     pop cx
     pop bx
@@ -9219,7 +9249,7 @@ fn_06F86:
     push di
     push es
     push cx
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 0A000h
     mov es, ax
     test word ptr [v_5064], 1000h
@@ -9244,7 +9274,7 @@ loc_06FBA:
     add di, 0F8h
     pop cx
     loop loc_06FBA
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     pop cx
     pop es
     pop di
@@ -9261,7 +9291,7 @@ loc_06FD9:
     add di, 0F7h
     pop cx
     loop loc_06FD9
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     pop cx
     pop es
     pop di
@@ -9400,7 +9430,7 @@ fn_070EA:
     jne loc_070F3
     retf
 loc_070F3:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_070FD
     jmp near ptr loc_07270
 loc_070FD:
@@ -9427,7 +9457,7 @@ loc_07129:
     jmp near ptr loc_0724D
 loc_07133:
     mov ax, word ptr [bx + 8]
-    mov word ptr [v_40E0], ax
+    mov word ptr [v_MouseCursor], ax
     mov word ptr [v_0CCA], ax
     mov ax, word ptr [bx + 0Ah]
     mov word ptr [v_40E4], ax
@@ -9443,18 +9473,18 @@ loc_07133:
 loc_0715B:
     or byte ptr [v_5568], al
 loc_0715F:
-    call far ptr fn_13AC6
-    call far ptr fn_13B8A
+    call far ptr fn_HideMouse
+    call far ptr fn_SetMouseCursor
     push cs
     call sub_07342
     mov ax, word ptr [v_40E2]
     call far ptr fn_02262
     call far ptr fn_11F83
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 loc_07180:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [si]
     mov word ptr [v_955D], ax
     mov ax, word ptr [si + 2]
@@ -9477,13 +9507,13 @@ loc_071A0:
     shr al, cl
 loc_071B8:
     or byte ptr [v_5568], al
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_1755C
     push cs
     call sub_07342
     call far ptr fn_1A6B5
     call far ptr fn_06F86
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -9500,11 +9530,11 @@ loc_071B8:
     mov bx, 0AFF8h
     call far ptr fn_15A06
     call far ptr fn_13E74
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 loc_0722A:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [si]
     mov word ptr [v_9561], ax
     mov ax, word ptr [si + 2]
@@ -9517,7 +9547,7 @@ loc_0722A:
     jmp near ptr loc_071A0
 loc_0724D:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [si]
     mov word ptr [v_9565], ax
     mov ax, word ptr [si + 2]
@@ -9582,7 +9612,7 @@ loc_072E7:
     not byte ptr [v_0E02]
     mov bl, byte ptr [v_0E02]
     and byte ptr [v_5568], bl
-    mov word ptr [v_40E0], 0
+    mov word ptr [v_MouseCursor], 0
     mov word ptr [v_0CCA], 0
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
@@ -9666,10 +9696,10 @@ fn_073E3:
     call sub_07342
     push cs
     call fn_076AC
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_07408:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_07408
     cmp word ptr [v_50CC], 1
@@ -9696,11 +9726,11 @@ loc_07444:
     jne loc_07408
     jmp near ptr loc_07682
 loc_0744E:
-    cmp byte ptr [v_0B9A], 20h
+    cmp byte ptr [v_KeyCode], 20h
     jne loc_07458
     jmp near ptr loc_075B8
 loc_07458:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_07475
     test word ptr [v_946F], 200h
     je loc_0748E
@@ -9709,7 +9739,7 @@ loc_07458:
     call far ptr fn_02262
     jmp near ptr loc_0760F
 loc_07475:
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     jne loc_07489
     call far ptr fn_08668
     call far ptr fn_08763
@@ -9719,8 +9749,8 @@ loc_07489:
 loc_0748E:
     jmp near ptr loc_07408
 loc_07491:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -9751,8 +9781,8 @@ loc_074E2:
     call far ptr fn_1760E
     jmp near ptr loc_07408
 loc_074EA:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -9778,23 +9808,23 @@ loc_07523:
 loc_07526:
     test word ptr [v_5060], 80h
     jne loc_0753D
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0753A
     call far ptr fn_0A444
 loc_0753A:
     jmp near ptr loc_07408
 loc_0753D:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_0753A
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 645Eh
     call far ptr fn_0D1DE
     cmp ax, 1
     jne loc_0753A
     jmp short loc_075B8
 loc_0755A:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_07569
     call far ptr fn_16044
     jmp near ptr loc_07408
@@ -9808,8 +9838,8 @@ loc_07569:
     call far ptr fn_1A6B5
     jmp near ptr loc_07408
 loc_07586:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -9839,7 +9869,7 @@ loc_075BF:
     call far ptr fn_1A6B5
 loc_075E7:
     pop word ptr [v_50CC]
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     jmp near ptr loc_076AB
 loc_075F3:
     call far ptr fn_085CA
@@ -9882,12 +9912,12 @@ loc_0766A:
     jne loc_07675
     jmp near ptr loc_075B8
 loc_07675:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0A692
     jmp near ptr loc_07408
 loc_07682:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -10049,7 +10079,7 @@ fn_0784D:
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
     mov word ptr [v_DrawSeg], ax
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov si, word ptr [v_5070]
     mov bx, 7BEBh
     mov cx, 2
@@ -10120,10 +10150,10 @@ loc_078D9:
 loc_0794E:
     call far ptr fn_13E8C
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_0795E:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov word ptr [v_5560], 6EEEh
     cmp word ptr [v_50CC], 1
     je loc_07976
@@ -10166,7 +10196,7 @@ loc_079BE:
     mov word ptr [v_94F7], 0
     jmp short loc_0798D
 loc_079DF:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     test word ptr [v_556A], 80h
     jne loc_07A00
     mov ax, word ptr [v_5564]
@@ -10189,7 +10219,7 @@ loc_07A00:
     call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_1916C
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_07A38
     retf
 loc_07A38:
@@ -10267,7 +10297,7 @@ loc_07AEA:
     test word ptr [v_556A], 2
     jne loc_07B01
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, word ptr [v_5560]
     dec word ptr [bx + 2]
 loc_07B01:
@@ -10285,7 +10315,7 @@ sub_07B1D:
     ret
 loc_07B2B:
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, word ptr [v_5560]
     inc word ptr [bx + 2]
     call far ptr fn_10E6A
@@ -10323,13 +10353,13 @@ loc_07B92:
     pop si
     mov bx, word ptr [v_0CE0]
     mov ax, word ptr [bx + 8]
-    mov word ptr [v_40E0], ax
+    mov word ptr [v_MouseCursor], ax
     mov word ptr [v_0CCA], ax
     mov ax, word ptr [bx + 0Ah]
     mov word ptr [v_40E4], ax
     mov ax, word ptr [si + 2]
     mov word ptr [v_40E6], ax
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_076AC
     call far ptr fn_1A6B5
@@ -10347,20 +10377,20 @@ sub_07BC1:
     mov word ptr [v_955D], 1
     call far ptr fn_1755C
 loc_07BED:
-    mov word ptr [v_40E0], 0
+    mov word ptr [v_MouseCursor], 0
     mov word ptr [v_0CCA], 0
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
     mov word ptr [v_40E4], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_06EA4
     push cs
     call fn_076AC
     call far ptr fn_1A6B5
     ret
 sub_07C1F:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 63CEh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -10472,7 +10502,7 @@ loc_07D76:
     test word ptr [v_0BAA], 0FC00h
     je loc_07DBC
     and word ptr [v_0BAA], 0FFFEh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
     mov ax, word ptr [v_50A8]
@@ -10480,12 +10510,12 @@ loc_07D76:
     or word ptr [v_946F], ax
     call far ptr fn_11836
     call far ptr fn_117AC
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_07DBC:
     or word ptr [v_505E], 100h
     call far ptr fn_06EA4
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     mov si, word ptr [v_0CE8]
     mov es, word ptr [v_0CE6]
     mov ax, word ptr es:[si + 10h]
@@ -10521,7 +10551,7 @@ loc_07E21:
     call far ptr fn_0B00F
     jmp near ptr loc_07C5C
 loc_07E35:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_07E35
     cmp word ptr [v_50CC], 1
@@ -10536,25 +10566,25 @@ loc_07E52:
     je loc_07E7F
     jmp short loc_07E78
 loc_07E62:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 645Eh
     call far ptr fn_0D1DE
     cmp ax, 0
     jne loc_07E98
     jmp short loc_07EAE
 loc_07E78:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_07E84
 loc_07E7F:
     mov ax, word ptr [v_0BB0]
     jmp short loc_07E98
 loc_07E84:
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jl loc_07E35
-    cmp byte ptr [v_0B9A], 39h
+    cmp byte ptr [v_KeyCode], 39h
     jg loc_07E35
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     and ax, 0Fh
 loc_07E98:
     cmp ax, word ptr [v_0BB0]
@@ -10571,8 +10601,8 @@ loc_07EAE:
     jne loc_07EB9
     jmp near ptr loc_07E35
 loc_07EB9:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -10597,7 +10627,7 @@ loc_07EF3:
     jne loc_07EFB
     jmp near ptr loc_07E35
 loc_07EFB:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50C0], bx
     call far ptr fn_171AE
     test word ptr [v_0BAA], 8000h
@@ -10624,7 +10654,7 @@ loc_07F43:
     call far ptr fn_0B7C8
     call far ptr fn_0B7A4
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_07E35
 loc_07F60:
     test word ptr [v_0BAA], 3000h
@@ -10655,7 +10685,7 @@ loc_07F60:
     call far ptr fn_13E74
 loc_07FD0:
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_07E35
 loc_07FDD:
     call far ptr fn_195DA
@@ -10666,22 +10696,22 @@ loc_07FE5:
     jmp near ptr loc_07E35
 loc_07FF0:
     mov bx, 963Bh
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     jne loc_07FFD
     jmp near ptr loc_07EF3
 loc_07FFD:
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Ch
+    cmp byte ptr [v_KeyCode], 3Ch
     jne loc_0800A
     jmp near ptr loc_07EF3
 loc_0800A:
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Dh
+    cmp byte ptr [v_KeyCode], 3Dh
     jne loc_08017
     jmp near ptr loc_07EF3
 loc_08017:
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Eh
+    cmp byte ptr [v_KeyCode], 3Eh
     jne loc_08024
     jmp near ptr loc_07EF3
 loc_08024:
@@ -10849,7 +10879,7 @@ loc_08187:
     call far ptr fn_1A6B5
     test word ptr [v_5062], 4
     je loc_081A0
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_081A8
 loc_081A0:
     mov ax, 0Ch
@@ -10870,12 +10900,12 @@ loc_081BC:
     mov di, ax
     test word ptr [v_5062], 4
     jne loc_081E2
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_081DD
     mov ax, word ptr [di]
     or ax, ax
     je loc_081DD
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_081DD:
     or word ptr [v_5062], 4
 loc_081E2:
@@ -11392,8 +11422,8 @@ S084E ends
 S085C segment byte use16
 fn_085CA:
     call sub_092F2
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11435,15 +11465,15 @@ loc_08644:
     cmp word ptr [si], 0
     je loc_085E1
     or word ptr [v_5060], bx
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_091F9
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_08668:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_092F2
     mov si, 963Bh
     cmp word ptr [si], 0
@@ -11478,7 +11508,7 @@ loc_086C7:
     call sub_091F9
 loc_086E4:
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     test word ptr [v_5060], 1Ch
     je loc_08758
     call far ptr fn_0B540
@@ -11508,10 +11538,10 @@ loc_08747:
     call far ptr fn_13E8C
 loc_08758:
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_08763:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je fn_08763
     cmp word ptr [v_50CC], 1
@@ -11538,8 +11568,8 @@ loc_087A0:
     jne fn_08763
     jmp near ptr loc_08BC9
 loc_087AA:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11557,8 +11587,8 @@ loc_087CE:
     call far ptr fn_176EC
     jmp short fn_08763
 loc_087DA:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     call sub_093D4
     cmp word ptr [v_50CC], 1
     jne loc_087F3
@@ -11572,7 +11602,7 @@ loc_087F3:
     call far ptr fn_1274F
     mov ax, word ptr [v_40E2]
     call far ptr fn_02262
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0881F
     test word ptr [v_5060], 1Ch
     jne loc_08827
@@ -11595,15 +11625,15 @@ loc_08844:
     call far ptr fn_070EA
     jmp near ptr fn_08763
 loc_08854:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0885E
     jmp near ptr loc_08C06
 loc_0885E:
     call far ptr fn_16044
     jmp near ptr fn_08763
 loc_08866:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11663,16 +11693,16 @@ loc_0891D:
     call far ptr fn_07328
     jmp near ptr fn_08763
 loc_08925:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     call sub_093D4
     cmp word ptr [v_50CC], 1
     jne loc_08939
     jmp near ptr loc_0889A
 loc_08939:
-    mov ax, word ptr [v_0F08]
+    mov ax, word ptr [v_MouseLeftX]
     sub ax, word ptr [v_5056]
-    mov bx, word ptr [v_0F0A]
+    mov bx, word ptr [v_MouseLeftY]
     sub bx, word ptr [v_505A]
     mov si, 60F4h
     call far ptr fn_0D1DE
@@ -11755,8 +11785,8 @@ loc_089FB:
 loc_08A0D:
     jmp near ptr fn_08763
 loc_08A10:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11775,8 +11805,8 @@ loc_08A31:
 loc_08A42:
     jmp near ptr fn_08763
 loc_08A45:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     call sub_093D4
     cmp word ptr [v_50CC], 1
     je loc_08A42
@@ -11804,7 +11834,7 @@ loc_08A7A:
     call far ptr fn_DelayTicks
     call sub_09032
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov word ptr [v_50CC], 0
     retf
 loc_08ABB:
@@ -11813,7 +11843,7 @@ loc_08ABE:
     test word ptr [v_5060], 80h
     jne loc_08AE0
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_08ACE:
     test word ptr [v_5060], 80h
     jne loc_08AE0
@@ -11821,12 +11851,12 @@ loc_08ACE:
     mov word ptr [v_50CC], 2
     retf
 loc_08AE0:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0A692
     jmp near ptr fn_08763
 loc_08AED:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11869,22 +11899,22 @@ loc_08B66:
     test word ptr [v_5060], bx
     jne loc_08B92
     or word ptr [v_5060], bx
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_091F9
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr fn_08763
 loc_08B92:
     not bx
     and word ptr [v_5060], bx
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_091AF
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     test word ptr [v_5060], 7800h
     jne loc_08BC6
     call far ptr fn_06EA4
@@ -11893,8 +11923,8 @@ loc_08B92:
 loc_08BC6:
     jmp near ptr fn_08763
 loc_08BC9:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -11903,11 +11933,11 @@ loc_08BC9:
     jne loc_08C03
 loc_08BE2:
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_09032
     call far ptr fn_076AC
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov word ptr [v_50CC], 0
     retf
 loc_08C03:
@@ -11933,7 +11963,7 @@ loc_08C35:
     test word ptr [v_5060], bx
     je loc_08C48
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1658F
 loc_08C48:
     call far ptr fn_06EA4
@@ -11942,7 +11972,7 @@ loc_08C48:
 loc_08C57:
     jmp near ptr fn_08763
 loc_08C5A:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_08C77
     test word ptr [v_946F], 200h
     je loc_08C97
@@ -11951,20 +11981,20 @@ loc_08C5A:
     call far ptr fn_02262
     jmp near ptr loc_08A7A
 loc_08C77:
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     jne loc_08C81
     jmp near ptr loc_08BE2
 loc_08C81:
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jl loc_08C97
-    cmp byte ptr [v_0B9A], 34h
+    cmp byte ptr [v_KeyCode], 34h
     jg loc_08C97
     call far ptr fn_16044
     jmp near ptr fn_08763
 loc_08C97:
-    cmp byte ptr [v_0B9A], 20h
+    cmp byte ptr [v_KeyCode], 20h
     jne loc_08CCF
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_08CCC
     test word ptr [v_5060], 10h
     je loc_08CB3
@@ -11982,9 +12012,9 @@ loc_08CC1:
 loc_08CCC:
     jmp near ptr fn_08763
 loc_08CCF:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_08CCC
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_08CE5
     call far ptr fn_0A692
     jmp near ptr fn_08763
@@ -11996,7 +12026,7 @@ loc_08CE5:
     call far ptr fn_02262
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
-    mov word ptr [v_40E0], ax
+    mov word ptr [v_MouseCursor], ax
     mov ax, word ptr [bx + 0Ah]
     mov word ptr [v_40E4], ax
     mov ax, word ptr [v_5106]
@@ -12005,16 +12035,16 @@ loc_08CE5:
     mov di, 5100h
     call far ptr fn_09D41
     call far ptr fn_06EA4
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     call far ptr fn_076AC
     call far ptr fn_1A6B5
     and word ptr [v_5064], 0FFDFh
     mov word ptr [v_5104], 0
     jmp near ptr loc_08827
 fn_08D3F:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -12258,16 +12288,16 @@ loc_08FFA:
     mov word ptr [v_40E4], 0
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
-    mov word ptr [v_40E0], 0
+    mov word ptr [v_MouseCursor], 0
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_0B3D2
     mov bx, word ptr [v_50C0]
     call far ptr fn_1274F
     mov word ptr [v_50CC], 0
     retf
 sub_09032:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_5056], 8
     mov word ptr [v_505A], 8
     mov si, 963Bh
@@ -12339,12 +12369,12 @@ loc_090F8:
     mov ax, word ptr [v_40E2]
     mov bx, 0
     call far ptr fn_11D04
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_0CE0]
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     call far ptr fn_076AC
     call far ptr fn_1A6B5
     ret
@@ -12446,12 +12476,12 @@ loc_0925E:
     mov ax, word ptr [v_40E2]
     mov bx, 0
     call far ptr fn_11D04
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_0CE0]
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     call far ptr fn_076AC
     call far ptr fn_1A6B5
     ret
@@ -12532,7 +12562,7 @@ loc_0937F:
     mov ax, word ptr [v_50BE]
     mov word ptr [v_5102], ax
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_06EA4
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E4], 0
@@ -12629,7 +12659,7 @@ loc_094EF:
     call far ptr fn_13D92
     call far ptr fn_1A6B5
 loc_09508:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_09508
     cmp word ptr [v_50CC], 1
@@ -12640,9 +12670,9 @@ loc_09508:
     je loc_0957E
     jmp short loc_09508
 loc_0952B:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_09539
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     jne loc_09508
 loc_09539:
     test word ptr [v_505E], 8000h
@@ -12654,8 +12684,8 @@ loc_09548:
     pop word ptr [v_50F6]
     retf
 loc_09552:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6528h
     call far ptr fn_0D1DE
     cmp ax, 3
@@ -12670,8 +12700,8 @@ loc_09574:
     mov bx, 1
     jmp short loc_09598
 loc_0957E:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 6528h
     call far ptr fn_0D1DE
     cmp ax, 4
@@ -12735,24 +12765,24 @@ loc_09611:
     inc word ptr [v_0B28]
     jmp short loc_095ED
 fn_09619:
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_09649
     mov bx, 963Bh
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     je loc_0967F
     mov bx, 963Dh
-    cmp byte ptr [v_0B9A], 3Ch
+    cmp byte ptr [v_KeyCode], 3Ch
     je loc_0967F
     mov bx, 963Fh
-    cmp byte ptr [v_0B9A], 3Dh
+    cmp byte ptr [v_KeyCode], 3Dh
     je loc_0967F
     mov bx, 9641h
-    cmp byte ptr [v_0B9A], 3Eh
+    cmp byte ptr [v_KeyCode], 3Eh
     je loc_0967F
     retf
 loc_09649:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -12781,19 +12811,19 @@ loc_09685:
     and word ptr [v_50F6], 3FFFh
     mov word ptr [v_50C0], bx
     mov ax, 2
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, word ptr [v_50C0]
 loc_0969F:
     mov ax, word ptr [bx]
     call far ptr fn_16024
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_09A1D
     call sub_0987F
     call far ptr fn_171AE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_096C0:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_096C0
     cmp word ptr [v_50CC], 1
@@ -12810,8 +12840,8 @@ loc_096E0:
     jne loc_096C0
     jmp near ptr loc_097D8
 loc_096F1:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6334h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -12847,8 +12877,8 @@ loc_0973F:
     jne loc_0974A
     jmp near ptr loc_097FA
 loc_0974A:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -12874,16 +12904,16 @@ loc_0978A:
     jmp near ptr loc_096C0
 loc_0978D:
     mov bx, 963Bh
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     je loc_097B8
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Ch
+    cmp byte ptr [v_KeyCode], 3Ch
     je loc_097B8
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Dh
+    cmp byte ptr [v_KeyCode], 3Dh
     je loc_097B8
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Eh
+    cmp byte ptr [v_KeyCode], 3Eh
     je loc_097B8
     jmp near ptr loc_096C0
 loc_097B8:
@@ -12894,14 +12924,14 @@ loc_097C0:
     mov word ptr [v_50C0], bx
     jmp near ptr loc_0969F
 loc_097C7:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_097D8
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     je loc_097D8
     jmp near ptr loc_096C0
 loc_097D8:
     mov ax, 2
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
     call far ptr fn_076AC
@@ -12922,9 +12952,9 @@ loc_0980D:
 loc_09815:
     mov word ptr [bx], 0
 loc_09819:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_0987F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     jmp near ptr loc_096C0
 fn_0982E:
@@ -13071,19 +13101,19 @@ loc_09A19:
     call sub_09855
     ret
 sub_09A1D:
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     push ax
     push si
-    mov byte ptr [v_0B9A], 31h
+    mov byte ptr [v_KeyCode], 31h
     cmp word ptr [v_50C0], 963Bh
     je loc_09A4E
-    mov byte ptr [v_0B9A], 32h
+    mov byte ptr [v_KeyCode], 32h
     cmp word ptr [v_50C0], 963Dh
     je loc_09A4E
-    mov byte ptr [v_0B9A], 33h
+    mov byte ptr [v_KeyCode], 33h
     cmp word ptr [v_50C0], 963Fh
     je loc_09A4E
-    mov byte ptr [v_0B9A], 34h
+    mov byte ptr [v_KeyCode], 34h
 loc_09A4E:
     call far ptr fn_16044
     mov word ptr [v_0B22], 0Fh
@@ -13114,7 +13144,7 @@ loc_09A4E:
     call far ptr fn_09C46
     pop si
     pop ax
-    mov byte ptr [v_0B9A], al
+    mov byte ptr [v_KeyCode], al
     ret
 S0948 ends
 S09AD segment byte use16
@@ -13350,7 +13380,7 @@ fn_09CAC:
     mov word ptr [v_DrawSeg], 0A000h
     mov cx, 0Bh
     mov bx, 0AFF8h
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_0D29A
     cmp word ptr [v_50CC], 0
     jne loc_09D36
@@ -13632,14 +13662,14 @@ loc_09F15:
 S09AD ends
 S09F1 segment byte use16
 fn_09F1C:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     push cs
     call fn_0A111
     cmp word ptr [v_50CC], 0
     je loc_09F2E
     jmp short loc_09F3A
 loc_09F2E:
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     jne loc_09F39
     push cs
     call fn_0A14B
@@ -13649,9 +13679,9 @@ loc_09F3A:
     test word ptr [di + 2], 4000h
     je loc_09F90
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, 0Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [di + 4]
     mov word ptr [v_94E7], ax
     mov ax, word ptr [di + 6]
@@ -13663,8 +13693,8 @@ loc_09F3A:
     call far ptr fn_117AC
     call far ptr fn_1A6B5
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    mov byte ptr [v_0B9A], 0
+    call far ptr fn_SetMouseCursor
+    mov byte ptr [v_KeyCode], 0
     jmp short loc_09F39
 loc_09F90:
     test word ptr [di + 2], 2000h
@@ -13672,7 +13702,7 @@ loc_09F90:
     call far ptr fn_0FE63
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     jmp short loc_09F39
 loc_09FAD:
     test word ptr [di + 2], 1000h
@@ -14111,7 +14141,7 @@ sub_0A430:
 S0A35 ends
 S0A44 segment byte use16
 fn_0A444:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_0A44C
     retf
 loc_0A44C:
@@ -14122,16 +14152,16 @@ loc_0A44C:
     call far ptr fn_0A692
     jmp short loc_0A4AF
 loc_0A464:
-    push word ptr [v_40E0]
-    mov word ptr [v_40E0], 0
+    push word ptr [v_MouseCursor]
+    mov word ptr [v_MouseCursor], 0
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, 4
     call far ptr fn_0A834
     cmp ax, 5
     je loc_0A491
     pop word ptr [v_0CCA]
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     jmp short loc_0A4AA
 loc_0A491:
     pop ax
@@ -14165,7 +14195,7 @@ loc_0A4D4:
     mov ax, word ptr [si + 6]
     cmp ax, 0
     je loc_0A4E1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0A4E1:
     and word ptr [v_9469], 0FFF8h
     test word ptr [si + 0Eh], 8000h
@@ -14248,11 +14278,11 @@ loc_0A5AF:
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
     mov word ptr [v_DrawSeg], ax
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, 7BD1h
     call far ptr fn_13E74
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0A5F5:
     xor ax, ax
     pop si
@@ -14280,13 +14310,13 @@ loc_0A61A:
 loc_0A629:
     or word ptr [bx], ax
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov ax, 2
     pop si
     ret
 loc_0A63A:
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     xor ax, ax
     pop si
     ret
@@ -14323,15 +14353,15 @@ loc_0A68E:
 S0A4B ends
 S0A69 segment byte use16
 fn_0A692:
-    push word ptr [v_40E0]
+    push word ptr [v_MouseCursor]
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov word ptr [v_0CCA], 0Eh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, 7
     call far ptr fn_DelayTicks
     pop word ptr [v_0CCA]
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     retf
 S0A69 ends
 S0A6B segment byte use16
@@ -14382,7 +14412,7 @@ loc_0A6D7:
     mov word ptr [v_0CEC], 0
     call far ptr fn_1A6B5
 loc_0A755:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     push word ptr [v_DrawSeg]
     push word ptr [v_0B26]
     mov word ptr [v_50E6], 16h
@@ -14393,13 +14423,13 @@ loc_0A755:
     mov word ptr [v_DrawSeg], 0A000h
     mov cx, 22h
     mov bx, 0AFF8h
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_0D29A
     pop word ptr [v_0B26]
     pop word ptr [v_DrawSeg]
     cmp word ptr [v_50CC], 2
     jne loc_0A7AD
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_0A832
 loc_0A7AD:
     cmp word ptr [v_50CC], 0
@@ -14424,8 +14454,8 @@ loc_0A7D8:
     mov bx, 840Ch
     call far ptr fn_13E74
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
-    call far ptr fn_06342
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
     jmp near ptr loc_0A6D7
 loc_0A804:
     mov word ptr [v_50E6], 16h
@@ -14434,8 +14464,8 @@ loc_0A804:
     mov bx, 841Fh
     call far ptr fn_13E74
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
-    call far ptr fn_06342
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
     or word ptr [v_5060], 40h
 loc_0A832:
     retf
@@ -14469,7 +14499,7 @@ loc_0A84F:
     mov ax, word ptr [si + 6]
     mov word ptr [v_0E06], ax
     add si, 8
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
 loc_0A877:
     push cx
     mov ax, word ptr [si]
@@ -14484,7 +14514,7 @@ loc_0A877:
     pop cx
     add si, 0Ah
     loop loc_0A877
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     test word ptr [v_507C], 8000h
     jne loc_0A8CE
     test word ptr [v_507C], 4000h
@@ -14502,15 +14532,15 @@ loc_0A8C8:
     mov ax, 0
     jmp near ptr loc_0AAC0
 loc_0A8CE:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0A8CE
     cmp word ptr [v_50CC], 1
     je loc_0A90B
     cmp word ptr [v_50CC], 3
     jne loc_0A8CE
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5D64h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -14524,24 +14554,24 @@ loc_0A90B:
     test word ptr [v_507C], 8000h
     je loc_0A8CE
     mov ax, word ptr [v_0F1A]
-    cmp byte ptr [v_0B9A], 59h
+    cmp byte ptr [v_KeyCode], 59h
     jne loc_0A920
     jmp near ptr loc_0AAC0
 loc_0A920:
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     jne loc_0A92A
     jmp near ptr loc_0AAC0
 loc_0A92A:
     mov ax, word ptr [v_0E06]
-    cmp byte ptr [v_0B9A], 4Eh
+    cmp byte ptr [v_KeyCode], 4Eh
     jne loc_0A937
     jmp near ptr loc_0AAC0
 loc_0A937:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0A8CE
     jmp near ptr loc_0AAC0
 loc_0A941:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0A941
     cmp word ptr [v_50CC], 1
@@ -14552,8 +14582,8 @@ loc_0A941:
     je loc_0A9CD
     cmp word ptr [v_50CC], 3
     jne loc_0A941
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -14585,7 +14615,7 @@ loc_0A9BB:
     je loc_0A941
     jmp near ptr loc_0AAC0
 loc_0A9C3:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_0A9CD
     jmp near ptr loc_0A941
 loc_0A9CD:
@@ -14594,19 +14624,19 @@ loc_0A9CD:
 loc_0A9D3:
     mov word ptr [v_50C0], 963Bh
     mov ax, word ptr [v_963B]
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     je loc_0A9BB
     mov word ptr [v_50C0], 963Dh
     mov ax, word ptr [v_963D]
-    cmp byte ptr [v_0B9A], 3Ch
+    cmp byte ptr [v_KeyCode], 3Ch
     je loc_0A9BB
     mov word ptr [v_50C0], 963Fh
     mov ax, word ptr [v_963F]
-    cmp byte ptr [v_0B9A], 3Dh
+    cmp byte ptr [v_KeyCode], 3Dh
     je loc_0A9BB
     mov word ptr [v_50C0], 9641h
     mov ax, word ptr [v_9641]
-    cmp byte ptr [v_0B9A], 3Eh
+    cmp byte ptr [v_KeyCode], 3Eh
     je loc_0A9BB
     jmp near ptr loc_0A941
 loc_0AA16:
@@ -14615,7 +14645,7 @@ loc_0AA16:
     mov es, word ptr [v_0C44]
     xor ax, ax
     rep stosw
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0B26], 0
     mov word ptr [v_50E6], 0F0h
@@ -14624,7 +14654,7 @@ loc_0AA16:
     mov word ptr [v_0B1C], 4
     mov bx, 0AFF8h
     mov cx, 0Ch
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_0D29A
     cmp word ptr [v_50CC], 0
     je loc_0AA69
@@ -14634,7 +14664,7 @@ loc_0AA69:
     mov ax, 2
     jmp short loc_0AAC0
 loc_0AA6E:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0AA6E
     cmp word ptr [v_50CC], 1
@@ -14646,8 +14676,8 @@ loc_0AA6E:
     mov ax, 0
     jmp short loc_0AAC0
 loc_0AA94:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5D64h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -14659,7 +14689,7 @@ loc_0AA94:
     jmp short loc_0AAC0
 loc_0AAB6:
     mov ax, 0
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0AA6E
 loc_0AAC0:
     pop bp
@@ -15233,14 +15263,14 @@ loc_0B012:
     mov si, 9503h
     call far ptr fn_09C46
     call far ptr fn_1A6B5
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50E6], 16h
     mov word ptr [v_50FE], 61h
     mov word ptr [v_0B1C], 44h
     mov word ptr [v_0CC6], 0Fh
     mov si, 0B012h
     call far ptr fn_09CAC
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     cmp word ptr [v_50CC], 0
     je loc_0B0F4
     jmp near ptr loc_0B18E
@@ -15255,7 +15285,7 @@ loc_0B0F4:
     mov bx, 808Fh
     call far ptr fn_13E74
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     jmp near ptr loc_0B012
 loc_0B128:
     jne loc_0B135
@@ -15263,7 +15293,7 @@ loc_0B128:
     call far ptr fn_1755C
 loc_0B135:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov si, 9507h
     cmp word ptr [v_5110], 2
     jne loc_0B15E
@@ -15640,7 +15670,7 @@ fn_0B588:
     pop di
     retf
 loc_0B598:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     push cx
     push si
     or word ptr [v_505E], 100h
@@ -15714,7 +15744,7 @@ loc_0B681:
     call far ptr fn_0ABEC
     call far ptr fn_08172
 loc_0B697:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     pop si
     pop cx
     pop di
@@ -15745,7 +15775,7 @@ fn_0B6C3:
     pop bp
     retf
 loc_0B6D5:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     push cx
     push si
     or word ptr [v_505E], 100h
@@ -15800,7 +15830,7 @@ loc_0B788:
     call far ptr fn_0ABEC
     call far ptr fn_08172
 loc_0B79A:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     pop si
     pop cx
     pop di
@@ -15814,7 +15844,7 @@ fn_0B7A4:
     test word ptr [v_505E], 1
     je loc_0B7C3
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     and word ptr [v_505E], 0FFFEh
 loc_0B7C3:
     push cs
@@ -16342,7 +16372,7 @@ loc_0BD38:
     cmp bx, word ptr [si]
     jle loc_0BD92
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     push cs
     call fn_0B971
     mov word ptr [v_50E6], 16h
@@ -16354,7 +16384,7 @@ loc_0BD38:
     push cs
     call fn_0CC8A
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     push cs
     call fn_0B7DD
     jmp near ptr loc_0BCE8
@@ -16376,7 +16406,7 @@ loc_0BDA4:
     mov ax, word ptr [bx + 1Ah]
     call far ptr fn_17F4E
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     push cs
     call fn_0B971
     mov word ptr [v_50E6], 16h
@@ -16425,7 +16455,7 @@ loc_0BE14:
     push cs
     call fn_0CC8A
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     push cs
     call fn_0B7DD
     jmp near ptr loc_0BCE8
@@ -17011,7 +17041,7 @@ loc_0C55F:
     mov cx, 2
     call far ptr fn_13E8C
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     call far ptr fn_09484
     call far ptr fn_171AE
     call sub_0CD36
@@ -17079,10 +17109,10 @@ loc_0C65E:
     retf
 loc_0C66F:
     and word ptr [v_0BAA], 0EFFEh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     push cs
     call fn_0BC0E
     push cs
@@ -17121,7 +17151,7 @@ loc_0C709:
     call far ptr fn_09D41
     push cs
     call sub_0CCF4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     push cs
     call fn_0B7C8
     mov bx, word ptr [v_5070]
@@ -17152,7 +17182,7 @@ loc_0C759:
     mov si, word ptr [v_5070]
     call far ptr fn_1620A
     call far ptr fn_171AE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     retf
 loc_0C780:
@@ -17169,10 +17199,10 @@ loc_0C7A3:
     retf
 loc_0C7A4:
     and word ptr [v_0BAA], 0DFFEh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     push cs
     call fn_0BC0E
     push cs
@@ -17181,7 +17211,7 @@ loc_0C7A4:
     retf
 loc_0C7CD:
     or word ptr [v_0BAA], 1
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_195DA
     mov ax, word ptr [v_509E]
     mov word ptr [v_0CEA], ax
@@ -17189,7 +17219,7 @@ loc_0C7CD:
     call fn_0B7C8
     push cs
     call fn_0B7A4
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     retf
 loc_0C7F5:
@@ -17255,7 +17285,7 @@ loc_0C89F:
     mov bx, word ptr [v_50C0]
     call far ptr fn_1274F
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     push cs
     call sub_0CCF4
     jmp near ptr loc_0C7CD
@@ -17476,7 +17506,7 @@ fn_0CB2A:
     push cs
     call sub_0BB5C
     call far ptr fn_1A6B5
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     and word ptr [v_505E], 0FFFEh
     test word ptr [v_0BAA], 8000h
     je loc_0CB78
@@ -17503,15 +17533,15 @@ loc_0CB94:
 loc_0CBA0:
     push cs
     call fn_0B9B4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_171AE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     retf
 loc_0CBB9:
     push cs
     call fn_0B7A4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_171AE
     call far ptr fn_06EA4
     test word ptr [v_0BAA], 1000h
@@ -17525,7 +17555,7 @@ loc_0CBDB:
     mov si, ax
     call far ptr fn_1620A
     call far ptr fn_19636
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     retf
 fn_0CBFD:
@@ -17996,8 +18026,23 @@ fn_0D0E4:
     pop es
     retf
 S0D0E ends
+; ---------------------------------------------------------------------------
+; Keyboard input: per-frame poll (S0D0F).
+; Reads one pending key through DOS int 21h 06h. The event code goes in the
+; shared v_50CC slot: 0 none, 1 ASCII key, 2 extended key (the second 06h call
+; returns the scancode), 3/6 left button press/hold, 7/0Ah right button
+; press/hold, 5/9 left/right release. v_KeyCode holds the key or scancode.
+; A held button is re-reported after 6 ticks. The STREAM build presents the
+; frame at the entry hook.
+; ---------------------------------------------------------------------------
 S0D0F segment byte use16
-fn_0D0FE:
+; ---------------------------------------------------------------------------
+; fn_PollInput (0x0D0FE) - poll keyboard/mouse, return one input event.
+; in:  -
+; out: v_50CC = event code (see the module banner)
+;      v_KeyCode = ASCII key/scancode for codes 1/2, 0 otherwise
+; ---------------------------------------------------------------------------
+fn_PollInput:
 IFDEF STREAM
     call far ptr fn_StreamPresent
 ENDIF
@@ -18005,30 +18050,30 @@ ENDIF
     push bx
     push cx
     push dx
-    call far ptr fn_1888A
-    mov word ptr [v_50CC], 0
-    mov byte ptr [v_0B9A], 0
+    call far ptr fn_MusicService    ; service sound
+    mov word ptr [v_50CC], 0         ; event code: none
+    mov byte ptr [v_KeyCode], 0
     mov ah, 6
     mov dl, 0FFh
-    int 21h
-    je loc_0D156
+    int 21h                 ; SEAM INPUT: DOS 06h - poll console input (non-blocking)
+    je loc_0D156            ; no key pending
     cmp al, 0
-    je loc_0D134
+    je loc_0D134            ; AL=0: extended key, read the scancode next
     cmp al, 61h
     jl loc_0D128
     cmp al, 7Ah
     jg loc_0D128
-    and al, 0DFh
+    and al, 0DFh            ; uppercase a-z
 loc_0D128:
-    mov byte ptr [v_0B9A], al
-    mov word ptr [v_50CC], 1
+    mov byte ptr [v_KeyCode], al
+    mov word ptr [v_50CC], 1         ; event code: ASCII key
     jmp near ptr loc_0D1D3
 loc_0D134:
     mov ah, 6
     mov dl, 0FFh
-    int 21h
-    mov byte ptr [v_0B9A], al
-    mov word ptr [v_50CC], 2
+    int 21h                 ; SEAM INPUT: DOS 06h - read extended key scancode
+    mov byte ptr [v_KeyCode], al
+    mov word ptr [v_50CC], 2         ; event code: extended key
     cmp al, 42h
     jne loc_0D154
     test word ptr [v_5064], 8
@@ -18037,40 +18082,40 @@ loc_0D134:
 loc_0D154:
     jmp short loc_0D1D3
 loc_0D156:
-    cmp word ptr [v_40F6], 2
+    cmp word ptr [v_MouseState], 2         ; cursor visible, no button latches
     je loc_0D1D3
-    test word ptr [v_40F6], 2000h
+    test word ptr [v_MouseState], 2000h
     je loc_0D189
-    mov word ptr [v_50CC], 3
-    and word ptr [v_40F6], 0DFFFh
+    mov word ptr [v_50CC], 3         ; event code: left button press
+    and word ptr [v_MouseState], 0DFFFh
     mov ax, 6
-    call far ptr fn_DelayTicks
-    test word ptr [v_40F6], 2000h
+    call far ptr fn_DelayTicks       ; 6-tick repeat delay
+    test word ptr [v_MouseState], 2000h
     je loc_0D1D3
-    mov word ptr [v_50CC], 6
+    mov word ptr [v_50CC], 6         ; event code: left button held
     jmp short loc_0D1D3
 loc_0D189:
-    test word ptr [v_40F6], 400h
+    test word ptr [v_MouseState], 400h
     je loc_0D1B5
-    mov word ptr [v_50CC], 7
-    and word ptr [v_40F6], 0FBFFh
+    mov word ptr [v_50CC], 7         ; event code: right button press
+    and word ptr [v_MouseState], 0FBFFh
     mov ax, 6
-    call far ptr fn_DelayTicks
-    test word ptr [v_40F6], 400h
+    call far ptr fn_DelayTicks       ; 6-tick repeat delay
+    test word ptr [v_MouseState], 400h
     je loc_0D1D3
-    mov word ptr [v_50CC], 0Ah
+    mov word ptr [v_50CC], 0Ah       ; event code: right button held
     jmp short loc_0D1D3
 loc_0D1B5:
-    test word ptr [v_40F6], 800h
+    test word ptr [v_MouseState], 800h
     je loc_0D1C5
-    mov word ptr [v_50CC], 5
+    mov word ptr [v_50CC], 5         ; event code: left button release
     jmp short loc_0D1D3
 loc_0D1C5:
-    test word ptr [v_40F6], 100h
+    test word ptr [v_MouseState], 100h
     je loc_0D1D3
-    mov word ptr [v_50CC], 9
+    mov word ptr [v_50CC], 9         ; event code: right button release
 loc_0D1D3:
-    and word ptr [v_40F6], 92FFh
+    and word ptr [v_MouseState], 92FFh     ; clear button latches
     pop dx
     pop cx
     pop bx
@@ -18107,7 +18152,7 @@ fn_0D20C:
     push ax
     push cx
     push bx
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_0D29A
     cmp word ptr [v_50CC], 0
     je loc_0D227
@@ -18185,7 +18230,7 @@ fn_0D29A:
     push bx
     push cx
     mov si, bx
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_0D2AF
     mov al, 2Dh
     call far ptr fn_1A03C
@@ -18194,24 +18239,24 @@ loc_0D2AF:
     mov al, 2Dh
     call far ptr fn_1A03C
 loc_0D2B6:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0D2B6
     cmp word ptr [v_50CC], 1
     jne loc_0D2B6
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     je loc_0D305
-    cmp byte ptr [v_0B9A], 8
+    cmp byte ptr [v_KeyCode], 8
     jne loc_0D2D9
     jmp short loc_0D339
 loc_0D2D9:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_0D31E
-    cmp byte ptr [v_0B9A], 20h
+    cmp byte ptr [v_KeyCode], 20h
     jl loc_0D2B6
-    cmp byte ptr [v_0B9A], 7Fh
+    cmp byte ptr [v_KeyCode], 7Fh
     jg loc_0D2B6
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     mov byte ptr [si], al
     inc si
     pop cx
@@ -18231,7 +18276,7 @@ loc_0D311:
     inc cx
     push cx
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_0D2B6
 loc_0D31E:
     mov byte ptr [si], 0
@@ -18253,7 +18298,7 @@ loc_0D339:
     push ax
     push cx
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_0D2B6
 loc_0D34C:
     dec si
@@ -18290,7 +18335,7 @@ loc_0D390:
     or word ptr [v_505E], 200h
 loc_0D3B0:
     mov word ptr [v_511A], 1
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
@@ -18324,17 +18369,17 @@ loc_0D42C:
     jg loc_0D4AA
     mov word ptr [v_511A], 0
     call far ptr fn_FadeOut
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     mov ax, 14h
     call far ptr fn_DelayTicks
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_11B00
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0D471
     jmp near ptr loc_0D3B0
 loc_0D471:
     call far ptr fn_050C4
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0D480
     jmp near ptr loc_0D3B0
 loc_0D480:
@@ -18342,7 +18387,7 @@ loc_0D480:
     call far ptr fn_0617A
     jmp near ptr loc_0D3B0
 loc_0D48B:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0D42C
     cmp word ptr [v_50CC], 1
@@ -18353,65 +18398,65 @@ loc_0D48B:
 loc_0D4A8:
     jmp short loc_0D42C
 loc_0D4AA:
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     jne loc_0D4B4
     jmp near ptr loc_0D568
 loc_0D4B4:
-    cmp byte ptr [v_0B9A], 41h
+    cmp byte ptr [v_KeyCode], 41h
     jne loc_0D4BE
     jmp near ptr loc_0D57A
 loc_0D4BE:
-    cmp byte ptr [v_0B9A], 45h
+    cmp byte ptr [v_KeyCode], 45h
     jne loc_0D4C8
     jmp near ptr loc_0D58C
 loc_0D4C8:
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     jne loc_0D4D2
     jmp near ptr loc_0D5F2
 loc_0D4D2:
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     jne loc_0D4DC
     jmp near ptr loc_0D604
 loc_0D4DC:
-    cmp byte ptr [v_0B9A], 11h
+    cmp byte ptr [v_KeyCode], 11h
     je loc_0D4F4
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     je loc_0D4FC
-    cmp byte ptr [v_0B9A], 13h
+    cmp byte ptr [v_KeyCode], 13h
     je loc_0D529
     jmp near ptr loc_0D42C
 loc_0D4F4:
-    mov byte ptr [v_0B9A], 0FFh
+    mov byte ptr [v_KeyCode], 0FFh
     jmp near ptr loc_0D5D3
 loc_0D4FC:
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_0D511
-    call far ptr fn_18A06
-    and word ptr [v_94D5], 0FFFDh
+    call far ptr fn_MusicStop
+    and word ptr [v_SoundState], 0FFFDh
     jmp near ptr loc_0D42C
 loc_0D511:
-    test word ptr [v_94D5], 1
+    test word ptr [v_SoundState], 1
     jne loc_0D51C
     jmp near ptr loc_0D42C
 loc_0D51C:
-    or word ptr [v_94D5], 2
-    call far ptr fn_1888A
+    or word ptr [v_SoundState], 2
+    call far ptr fn_MusicService
     jmp near ptr loc_0D42C
 loc_0D529:
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     je loc_0D539
-    and word ptr [v_94D5], 0FFF7h
+    and word ptr [v_SoundState], 0FFF7h
     jmp near ptr loc_0D42C
 loc_0D539:
-    test word ptr [v_94D5], 4
+    test word ptr [v_SoundState], 4
     jne loc_0D544
     jmp near ptr loc_0D42C
 loc_0D544:
-    or word ptr [v_94D5], 8
+    or word ptr [v_SoundState], 8
     jmp near ptr loc_0D42C
 loc_0D54C:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5AFAh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -18438,7 +18483,7 @@ loc_0D58C:
     test word ptr [v_505E], 200h
     jne loc_0D59F
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_0D42C
 loc_0D59F:
     test word ptr [v_5060], 100h
@@ -18460,7 +18505,7 @@ loc_0D5BB:
     loop loc_0D5BB
 loc_0D5D3:
     mov word ptr [v_511A], 0
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     call far ptr fn_FadeOut
     call far ptr fn_0ABEC
     pop word ptr [v_94D7]
@@ -18486,7 +18531,7 @@ loc_0D61D:
 S0D36 ends
 S0D62 segment byte use16
 fn_0D620:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0D628
     retf
 loc_0D628:
@@ -18533,7 +18578,7 @@ loc_0D6A0:
     retf
 loc_0D6A8:
     or word ptr [v_5062], 20h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0B22], 0EFh
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
@@ -18567,7 +18612,7 @@ loc_0D6A8:
     call far ptr fn_117AC
     call far ptr fn_1A6B5
     mov ax, word ptr [v_5136]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1C1D1
     mov word ptr [v_50C8], 31h
     call far ptr fn_1C0DA
@@ -18683,7 +18728,7 @@ loc_0D8C4:
     call far ptr fn_10E42
     call far ptr fn_117AC
     call far ptr fn_12A96
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 loc_0D8E3:
     or word ptr [v_5062], 20h
@@ -18811,7 +18856,7 @@ loc_0DA89:
     mov ax, word ptr [v_514E]
     call sub_0DBAA
 loc_0DA99:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 sub_0DA9F:
     cmp word ptr [v_5110], 0
@@ -18853,7 +18898,7 @@ loc_0DB0E:
     call far ptr fn_117AC
     call far ptr fn_1A6B5
     mov ax, word ptr [v_515A]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0DB4C:
     ret
 sub_0DB4D:
@@ -18900,7 +18945,7 @@ loc_0DBA2:
     ret
 sub_0DBAA:
     push ax
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_0DBBC
     pop ax
     mov ax, 6
@@ -18910,7 +18955,7 @@ loc_0DBBC:
     pop ax
     cmp ax, 0
     je loc_0DBBC
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     ret
 sub_0DBC8:
     and word ptr [v_5062], 0FDFFh
@@ -19150,7 +19195,7 @@ loc_0DE68:
     cmp word ptr [bx + 94h], 0
     jne loc_0DE7E
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_0E0B1
 loc_0DE7E:
     call sub_0E30F
@@ -19159,7 +19204,7 @@ loc_0DE7E:
     call far ptr fn_0A692
     jmp near ptr loc_0E0B1
 loc_0DE90:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_0E612
     call far ptr fn_171AE
 loc_0DE9D:
@@ -19168,60 +19213,60 @@ loc_0DE9D:
     call sub_0E4BE
     call sub_0E6AE
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0DEB3:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0DEB3
     cmp word ptr [v_50CC], 1
     jne loc_0DEEE
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0DED0
     jmp near ptr loc_0E07D
 loc_0DED0:
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     jne loc_0DEDA
     jmp near ptr loc_0E07D
 loc_0DEDA:
-    cmp byte ptr [v_0B9A], 20h
+    cmp byte ptr [v_KeyCode], 20h
     jne loc_0DEE4
     jmp near ptr loc_0E115
 loc_0DEE4:
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     jne loc_0DEB3
     jmp near ptr loc_0E115
 loc_0DEEE:
     cmp word ptr [v_50CC], 2
     jne loc_0DF53
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     jne loc_0DEFF
     jmp near ptr loc_0E277
 loc_0DEFF:
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     jne loc_0DF09
     jmp near ptr loc_0E292
 loc_0DF09:
-    cmp byte ptr [v_0B9A], 48h
+    cmp byte ptr [v_KeyCode], 48h
     jne loc_0DF13
     jmp near ptr loc_0E2CB
 loc_0DF13:
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     jne loc_0DF1D
     jmp near ptr loc_0E2DE
 loc_0DF1D:
     test word ptr [v_5064], 1000h
     jne loc_0DF50
     mov bx, 963Bh
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     je loc_0DF4D
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Ch
+    cmp byte ptr [v_KeyCode], 3Ch
     je loc_0DF4D
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Dh
+    cmp byte ptr [v_KeyCode], 3Dh
     je loc_0DF4D
     add bx, 2
-    cmp byte ptr [v_0B9A], 3Eh
+    cmp byte ptr [v_KeyCode], 3Eh
     jne loc_0DF50
 loc_0DF4D:
     jmp near ptr loc_0E0B7
@@ -19232,8 +19277,8 @@ loc_0DF53:
     je loc_0DF5D
     jmp near ptr loc_0E00A
 loc_0DF5D:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 67B2h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -19280,9 +19325,9 @@ loc_0DFA8:
 loc_0DFC3:
     test word ptr [v_5064], 1000h
     jne loc_0E004
-    mov byte ptr [v_0B9A], 0
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov byte ptr [v_KeyCode], 0
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -19306,8 +19351,8 @@ loc_0E007:
 loc_0E00A:
     cmp word ptr [v_50CC], 6
     jne loc_0E073
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 67B2h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -19350,8 +19395,8 @@ loc_0E073:
     jmp near ptr loc_0DEB3
 loc_0E07D:
     mov ax, 1
-    call far ptr fn_1897C
-    call far ptr fn_13AC6
+    call far ptr fn_PlaySFX
+    call far ptr fn_HideMouse
     mov word ptr [v_50C0], 0
     call far ptr fn_171AE
     call sub_0E63E
@@ -19359,7 +19404,7 @@ loc_0E07D:
     call far ptr fn_11754
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0E0B1:
     call far ptr fn_0FF27
     retf
@@ -19377,17 +19422,17 @@ loc_0E0B7:
     je loc_0E0EF
     call sub_0E30F
     add sp, 6
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_171AE
     jmp near ptr loc_0DE9D
 loc_0E0EF:
     pop word ptr [v_5072]
     pop word ptr [v_5070]
     pop word ptr [v_50C0]
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_0E10D
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_0DEB3
 loc_0E10D:
     call far ptr fn_0A692
@@ -19451,20 +19496,20 @@ loc_0E1CF:
     jne loc_0E1EA
     or word ptr [v_505E], 80h
     mov ax, 34h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_0E1F7
 loc_0E1EA:
     cmp ax, 7
     jne loc_0E19F
     mov ax, 0Bh
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0E1F7:
     pop word ptr [v_50C0]
     mov bx, word ptr [v_50C0]
     mov ax, word ptr [bx]
     call far ptr fn_16024
     call sub_0E783
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_50C0]
     call far ptr fn_1274F
     call sub_0E68A
@@ -19480,7 +19525,7 @@ loc_0E1F7:
     call far ptr fn_11754
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov ax, word ptr [v_5ABA]
     call far ptr fn_0D25E
     and word ptr [v_5064], 0FF7Fh
@@ -19839,7 +19884,7 @@ loc_0E60D:
     ret
 sub_0E612:
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov word ptr [v_0B22], 102h
     mov word ptr [v_0B24], 43h
     mov ax, word ptr [v_WorkSeg]
@@ -19859,14 +19904,14 @@ sub_0E63E:
     ret
 sub_0E662:
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, 12h
     call far ptr fn_0A834
     mov word ptr [v_5AB6], ax
     mov ax, word ptr [v_50C0]
     mov word ptr [v_5AB8], ax
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     ret
 sub_0E68A:
     mov word ptr [v_0B26], 1
@@ -19946,8 +19991,8 @@ sub_0E783:
 S0DE4 ends
 S0E7B segment byte use16
 fn_0E7B2:
-    mov byte ptr [v_0B9A], 0
-    cmp word ptr [v_40E0], 0
+    mov byte ptr [v_KeyCode], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0E7BF
     retf
 loc_0E7BF:
@@ -19971,18 +20016,18 @@ loc_0E7CA:
     call far ptr fn_13E8C
     call far ptr fn_1A6B5
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     retf
 loc_0E816:
     call far ptr fn_187B0
     call far ptr fn_06F86
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     test word ptr [v_505E], 1
     jne loc_0E835
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0E835:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0B22], 115h
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
@@ -20054,7 +20099,7 @@ loc_0E8FE:
     call far ptr fn_13E8C
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0FF27
     call far ptr fn_FadeIn
 loc_0E970:
@@ -20063,7 +20108,7 @@ loc_0E970:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
 loc_0E982:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0E970
     call far ptr fn_06382
@@ -20144,7 +20189,7 @@ loc_0EA13:
     mov cx, 2
     call far ptr fn_13E8C
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0FF27
     call far ptr fn_1591E
     call far ptr fn_FadeIn
@@ -20262,9 +20307,9 @@ S0E7B ends
 S0EBD segment byte use16
     db 0h
 fn_0EBD6:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov word ptr [v_50BA], 0
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_0EBEB
     jmp near ptr loc_0EDF5
 loc_0EBEB:
@@ -20274,9 +20319,9 @@ loc_0EBEB:
     test word ptr [v_505E], 1
     jne loc_0EC0A
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0EC0A:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0B22], 128h
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
@@ -20305,9 +20350,9 @@ loc_0EC38:
     call far ptr fn_PaletteFade
     or word ptr [v_505E], 2
 loc_0EC8F:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0EC94:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_0EC94
     cmp word ptr [v_50CC], 1
@@ -20318,51 +20363,51 @@ loc_0EC94:
     jne loc_0EC94
     jmp near ptr loc_0EDC2
 loc_0ECB8:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5CCCh
     call far ptr fn_0D1DE
     cmp ax, 0
     jne loc_0ED32
     jmp short loc_0EC94
 loc_0ECCE:
-    cmp byte ptr [v_0B9A], 41h
+    cmp byte ptr [v_KeyCode], 41h
     jne loc_0ECD8
     jmp near ptr loc_0ED65
 loc_0ECD8:
-    cmp byte ptr [v_0B9A], 44h
+    cmp byte ptr [v_KeyCode], 44h
     jne loc_0ECE2
     jmp near ptr loc_0ED73
 loc_0ECE2:
-    cmp byte ptr [v_0B9A], 4Ch
+    cmp byte ptr [v_KeyCode], 4Ch
     jne loc_0ECEC
     jmp near ptr loc_0ED8E
 loc_0ECEC:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_0ECF6
     jmp near ptr loc_0ED99
 loc_0ECF6:
-    cmp byte ptr [v_0B9A], 4Eh
+    cmp byte ptr [v_KeyCode], 4Eh
     jne loc_0ED00
     jmp near ptr loc_0ED9F
 loc_0ED00:
-    cmp byte ptr [v_0B9A], 4Fh
+    cmp byte ptr [v_KeyCode], 4Fh
     jne loc_0ED0A
     jmp near ptr loc_0EDE3
 loc_0ED0A:
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     jne loc_0ED14
     jmp near ptr loc_0EDC2
 loc_0ED14:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0ED1E
     jmp near ptr loc_0EDC2
 loc_0ED1E:
-    cmp byte ptr [v_0B9A], 53h
+    cmp byte ptr [v_KeyCode], 53h
     jne loc_0ED28
     jmp near ptr loc_0EDD9
 loc_0ED28:
-    cmp byte ptr [v_0B9A], 55h
+    cmp byte ptr [v_KeyCode], 55h
     je loc_0ED88
     jmp near ptr loc_0EC94
 loc_0ED32:
@@ -20396,7 +20441,7 @@ loc_0ED73:
     test word ptr [v_505E], 10h
     je loc_0ED62
     call sub_0FAEB
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     je loc_0EDF5
 loc_0ED85:
     jmp near ptr loc_0EC38
@@ -20414,18 +20459,18 @@ loc_0ED9F:
     test word ptr [v_505E], 20h
     je loc_0ED62
     call sub_0F7C9
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_0ED85
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     je loc_0EDF5
-    cmp byte ptr [v_0B9A], 0FEh
+    cmp byte ptr [v_KeyCode], 0FEh
     je loc_0EDF5
     jmp near ptr loc_0EC38
 loc_0EDC2:
     test word ptr [v_505E], 4
     je loc_0ED62
     mov ax, 1
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_1A6B5
     jmp short loc_0EDF5
 loc_0EDD9:
@@ -20446,21 +20491,21 @@ loc_0EDF5:
     and word ptr [v_5064], 0FFFh
     retf
 loc_0EE08:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 1
     call sub_0F58A
     call sub_0F762
 loc_0EE16:
     mov word ptr [v_50AC], 2Ch
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call sub_0F49D
-    call far ptr fn_13AC6
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_HideMouse
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0EE33
     jmp near ptr loc_0EC38
 loc_0EE33:
     mov ax, 4
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B1C], 4
     mov word ptr [v_0B26], 0
@@ -20471,7 +20516,7 @@ loc_0EE33:
     mov byte ptr [v_9091], al
     test byte ptr [bx + 1], 80h
     jne loc_0EE68
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     jmp short loc_0EEBD
 loc_0EE68:
     add bx, 2
@@ -20482,15 +20527,15 @@ loc_0EE68:
     mov al, 2Dh
     call far ptr fn_1A03C
 loc_0EE7F:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 1
     je loc_0EE92
     cmp word ptr [v_50CC], 2
     jne loc_0EE7F
 loc_0EE92:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_0EEDF
-    cmp byte ptr [v_0B9A], 0Dh
+    cmp byte ptr [v_KeyCode], 0Dh
     jne loc_0EEBD
     mov ax, 2
     call far ptr fn_0A834
@@ -20514,7 +20559,7 @@ loc_0EEBD:
     je loc_0EF01
 loc_0EEDF:
     call far ptr fn_06F86
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_50A0]
     mov ax, word ptr [bx]
     mov bx, word ptr [bx + 4]
@@ -20535,21 +20580,21 @@ loc_0EF1B:
     or word ptr [v_505E], 4000h
     call sub_0F823
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
-    mov byte ptr [v_0B9A], 0
+    call far ptr fn_ShowMouse
+    mov byte ptr [v_KeyCode], 0
     jmp near ptr loc_0EDF5
 loc_0EF36:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 2
     call sub_0F58A
     call sub_0F762
 loc_0EF44:
     mov word ptr [v_50AC], 51h
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call sub_0F49D
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0EF61
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     jmp near ptr loc_0EC38
 loc_0EF61:
     call sub_0F3AB
@@ -20558,18 +20603,18 @@ loc_0EF61:
     test byte ptr [bx + 1], 80h
     jne loc_0EF79
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_0EF8E
 loc_0EF79:
     mov ax, 4
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, 3
     call far ptr fn_0A834
     cmp ax, 5
     je loc_0EFAF
 loc_0EF8E:
     call far ptr fn_06F86
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_50A0]
     mov ax, word ptr [bx]
     mov bx, word ptr [bx + 4]
@@ -20581,14 +20626,14 @@ loc_0EF8E:
 loc_0EFAF:
     call far ptr fn_06F86
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov word ptr [v_50CC], 0Bh
     mov bx, 907Ch
     mov al, 2
     call far ptr fn_FileOpen
     call far ptr fn_18F17
-    call far ptr fn_18A06
-    mov ax, word ptr [v_94D5]
+    call far ptr fn_MusicStop
+    mov ax, word ptr [v_SoundState]
     and ax, 5
     push ax
     mov ax, 944Fh
@@ -20597,19 +20642,19 @@ loc_0EFAF:
     mov word ptr [v_50CC], 0Bh
     call far ptr fn_FileRead
     call far ptr fn_18F17
-    and word ptr [v_94D5], 0FFFAh
+    and word ptr [v_SoundState], 0FFFAh
     pop ax
     test ax, 1
     je loc_0F00E
     or ax, 2
-    or word ptr [v_94D5], 1
+    or word ptr [v_SoundState], 1
 loc_0F00E:
     test ax, 4
     je loc_0F01B
     or ax, 8
-    or word ptr [v_94D5], 4
+    or word ptr [v_SoundState], 4
 loc_0F01B:
-    and word ptr [v_94D5], ax
+    and word ptr [v_SoundState], ax
     mov ax, 944Fh
     mov bx, 904Bh
     call far ptr fn_18312
@@ -20786,8 +20831,8 @@ loc_0F29C:
     mov bx, 907Ch
     call far ptr fn_FileClose
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    mov byte ptr [v_0B9A], 0FEh
+    call far ptr fn_SetMouseCursor
+    mov byte ptr [v_KeyCode], 0FEh
     call sub_0F7B1
     jmp near ptr loc_0EDF5
 fn_0F2C0:
@@ -20840,10 +20885,10 @@ sub_0F356:
     je loc_0F379
     mov ax, 5
 loc_0F379:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_94D7], ax
     call sub_0FAA8
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_0F38A:
     mov ah, 19h
@@ -20918,22 +20963,22 @@ loc_0F446:
     jne loc_0F451
     call sub_0F69F
 loc_0F451:
-    test word ptr [v_94D5], 1
+    test word ptr [v_SoundState], 1
     jne loc_0F45C
     call sub_0F6D5
 loc_0F45C:
-    test word ptr [v_94D5], 4
+    test word ptr [v_SoundState], 4
     jne loc_0F467
     call sub_0F747
 loc_0F467:
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     je loc_0F47B
     mov ax, 73h
     mov bx, 6Ah
     mov cx, 12h
     call sub_0F3E7
 loc_0F47B:
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_0F48F
     mov ax, 42h
     mov bx, 6Ah
@@ -20947,16 +20992,16 @@ loc_0F48F:
 loc_0F49C:
     ret
 sub_0F49D:
-    mov byte ptr [v_0B9A], 0
-    call far ptr fn_0D0FE
+    mov byte ptr [v_KeyCode], 0
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je sub_0F49D
     cmp word ptr [v_50CC], 1
     je loc_0F4FA
     cmp word ptr [v_50CC], 3
     jne sub_0F49D
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5CCCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -20971,52 +21016,52 @@ loc_0F4DD:
     je loc_0F4EF
     cmp ax, 8
     jne sub_0F49D
-    mov byte ptr [v_0B9A], 1Bh
+    mov byte ptr [v_KeyCode], 1Bh
     ret
 loc_0F4EF:
     cmp ax, 7
     jne sub_0F49D
-    mov byte ptr [v_0B9A], 1Bh
+    mov byte ptr [v_KeyCode], 1Bh
     ret
 loc_0F4FA:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_0F502
     ret
 loc_0F502:
     mov ax, 1
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     je loc_0F562
     mov ax, 2
-    cmp byte ptr [v_0B9A], 32h
+    cmp byte ptr [v_KeyCode], 32h
     je loc_0F562
     mov ax, 3
-    cmp byte ptr [v_0B9A], 33h
+    cmp byte ptr [v_KeyCode], 33h
     je loc_0F562
     mov ax, 4
-    cmp byte ptr [v_0B9A], 34h
+    cmp byte ptr [v_KeyCode], 34h
     je loc_0F562
     mov ax, 5
-    cmp byte ptr [v_0B9A], 35h
+    cmp byte ptr [v_KeyCode], 35h
     je loc_0F562
     mov ax, 6
-    cmp byte ptr [v_0B9A], 36h
+    cmp byte ptr [v_KeyCode], 36h
     je loc_0F562
     cmp word ptr [v_50AC], 2Ch
     je loc_0F552
-    cmp byte ptr [v_0B9A], 4Ch
+    cmp byte ptr [v_KeyCode], 4Ch
     jne loc_0F55F
-    mov byte ptr [v_0B9A], 1Bh
+    mov byte ptr [v_KeyCode], 1Bh
     ret
 loc_0F552:
-    cmp byte ptr [v_0B9A], 53h
+    cmp byte ptr [v_KeyCode], 53h
     jne loc_0F55F
-    mov byte ptr [v_0B9A], 1Bh
+    mov byte ptr [v_KeyCode], 1Bh
     ret
 loc_0F55F:
     jmp near ptr sub_0F49D
 loc_0F562:
     mov word ptr [v_50BA], ax
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, word ptr [v_50BA]
     mov bx, 0Ah
     dec ax
@@ -21027,7 +21072,7 @@ loc_0F562:
     mov bx, word ptr [bx + 4]
     mov cx, 12h
     call sub_0F3E7
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_0F58A:
     mov word ptr [v_0CC6], 8Ah
@@ -21193,7 +21238,7 @@ loc_0F7B7:
     or byte ptr [si + 1], 40h
     ret
 sub_0F7C9:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 4
     call sub_0F58A
     mov ax, 1Fh
@@ -21201,26 +21246,26 @@ sub_0F7C9:
     cmp ax, 5
     je loc_0F7F1
     call far ptr fn_06F86
-    mov byte ptr [v_0B9A], 0
-    call far ptr fn_13AC6
+    mov byte ptr [v_KeyCode], 0
+    call far ptr fn_HideMouse
     ret
 loc_0F7F1:
-    call far ptr fn_13AC6
-    call far ptr fn_18A06
+    call far ptr fn_HideMouse
+    call far ptr fn_MusicStop
     and word ptr [v_5060], 0FBFFh
     and word ptr [v_505E], 9FFFh
     call far ptr fn_06EA4
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0D36C
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     je loc_0F822
-    mov byte ptr [v_0B9A], 0FEh
+    mov byte ptr [v_KeyCode], 0FEh
 loc_0F822:
     ret
 sub_0F823:
     call far ptr fn_06F86
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov bx, word ptr [v_50A2]
     test byte ptr [bx + 1], 80h
     jne loc_0F856
@@ -21374,7 +21419,7 @@ loc_0F9D6:
     mov bx, 907Ch
     call far ptr fn_FileClose
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call sub_0F7B1
     ret
 sub_0FAA8:
@@ -21396,7 +21441,7 @@ loc_0FABF:
     pop word ptr [v_0B26]
     ret
 sub_0FAEB:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 3
     call sub_0F58A
     mov ax, 1
@@ -21404,70 +21449,101 @@ sub_0FAEB:
     cmp ax, 5
     je loc_0FB13
     call far ptr fn_06F86
-    call far ptr fn_13AC6
-    mov byte ptr [v_0B9A], 0
+    call far ptr fn_HideMouse
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_0FB13:
-    mov byte ptr [v_0B9A], 0FFh
+    mov byte ptr [v_KeyCode], 0FFh
     ret
 sub_0FB19:
-    test word ptr [v_94D5], 1
+    test word ptr [v_SoundState], 1
     je loc_0FB60
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, 4
-    call far ptr fn_1897C
-    test word ptr [v_94D5], 2
+    call far ptr fn_PlaySFX
+    test word ptr [v_SoundState], 2
     je loc_0FB45
-    call far ptr fn_18A06
-    and word ptr [v_94D5], 0FFFDh
+    call far ptr fn_MusicStop
+    and word ptr [v_SoundState], 0FFFDh
     mov cx, 11h
     jmp short loc_0FB52
 loc_0FB45:
-    or word ptr [v_94D5], 2
-    call far ptr fn_1888A
+    or word ptr [v_SoundState], 2
+    call far ptr fn_MusicService
     mov cx, 12h
 loc_0FB52:
     mov ax, 42h
     mov bx, 6Ah
     call sub_0F3E7
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_0FB60:
     ret
 sub_0FB61:
-    test word ptr [v_94D5], 4
+    test word ptr [v_SoundState], 4
     je loc_0FB9E
-    call far ptr fn_13AC6
-    test word ptr [v_94D5], 8
+    call far ptr fn_HideMouse
+    test word ptr [v_SoundState], 8
     je loc_0FB80
-    and word ptr [v_94D5], 0FFF7h
+    and word ptr [v_SoundState], 0FFF7h
     mov cx, 11h
     jmp short loc_0FB88
 loc_0FB80:
-    or word ptr [v_94D5], 8
+    or word ptr [v_SoundState], 8
     mov cx, 12h
 loc_0FB88:
     mov ax, 73h
     mov bx, 6Ah
     call sub_0F3E7
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov ax, 4
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_0FB9E:
     ret
     db 15 dup(0h)
     db 11h
 S0EBD ends
+; ===========================================================================
+; Game tick - INT 1Ch hook, installed by fn_TickInit and removed by
+; fn_TickRestore (also from the error exit). The vector points at
+; S0FBA:019Eh, i.e. at fn_TickISR. The first 399 bytes of the segment are the
+; ISR stack (the handler sets SS:SP = CS:19Eh, so that filler is scratch
+; space, not data).
+;
+; CS-relative state used by the handler:
+;   0/2   old INT 1Ch vector (offset/segment), saved by fn_TickInit
+;   4     reentrancy guard: nonzero while the game update is running
+;   6     ticks counted since the last game update; folded into v_50F2
+;   8     timeout counter, armed to 270Fh by fn_0FE63
+;   A/C   saved SS:SP of the interrupted code (restored before iret)
+;
+; Countdowns decremented once per tick, each gated by a v_50F6 bit:
+;   8000h v_50E8 -> fn_0FF3B     4000h v_50EA -> fn_10073
+;   2000h v_50EC -> sub_10208    1000h v_50EE -> sub_100F3
+;   0200h v_50F4 -> sets v_5064 bit 10h (music service due, fn_MusicService)
+; The saved BIOS handler is called first, so the standard timer chain keeps
+; running under the hook.
+; ===========================================================================
 S0FBA segment byte use16
-    db 399 dup(11h)
-fn_0FD3E:
-    inc word ptr cs:[6]
+    db 399 dup(11h)             ; ISR stack (SP = 19Eh while inside)
+; ---------------------------------------------------------------------------
+; fn_TickISR (0x0FD3E) - INT 1Ch chain entry and per-tick game update.
+; in:  interrupt context, CS:IP = S0FBA:019Eh
+; out: -
+; Notes: counts the tick (CS:6); when the game update is already running
+;        (CS:4 nonzero) chains straight to the old handler. Otherwise runs the
+;        old handler, switches to the ISR stack, points DS at S1DEA, services
+;        the countdowns above, folds the tick count into v_50F2, restores the
+;        interrupted SS:SP and returns through iret.
+; ---------------------------------------------------------------------------
+fn_TickISR:
+    inc word ptr cs:[6]         ; count the tick (folded into v_50F2 below)
     cmp word ptr cs:[4], 0
     je loc_0FD50
-    jmp dword ptr cs:[0]
+    jmp dword ptr cs:[0]        ; reentered: chain to the old handler
 loc_0FD50:
-    inc word ptr cs:[4]
+    inc word ptr cs:[4]         ; reentrancy guard on
     pushf
-    call dword ptr cs:[0]
+    call dword ptr cs:[0]       ; run the saved BIOS handler first
     cli
     push ds
     push es
@@ -21485,46 +21561,46 @@ loc_0FD50:
     mov word ptr cs:[0Ah], ax
     mov ax, cs
     mov ss, ax
-    mov sp, 19Eh
+    mov sp, 19Eh                ; switch to the ISR stack (grows down into the filler)
     sti
     test word ptr [v_50F6], 8000h
     je loc_0FD8E
-    dec word ptr [v_50E8]
+    dec word ptr [v_50E8]       ; countdown A
     jne loc_0FD8E
     call fn_0FF3B
 loc_0FD8E:
     test word ptr [v_50F6], 4000h
     je loc_0FD9F
-    dec word ptr [v_50EA]
+    dec word ptr [v_50EA]       ; countdown B
     jne loc_0FD9F
     call fn_10073
 loc_0FD9F:
     test word ptr [v_50F6], 2000h
     je loc_0FDB0
-    dec word ptr [v_50EC]
+    dec word ptr [v_50EC]       ; countdown C
     jne loc_0FDB0
     call sub_10208
 loc_0FDB0:
     test word ptr [v_50F6], 1000h
     je loc_0FDC1
-    dec word ptr [v_50EE]
+    dec word ptr [v_50EE]       ; countdown D
     jne loc_0FDC1
     call sub_100F3
 loc_0FDC1:
-    mov ax, word ptr cs:[6]
+    mov ax, word ptr cs:[6]     ; fold elapsed ticks into the game clock
     add word ptr [v_50F2], ax
     mov word ptr cs:[6], 0
     test word ptr [v_50F6], 200h
     je loc_0FDE9
-    dec word ptr [v_50F4]
+    dec word ptr [v_50F4]       ; music service countdown
     jne loc_0FDE9
     and word ptr [v_50F6], 0FDFFh
-    or word ptr [v_5064], 10h
+    or word ptr [v_5064], 10h   ; music service due (fn_MusicService)
 loc_0FDE9:
     cli
     mov ax, word ptr cs:[0Ah]
     mov ss, ax
-    mov sp, word ptr cs:[0Ch]
+    mov sp, word ptr cs:[0Ch]   ; restore the interrupted SS:SP
     pop ax
     pop bx
     pop cx
@@ -21534,10 +21610,19 @@ loc_0FDE9:
     pop di
     pop es
     pop ds
-    dec word ptr cs:[4]
+    dec word ptr cs:[4]         ; reentrancy guard off
     sti
     iret
-fn_0FE05:
+; ---------------------------------------------------------------------------
+; fn_TickInit (0x0FE05) - install the INT 1Ch game tick.
+; in:  -
+; out: -
+; Notes: clears the music-pending bit and reloads the four countdowns (v_50E8
+;        from the game speed v_94D7, v_50EA = v_50EC = 5Bh, v_50EE = 5). Saves
+;        the old vector at CS:0/CS:2 and points INT 1Ch at S0FBA:019Eh
+;        (DS = handler segment for the DOS call). Called once from fn_01BE8.
+; ---------------------------------------------------------------------------
+fn_TickInit:
     and word ptr [v_50F6], 0DFFh
     mov ax, word ptr [v_94D7]
     mov word ptr [v_50E8], ax
@@ -21545,24 +21630,31 @@ fn_0FE05:
     mov word ptr [v_50EC], 5Bh
     mov word ptr [v_50EE], 5
     mov ax, 351Ch
-    int 21h
+    int 21h                 ; SEAM TICK: 351Ch - save the old INT 1Ch vector
     mov word ptr cs:[0], bx
     mov word ptr cs:[2], es
     mov ax, S0FBA
-    mov dx, 19Eh
+    mov dx, 19Eh            ; DS:DX = S0FBA:019Eh (fn_TickISR)
     mov ds, ax
     mov ax, 251Ch
-    int 21h
+    int 21h                 ; SEAM TICK: 251Ch - install the tick handler
     mov ax, S1DEA
     mov ds, ax
     retf
-fn_0FE45:
+; ---------------------------------------------------------------------------
+; fn_TickRestore (0x0FE45) - remove the INT 1Ch hook.
+; in:  -
+; out: -
+; Notes: clears the music-pending bit and, when a vector was saved, puts it
+;        back with DOS 25h. Called on the exit paths.
+; ---------------------------------------------------------------------------
+fn_TickRestore:
     and word ptr [v_50F6], 0DFFh
     cmp word ptr cs:[2], 0
     je loc_0FE62
     lds dx, dword ptr cs:[0]
     mov ax, 251Ch
-    int 21h
+    int 21h                 ; SEAM TICK: 251Ch - restore the old INT 1Ch vector
     mov ax, S1DEA
     mov ds, ax
 loc_0FE62:
@@ -21987,12 +22079,12 @@ S1029 segment byte use16
 fn_10294:
     push word ptr [v_50F6]
     mov word ptr [v_50F6], 0
-    push word ptr [v_0F14]
-    push word ptr [v_0F12]
-    push word ptr [v_40F2]
-    push word ptr [v_40F4]
-    mov word ptr [v_0F14], 0
-    mov word ptr [v_40F4], 0
+    push word ptr [v_MouseMinX]
+    push word ptr [v_MouseMaxX]
+    push word ptr [v_MouseMaxY]
+    push word ptr [v_MouseMinY]
+    mov word ptr [v_MouseMinX], 0
+    mov word ptr [v_MouseMinY], 0
     mov word ptr [v_0B1E], 0
     mov word ptr [v_0B20], 0
     mov word ptr [v_0C30], 0
@@ -22002,11 +22094,11 @@ fn_10294:
     and word ptr [v_505E], 0FBFFh
     or word ptr [v_505E], 1
     call far ptr fn_1217B
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_FadeIn
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     call sub_1061B
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_10670
     call sub_1062A
     call sub_1069F
@@ -22030,9 +22122,9 @@ fn_10294:
     mov bx, word ptr [v_94E9]
     call far ptr fn_06FF0
     call sub_10AAC
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_1034A:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_1034A
     cmp word ptr [v_50CC], 1
@@ -22049,7 +22141,7 @@ loc_10371:
     jne loc_1034A
     jmp near ptr loc_10543
 loc_1037B:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_103C4
     call far ptr fn_FadeOut
     and word ptr [v_505E], 0FFFEh
@@ -22060,48 +22152,48 @@ loc_1037B:
     call far ptr fn_117AC
     call far ptr fn_1A6B5
     call far ptr fn_FadeIn
-    pop word ptr [v_40F4]
-    pop word ptr [v_40F2]
-    pop word ptr [v_0F12]
-    pop word ptr [v_0F14]
+    pop word ptr [v_MouseMinY]
+    pop word ptr [v_MouseMaxY]
+    pop word ptr [v_MouseMaxX]
+    pop word ptr [v_MouseMinX]
     pop word ptr [v_50F6]
     retf
 loc_103C4:
-    cmp byte ptr [v_0B9A], 9
+    cmp byte ptr [v_KeyCode], 9
     jne loc_103D1
     call sub_10A3B
     jmp near ptr loc_1034A
 loc_103D1:
-    cmp byte ptr [v_0B9A], 42h
+    cmp byte ptr [v_KeyCode], 42h
     jne loc_103DE
     call sub_1081F
     jmp near ptr loc_1034A
 loc_103DE:
-    cmp byte ptr [v_0B9A], 46h
+    cmp byte ptr [v_KeyCode], 46h
     jne loc_103EB
     call sub_1084A
     jmp near ptr loc_1034A
 loc_103EB:
-    cmp byte ptr [v_0B9A], 41h
+    cmp byte ptr [v_KeyCode], 41h
     jne loc_10402
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_1056F
     call sub_1097F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_10402:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_10419
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_108C4
     call sub_1097F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_10419:
-    cmp byte ptr [v_0B9A], 53h
+    cmp byte ptr [v_KeyCode], 53h
     jne loc_10465
     test word ptr [v_505E], 400h
     je loc_10452
     and word ptr [v_505E], 0FBFFh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_1217B
     call sub_1097F
     call sub_1061B
@@ -22109,21 +22201,21 @@ loc_10419:
     call sub_1062A
     call sub_1069F
     call sub_106CE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_1034A
 loc_10452:
     or word ptr [v_505E], 400h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_1097F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_10465:
     jmp near ptr loc_1034A
 loc_10468:
-    cmp byte ptr [v_0B9A], 4Bh
+    cmp byte ptr [v_KeyCode], 4Bh
     jne loc_104A9
     sub word ptr [v_94E7], 28h
 loc_10474:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_10BF6
     mov ax, word ptr [v_94E7]
     mov bx, word ptr [v_94E9]
@@ -22135,26 +22227,26 @@ loc_10474:
     call sub_1062A
     call sub_1069F
     call sub_106CE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_1034A
 loc_104A9:
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_104B7
     add word ptr [v_94E7], 28h
     jmp short loc_10474
 loc_104B7:
-    cmp byte ptr [v_0B9A], 48h
+    cmp byte ptr [v_KeyCode], 48h
     jne loc_104C5
     sub word ptr [v_94E9], 18h
     jmp short loc_10474
 loc_104C5:
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     jne loc_104D3
     add word ptr [v_94E9], 18h
     jmp short loc_10474
 loc_104D3:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5E06h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -22191,14 +22283,14 @@ loc_10517:
 loc_1052E:
     cmp ax, 14h
     jl loc_10540
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_10876
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_10540:
     jmp near ptr loc_1034A
 loc_10543:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 5E06h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -22207,9 +22299,9 @@ loc_10543:
 loc_1055A:
     cmp ax, 14h
     jl loc_1056C
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_10930
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_1056C:
     jmp near ptr loc_1034A
 sub_1056F:
@@ -22374,7 +22466,7 @@ sub_10714:
     pop cx
     ret
 sub_10747:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50E6], 4
     mov word ptr [v_50FE], 1
     mov word ptr [v_0B26], 0
@@ -22393,10 +22485,10 @@ sub_10747:
 loc_10788:
     call sub_10670
     call sub_1062A
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_10794:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50E6], 0A4h
     mov word ptr [v_50FE], 1
     mov word ptr [v_0B26], 0
@@ -22417,7 +22509,7 @@ loc_107D2:
 loc_107D8:
     call sub_1069F
     call sub_106CE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_107E4:
     push dx
@@ -22439,10 +22531,10 @@ sub_107E4:
     pop dx
     ret
 sub_1081F:
-    call far ptr fn_13AC6
-    mov ax, word ptr [v_0F10]
+    call far ptr fn_HideMouse
+    mov ax, word ptr [v_MouseX]
     mov word ptr [v_50DA], ax
-    mov ax, word ptr [v_40F0]
+    mov ax, word ptr [v_MouseY]
     mov word ptr [v_50DC], ax
     call sub_10714
     call sub_107E4
@@ -22451,13 +22543,13 @@ sub_1081F:
     mov word ptr [v_0C30], ax
     call sub_10670
     call sub_1062A
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_1084A:
-    call far ptr fn_13AC6
-    mov ax, word ptr [v_0F10]
+    call far ptr fn_HideMouse
+    mov ax, word ptr [v_MouseX]
     mov word ptr [v_50DA], ax
-    mov ax, word ptr [v_40F0]
+    mov ax, word ptr [v_MouseY]
     mov word ptr [v_50DC], ax
     call sub_10714
     call sub_107E4
@@ -22466,12 +22558,12 @@ sub_1084A:
     mov word ptr [v_0C3C], ax
     call sub_1069F
     call sub_106CE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_10876:
-    mov ax, word ptr [v_0F08]
+    mov ax, word ptr [v_MouseLeftX]
     mov word ptr [v_50DA], ax
-    mov ax, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftY]
     mov word ptr [v_50DC], ax
     call sub_10714
     call far ptr fn_11FCC
@@ -22482,11 +22574,11 @@ sub_10876:
     call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov cx, 3
-    mov ax, word ptr [v_0F08]
+    mov ax, word ptr [v_MouseLeftX]
     shr ax, cl
     shl ax, cl
     mov word ptr [v_0B22], ax
-    mov ax, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftY]
     shr ax, cl
     shl ax, cl
     mov word ptr [v_0B24], ax
@@ -22536,9 +22628,9 @@ loc_108F9:
     loop loc_108EB
     ret
 sub_10930:
-    mov ax, word ptr [v_0F0C]
+    mov ax, word ptr [v_MouseRightX]
     mov word ptr [v_50DA], ax
-    mov ax, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightY]
     mov word ptr [v_50DC], ax
     call sub_10714
     call far ptr fn_11FCC
@@ -22549,11 +22641,11 @@ sub_10930:
     call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov cx, 3
-    mov ax, word ptr [v_0F0C]
+    mov ax, word ptr [v_MouseRightX]
     shr ax, cl
     shl ax, cl
     mov word ptr [v_0B22], ax
-    mov ax, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightY]
     shr ax, cl
     shl ax, cl
     mov word ptr [v_0B24], ax
@@ -22623,16 +22715,16 @@ loc_10A1F:
     loop loc_109C7
     ret
 sub_10A3B:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_1061B
     mov word ptr [v_50E6], 0
     mov word ptr [v_50FE], 1
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B1C], 0
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_0F10]
+    mov ax, word ptr [v_MouseX]
     mov word ptr [v_50DA], ax
-    mov ax, word ptr [v_40F0]
+    mov ax, word ptr [v_MouseY]
     mov word ptr [v_50DC], ax
     call sub_10714
     push bx
@@ -22644,13 +22736,13 @@ sub_10A3B:
     call far ptr fn_15A42
     mov byte ptr [bx], 56h
     call far ptr fn_13E74
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     call sub_1061B
     call sub_10670
     call sub_1069F
     call sub_1062A
     call sub_106CE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_10AAC:
     push bx
@@ -22680,7 +22772,7 @@ S1029 ends
 S10AE segment byte use16
 fn_10AEE:
     push si
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     cmp word ptr [v_5110], 9
     je loc_10B1D
     cmp word ptr [v_5110], 0Fh
@@ -22714,7 +22806,7 @@ loc_10B5A:
     call sub_10BE4
     dec word ptr [si]
     mov ax, 9
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     test word ptr [v_505E], 40h
     jne loc_10B72
     pop si
@@ -22725,7 +22817,7 @@ loc_10B72:
     pop si
     retf
 fn_10B7E:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     cmp word ptr [v_5110], 8
     je loc_10BAB
     cmp word ptr [v_5110], 0Eh
@@ -22767,7 +22859,7 @@ loc_10BED:
 S10AE ends
 S10BF segment byte use16
 fn_10BF6:
-    mov ax, word ptr [v_0C40]
+    mov ax, word ptr [v_MusicId]
     cmp ax, 0
     je loc_10C0F
     cmp ax, word ptr [v_94A1]
@@ -22775,7 +22867,7 @@ fn_10BF6:
     cmp ax, word ptr [v_94A3]
     jne loc_10C0F
 loc_10C0A:
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
 loc_10C0F:
     mov ax, word ptr [v_94E7]
     sub ax, 27h
@@ -24114,18 +24206,21 @@ loc_11AE7:
     ret
 S1191 ends
 S11B0 segment byte use16
+; Attract/intro sequence player: cycles the intro images with fades and timed
+; waits, exits on ESC. Not annotated yet; the BIOS tick reads are tagged for
+; the TICK inventory.
 fn_11B00:
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11B0B
     retf
 loc_11B0B:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_15DC2
     mov ax, 3
-    call far ptr fn_18800
+    call far ptr fn_PlayMusic
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     mov ax, cx
     mov bx, dx
     add bx, 5Ah
@@ -24138,7 +24233,7 @@ loc_11B33:
 loc_11B36:
     push ax
     push bx
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_11B4D
     cmp word ptr [v_0C2C], 0
     jne loc_11B4D
@@ -24146,14 +24241,14 @@ loc_11B36:
     jmp near ptr loc_11C90
 loc_11B4D:
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11B62
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     add sp, 4
     jmp near ptr loc_11C90
 loc_11B62:
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     pop bx
     pop ax
     cmp ax, cx
@@ -24171,14 +24266,14 @@ loc_11B80:
     call sub_11CE3
     call far ptr fn_FadeOut
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11B96
     retf
 loc_11B96:
     mov word ptr [v_0CCA], 10h
     call sub_11CBA
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11BAA
     retf
 loc_11BAA:
@@ -24189,7 +24284,7 @@ loc_11BAA:
     mov dx, 0
     call far ptr fn_PaletteFade
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     mov ax, cx
     mov bx, dx
     add bx, 3Fh
@@ -24198,7 +24293,7 @@ loc_11BAA:
 loc_11BCF:
     push ax
     push bx
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_11BE6
     cmp word ptr [v_0C2C], 0
     jne loc_11BE6
@@ -24206,14 +24301,14 @@ loc_11BCF:
     jmp near ptr loc_11C90
 loc_11BE6:
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11BFB
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     add sp, 4
     jmp near ptr loc_11C90
 loc_11BFB:
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     pop bx
     pop ax
     cmp ax, cx
@@ -24225,14 +24320,14 @@ loc_11C09:
     call sub_11CE3
     call far ptr fn_FadeOut
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11C1F
     retf
 loc_11C1F:
     mov word ptr [v_0CCA], 0
     call sub_11CBA
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11C33
     retf
 loc_11C33:
@@ -24243,7 +24338,7 @@ loc_11C33:
     mov dx, 0
     call far ptr fn_PaletteFade
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     mov ax, cx
     mov bx, dx
     add bx, 5Ah
@@ -24252,7 +24347,7 @@ loc_11C33:
 loc_11C58:
     push ax
     push bx
-    test word ptr [v_94D5], 2
+    test word ptr [v_SoundState], 2
     je loc_11C6E
     cmp word ptr [v_0C2C], 0
     jne loc_11C6E
@@ -24260,14 +24355,14 @@ loc_11C58:
     jmp short loc_11C90
 loc_11C6E:
     call sub_11CA1
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_11C82
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     add sp, 4
     jmp short loc_11C90
 loc_11C82:
     mov ah, 0
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     pop bx
     pop ax
     cmp ax, cx
@@ -24281,12 +24376,12 @@ loc_11C90:
     int 10h                 ; SEAM VIDEO: mode 13h (restore)
     retf
 sub_11CA1:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_11CB9
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_11CB9
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
 loc_11CB9:
     ret
 sub_11CBA:
@@ -24347,7 +24442,7 @@ loc_11D43:
 loc_11D5F:
     push cs
     call fn_11F83
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50E6], 0F0h
     cmp word ptr [v_5110], 2Fh
     jne loc_11D7D
@@ -24474,7 +24569,7 @@ loc_11F06:
 loc_11F1B:
     call far ptr fn_076AC
 loc_11F20:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_11F2A:
     pop word ptr [v_5110]
@@ -24685,12 +24780,12 @@ fn_1217B:
     test word ptr [v_946F], 200h
     jne loc_12194
     call sub_125C7
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 loc_12194:
     call far ptr fn_FadeOut
 loc_12199:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     or word ptr [v_5064], 4
     mov ax, 0A000h
     mov word ptr [v_DrawSeg], ax
@@ -24861,10 +24956,10 @@ loc_123BB:
     retf
 loc_123C4:
     call far ptr fn_FadeIn
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     call far ptr fn_FadeOut
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_FadeIn
     mov ax, word ptr [v_WorkSeg]
     mov word ptr [v_DrawSeg], ax
@@ -24873,7 +24968,7 @@ fn_123E9:
     test word ptr [v_946F], 100h
     jne loc_123FA
     call sub_125C7
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 loc_123FA:
     call far ptr fn_FadeOut
@@ -24887,11 +24982,11 @@ loc_123FA:
     call far ptr fn_19E12
     call sub_1255F
     call far ptr fn_FadeIn
-    call far ptr fn_06342
+    call far ptr fn_WaitKey
     call far ptr fn_FadeOut
     call far ptr fn_1A6B5
     call far ptr fn_FadeIn
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_1244A:
     push cx
@@ -25479,7 +25574,7 @@ S1260 ends
 S12A9 segment byte use16
     db 0h
 fn_12A96:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     test word ptr [v_5062], 10h
     jne loc_12AA9
     call far ptr fn_1A6B5
@@ -25539,7 +25634,7 @@ loc_12B27:
     pop dx
     ret
 sub_12B29:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_12B49
     mov cx, 4
     mov di, 0BC78h
@@ -25551,7 +25646,7 @@ loc_12B36:
     loop loc_12B36
     jmp short loc_12B49
 loc_12B44:
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_12B49:
     test word ptr [v_5062], 8
     jne loc_12B54
@@ -25760,7 +25855,7 @@ loc_12D7B:
     loop loc_12D7B
     mov si, 0
     mov ax, 13h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_12E7D
 loc_12D94:
     mov word ptr [si], bx
@@ -26389,10 +26484,10 @@ fn_1345B:
     push dx
     push si
     push di
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_1346E
     mov ax, word ptr [v_5130]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_1346E:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
@@ -26882,9 +26977,49 @@ loc_139FB:
     and word ptr [si + 0Ch], 0FC1Fh
     ret
 S12D7 ends
+; ---------------------------------------------------------------------------
+; Mouse driver wrapper (S13A0) - INT 33h mouse + software cursor.
+;
+; fn_MouseInit probes the driver, resets it, installs fn_MouseHandler as the
+; user event handler (INT 33h AX=000Ch) and sets an 8:1 mickey/pixel ratio.
+; The driver calls the handler from driver context; this is the callback-
+; inversion seam noted in docs/porting.md §6. The handler accumulates motion
+; and button state in v_MouseState; fn_PollInput turns the latches into the
+; input event codes consumed by the main loop.
+;
+; Cursor: 16x16, drawn into A000h. v_MouseX/v_MouseY is the drawn position,
+; v_MouseNewX/v_MouseNewY the pending target. sub_MouseSaveBackground copies
+; the screen under the cursor to DS:0E08h, sub_MouseRestoreBackground puts it
+; back, and sub_MouseDraw overlays the image at DS:3FE0h (0FFh transparent).
+; v_MouseCursor selects the cursor image loaded by fn_SetMouseCursor.
+;
+; Variables: v_MouseState 40F6h; v_MouseX 0F10h, v_MouseY 40F0h;
+; v_MouseNewX 0F1Ch, v_MouseNewY 0F1Eh; v_MouseMinX 0F14h, v_MouseMaxX 0F12h,
+; v_MouseMinY 40F4h, v_MouseMaxY 40F2h; v_MouseCursor 40E0h; click coordinates
+; left 0F08h/0F0Ah, right 0F0Ch/0F0Eh, releases 40E8h/40EAh and 40ECh/40EEh.
+;
+; v_MouseState bits: 0001h present, 0002h cursor visible, 0004h save/restore
+; guard, 0100h right release, 0400h right press, 0800h left release, 2000h
+; left press, 4000h button event pending, 8000h handler reentrancy. Bits 1000h
+; and 0200h are cleared at handler entry; their role is not yet identified.
+;
+; Platform: INT 33h 00h reset, 0Bh motion counters, 0Ch handler, 0Fh ratio;
+; INT 21h 3533h driver vector. v_50CC is a shared status slot (here the file
+; error code while loading a cursor); v_0CCA/v_0CCC are shared picture-state
+; slots (here the cursor image index and the descriptor offset 80h).
+; ---------------------------------------------------------------------------
 S13A0 segment byte use16
     db 0h
-fn_13A02:
+; ---------------------------------------------------------------------------
+; fn_MouseHandler (0x13A02) - INT 33h user event handler.
+; The driver calls this from driver context with AX = event mask and CX/DX =
+; cursor position: bit 0 motion, bit 1 left press, bit 2 left release, bit 3
+; right press, bit 4 right release. Motion updates the software cursor; button
+; events latch the clamped cursor position in the v_Mouse* coordinates.
+; Notes: all registers are preserved; bit 8000h guards reentrancy; INT 33h 0Bh
+; returns the motion counters used for the software cursor.
+; ---------------------------------------------------------------------------
+fn_MouseHandler:
     push ds
     push es
     push di
@@ -26897,63 +27032,63 @@ fn_13A02:
     mov ds, ax
     pop ax
     push ax
-    and word ptr [v_40F6], 0EDFFh
-    test word ptr [v_40F6], 1
+    and word ptr [v_MouseState], 0EDFFh    ; clear stale 1000h/0200h bits
+    test word ptr [v_MouseState], 1        ; driver present?
     jne loc_13A22
     jmp near ptr loc_13ABD
 loc_13A22:
-    test word ptr [v_40F6], 8000h
+    test word ptr [v_MouseState], 8000h    ; reentrant callback?
     je loc_13A2D
     jmp near ptr loc_13ABD
 loc_13A2D:
-    or word ptr [v_40F6], 8000h
+    or word ptr [v_MouseState], 8000h     ; handler busy
     push ax
     push bx
     mov ax, 0Bh
-    int 33h
-    call fn_13CE3
+    int 33h                 ; SEAM MOUSE: 0Bh - read motion counters
+    call fn_MouseMoveBy     ; update/clamp the pending position
     pop bx
     pop ax
-    and word ptr [v_40F6], 7FFFh
+    and word ptr [v_MouseState], 7FFFh    ; clear busy
     test ax, 2
     je loc_13A58
-    or word ptr [v_40F6], 6000h
-    mov word ptr [v_0F08], cx
-    mov word ptr [v_0F0A], dx
+    or word ptr [v_MouseState], 6000h     ; left press + event pending
+    mov word ptr [v_MouseLeftX], cx
+    mov word ptr [v_MouseLeftY], dx
 loc_13A58:
     test ax, 4
     je loc_13A6B
-    or word ptr [v_40F6], 4800h
-    mov word ptr [v_40E8], cx
-    mov word ptr [v_40EA], dx
+    or word ptr [v_MouseState], 4800h     ; left release + event pending
+    mov word ptr [v_MouseLeftReleaseX], cx
+    mov word ptr [v_MouseLeftReleaseY], dx
 loc_13A6B:
     test ax, 8
     je loc_13A7E
-    or word ptr [v_40F6], 4400h
-    mov word ptr [v_0F0C], cx
-    mov word ptr [v_0F0E], dx
+    or word ptr [v_MouseState], 4400h     ; right press + event pending
+    mov word ptr [v_MouseRightX], cx
+    mov word ptr [v_MouseRightY], dx
 loc_13A7E:
     test ax, 10h
     je loc_13A91
-    or word ptr [v_40F6], 4100h
-    mov word ptr [v_40EC], cx
-    mov word ptr [v_40EE], dx
+    or word ptr [v_MouseState], 4100h     ; right release + event pending
+    mov word ptr [v_MouseRightReleaseX], cx
+    mov word ptr [v_MouseRightReleaseY], dx
 loc_13A91:
     test ax, 1
     jne loc_13A98
     jmp short loc_13ABD
 loc_13A98:
-    test word ptr [v_40F6], 2
+    test word ptr [v_MouseState], 2
     je loc_13ABD
-    test word ptr [v_40F6], 4
+    test word ptr [v_MouseState], 4
     jne loc_13ABD
-    call sub_13D38
-    mov ax, word ptr [v_0F1C]
-    mov word ptr [v_0F10], ax
-    mov ax, word ptr [v_0F1E]
-    mov word ptr [v_40F0], ax
-    call sub_13C32
-    call sub_13C7B
+    call sub_MouseRestoreBackground     ; erase the old cursor
+    mov ax, word ptr [v_MouseNewX]
+    mov word ptr [v_MouseX], ax
+    mov ax, word ptr [v_MouseNewY]
+    mov word ptr [v_MouseY], ax
+    call sub_MouseSaveBackground        ; save the new background
+    call sub_MouseDraw                  ; draw at the new position
 loc_13ABD:
     pop ax
     pop bx
@@ -26964,137 +27099,182 @@ loc_13ABD:
     pop es
     pop ds
     retf
-fn_13AC6:
-    test word ptr [v_40F6], 1
+; ---------------------------------------------------------------------------
+; fn_HideMouse (0x13AC6) - hide the software cursor and restore the screen.
+; in:  -
+; out: -
+; Notes: no-op without a driver or when already hidden; preserves v_50CC.
+; ---------------------------------------------------------------------------
+fn_HideMouse:
+    test word ptr [v_MouseState], 1        ; driver present?
     jne loc_13AD4
-    and word ptr [v_40F6], 0FFFDh
+    and word ptr [v_MouseState], 0FFFDh    ; clear visible
     retf
 loc_13AD4:
-    test word ptr [v_40F6], 2
+    test word ptr [v_MouseState], 2        ; visible?
     jne loc_13ADD
     retf
 loc_13ADD:
-    and word ptr [v_40F6], 0FFFDh
-    push word ptr [v_50CC]
-    call sub_13D38
+    and word ptr [v_MouseState], 0FFFDh    ; clear visible
+    push word ptr [v_50CC]                 ; preserve shared status slot
+    call sub_MouseRestoreBackground        ; erase cursor
     pop word ptr [v_50CC]
     retf
-fn_13AEE:
+; ---------------------------------------------------------------------------
+; fn_MouseInit (0x13AEE) - probe and initialize the INT 33h mouse driver.
+; in:  -
+; out: v_MouseState bit 0 set when present; cursor at (0E6h,0B4h)
+; Notes: leaves early if the vector is empty/IRET or the reset fails; installs
+; fn_MouseHandler with ES:DX = S13A0:0002 and sets an 8:1 mickey/pixel ratio.
+; ---------------------------------------------------------------------------
+fn_MouseInit:
     mov word ptr [v_50CC], 0
     mov ax, 3533h
-    int 21h
+    int 21h                 ; SEAM MOUSE: DOS 3533h - get driver vector
     cmp bx, 0
     jne loc_13B06
     mov ax, es
     cmp ax, 0
-    jne loc_13B06
+    jne loc_13B06            ; empty vector: no driver
     retf
 loc_13B06:
-    cmp byte ptr es:[bx], 0CFh
+    cmp byte ptr es:[bx], 0CFh    ; vector points at an IRET stub?
     jne loc_13B0D
     retf
 loc_13B0D:
     mov ax, 0
-    int 33h
-    cmp ax, -1
+    int 33h                 ; SEAM MOUSE: 00h - reset driver
+    cmp ax, -1              ; AX=FFFFh: driver present
     je loc_13B18
     retf
 loc_13B18:
-    or word ptr [v_40F6], 1
-    and word ptr [v_40F6], 0FFFDh
-    mov word ptr [v_0F10], 0E6h
-    mov word ptr [v_40F0], 0B4h
-    mov word ptr [v_0F1C], 0E6h
-    mov word ptr [v_0F1E], 0B4h
-    mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    or word ptr [v_MouseState], 1        ; present
+    and word ptr [v_MouseState], 0FFFDh  ; hidden
+    mov word ptr [v_MouseX], 0E6h        ; default position (230,180)
+    mov word ptr [v_MouseY], 0B4h
+    mov word ptr [v_MouseNewX], 0E6h
+    mov word ptr [v_MouseNewY], 0B4h
+    mov word ptr [v_0CCA], 0             ; default cursor image
+    call far ptr fn_SetMouseCursor       ; load the pointer
     mov ax, S13A0
     mov es, ax
-    mov dx, 2
-    mov cx, 1Fh
+    mov dx, 2                ; handler at S13A0:0002 (after the db 0h)
+    mov cx, 1Fh              ; event mask: motion + 4 buttons
     mov ax, 0Ch
-    int 33h
+    int 33h                 ; SEAM MOUSE: 0Ch - install user event handler
     mov ax, 0Fh
     mov cx, 8
-    mov dx, 8
-    int 33h
+    mov dx, 8                ; 8 mickeys per pixel
+    int 33h                 ; SEAM MOUSE: 0Fh - set mickey/pixel ratio
     retf
-fn_13B61:
+; ---------------------------------------------------------------------------
+; fn_MoveMouse (0x13B61) - move the cursor by CX/DX and redraw it.
+; in:  CX/DX = movement
+; out: -
+; Notes: no callers in this build.
+; ---------------------------------------------------------------------------
+fn_MoveMouse:
     push word ptr [v_50CC]
-    call fn_13CE3
-    test word ptr [v_40F6], 2
+    call fn_MouseMoveBy      ; apply movement and clamp
+    test word ptr [v_MouseState], 2        ; visible?
     je loc_13B85
-    call sub_13D38
-    mov ax, word ptr [v_0F1C]
-    mov word ptr [v_0F10], ax
-    mov ax, word ptr [v_0F1E]
-    mov word ptr [v_40F0], ax
-    call sub_13C32
-    call sub_13C7B
+    call sub_MouseRestoreBackground        ; erase old cursor
+    mov ax, word ptr [v_MouseNewX]
+    mov word ptr [v_MouseX], ax
+    mov ax, word ptr [v_MouseNewY]
+    mov word ptr [v_MouseY], ax
+    call sub_MouseSaveBackground           ; save new background
+    call sub_MouseDraw                     ; draw at the new position
 loc_13B85:
     pop word ptr [v_50CC]
     retf
-fn_13B8A:
-    mov word ptr [v_0CCC], 80h
+; ---------------------------------------------------------------------------
+; fn_SetMouseCursor (0x13B8A) - load the cursor image selected by v_0CCA.
+; in:  v_0CCA = image/block index in PICTURES.VGA
+; out: v_MouseCursor = shape; DS:3FE0h = 16x16 cursor image
+; Notes: the descriptor at DS:7834h+80h supplies the block size and 32-bit
+; base offset; the read goes through the PICTURES.VGA file struct at 9061h.
+; Redraws the cursor when it is visible.
+; ---------------------------------------------------------------------------
+fn_SetMouseCursor:
+    mov word ptr [v_0CCC], 80h           ; cursor descriptor offset
     push bx
     mov bx, 7834h
-    add bx, word ptr [v_0CCC]
+    add bx, word ptr [v_0CCC]             ; descriptor entry at 78B4h
     mov ax, word ptr [v_0CCA]
-    mov word ptr [v_40E0], ax
-    mov word ptr [v_9069], ax
+    mov word ptr [v_MouseCursor], ax      ; cursor shape
+    mov word ptr [v_9069], ax             ; block index
     mov ax, S1DEA
-    mov word ptr [v_9063], ax
+    mov word ptr [v_9063], ax             ; buffer segment
     mov ax, 3FE0h
-    mov word ptr [v_9065], ax
+    mov word ptr [v_9065], ax             ; buffer offset (cursor image)
     mov ax, word ptr [bx + 4]
-    mov word ptr [v_9067], ax
+    mov word ptr [v_9067], ax             ; block size
     mov ax, word ptr [bx + 0Ch]
-    mov word ptr [v_906B], ax
+    mov word ptr [v_906B], ax             ; base offset, low word
     mov ax, word ptr [bx + 0Eh]
-    mov word ptr [v_906D], ax
-    mov bx, 9061h
-    mov word ptr [v_50CC], 2
-    call far ptr fn_FileRead
-    call far ptr fn_18F17
+    mov word ptr [v_906D], ax             ; base offset, high word
+    mov bx, 9061h                         ; PICTURES.VGA file struct
+    mov word ptr [v_50CC], 2              ; error code 2 = PICTURES.VGA
+    call far ptr fn_FileRead              ; read the cursor block
+    call far ptr fn_18F17                 ; report on failure
     pop bx
-    test word ptr [v_40F6], 2
+    test word ptr [v_MouseState], 2        ; redraw if visible
     jne loc_13BDC
     retf
 loc_13BDC:
-    call sub_13D38
-    call sub_13C7B
+    call sub_MouseRestoreBackground
+    call sub_MouseDraw
     retf
-fn_13BE3:
-    test word ptr [v_40F6], 1
+; ---------------------------------------------------------------------------
+; fn_ShowMouse (0x13BE3) - show the software cursor at the pending position.
+; in:  -
+; out: -
+; Notes: no-op without a driver or when already visible; saves the background,
+; sets the visible bit, then draws.
+; ---------------------------------------------------------------------------
+fn_ShowMouse:
+    test word ptr [v_MouseState], 1        ; driver present?
     jne loc_13BF1
-    and word ptr [v_40F6], 0FFFDh
+    and word ptr [v_MouseState], 0FFFDh    ; clear visible
     retf
 loc_13BF1:
-    test word ptr [v_40F6], 2
+    test word ptr [v_MouseState], 2        ; already visible?
     je loc_13BFA
     retf
 loc_13BFA:
-    mov ax, word ptr [v_0F1C]
-    mov word ptr [v_0F10], ax
-    mov ax, word ptr [v_0F1E]
-    mov word ptr [v_40F0], ax
+    mov ax, word ptr [v_MouseNewX]
+    mov word ptr [v_MouseX], ax
+    mov ax, word ptr [v_MouseNewY]
+    mov word ptr [v_MouseY], ax
     push word ptr [v_50CC]
-    call sub_13C32
-    or word ptr [v_40F6], 2
-    call sub_13C7B
+    call sub_MouseSaveBackground           ; save background
+    or word ptr [v_MouseState], 2          ; set visible
+    call sub_MouseDraw                     ; draw cursor
     pop word ptr [v_50CC]
     retf
-fn_13C1A:
-    test word ptr [v_40F6], 2
+; ---------------------------------------------------------------------------
+; fn_RedrawMouse (0x13C1A) - redraw the visible cursor at its current position.
+; in:  -
+; out: -
+; Notes: no callers in this build.
+; ---------------------------------------------------------------------------
+fn_RedrawMouse:
+    test word ptr [v_MouseState], 2        ; visible?
     jne loc_13C23
     retf
 loc_13C23:
     push word ptr [v_50CC]
-    call sub_13C32
-    call sub_13C7B
+    call sub_MouseSaveBackground           ; save background
+    call sub_MouseDraw                     ; draw cursor
     pop word ptr [v_50CC]
     retf
-sub_13C32:
+; ---------------------------------------------------------------------------
+; sub_MouseSaveBackground (0x13C32) - save the 16x16 area under the cursor.
+; in:  v_MouseX/v_MouseY = cursor position
+; out: DS:0E08h = 16x16 background; bit 4 of v_MouseState guards the copy
+; ---------------------------------------------------------------------------
+sub_MouseSaveBackground:
     push ax
     push cx
     push dx
@@ -27102,29 +27282,29 @@ sub_13C32:
     push di
     push es
     push ds
-    or word ptr [v_40F6], 4
+    or word ptr [v_MouseState], 4        ; guard the save/restore
     mov ax, 140h
-    mul word ptr [v_40F0]
-    add ax, word ptr [v_0F10]
+    mul word ptr [v_MouseY]
+    add ax, word ptr [v_MouseX]          ; offset = 320*y + x
     mov si, ax
-    mov di, 0E08h
+    mov di, 0E08h                        ; background save buffer
     mov ax, S1DEA
     mov es, ax
     mov ax, 0A000h
     mov ds, ax
-    mov cx, 10h
+    mov cx, 10h                          ; 16 rows
 loc_13C5B:
     push cx
     mov cx, 8
-    rep movsw
-    add si, 130h
+    rep movsw                            ; 8 words = 16 pixels per row
+    add si, 130h                         ; 320-byte screen stride
     pop cx
-    cmp si, 0FA00h
+    cmp si, 0FA00h                       ; stop at the bottom edge
     ja loc_13C6E
     loop loc_13C5B
 loc_13C6E:
     pop ds
-    and word ptr [v_40F6], 0FFFBh
+    and word ptr [v_MouseState], 0FFFBh  ; clear guard
     pop es
     pop di
     pop si
@@ -27132,8 +27312,13 @@ loc_13C6E:
     pop cx
     pop ax
     ret
-sub_13C7B:
-    test word ptr [v_40F6], 2
+; ---------------------------------------------------------------------------
+; sub_MouseDraw (0x13C7B) - overlay the 16x16 cursor image at the cursor.
+; in:  v_MouseX/v_MouseY = position; DS:3FE0h = 16x16 image
+; out: A000h patched; 0FFh pixels are transparent; clipped at the right edge
+; ---------------------------------------------------------------------------
+sub_MouseDraw:
+    test word ptr [v_MouseState], 2        ; only when visible
     jne loc_13C84
     ret
 loc_13C84:
@@ -27144,25 +27329,25 @@ loc_13C84:
     push di
     push es
     mov ax, 140h
-    mul word ptr [v_40F0]
-    add ax, word ptr [v_0F10]
+    mul word ptr [v_MouseY]
+    add ax, word ptr [v_MouseX]          ; offset = 320*y + x
     mov di, ax
-    mov si, 3FE0h
+    mov si, 3FE0h                        ; 16x16 cursor image
     mov ax, 0A000h
     mov es, ax
-    mov cx, 10h
+    mov cx, 10h                          ; 16 rows
 loc_13CA2:
     push cx
     mov cx, 10h
     xor dx, dx
-    cmp word ptr [v_0F10], 130h
+    cmp word ptr [v_MouseX], 130h        ; clip at x > 304
     jle loc_13CBA
-    mov dx, word ptr [v_0F10]
+    mov dx, word ptr [v_MouseX]
     sub dx, 130h
     sub cx, dx
 loc_13CBA:
     lodsb
-    cmp al, 0FFh
+    cmp al, 0FFh                         ; 0FFh = transparent
     je loc_13CC4
     stosb
     loop loc_13CBA
@@ -27176,9 +27361,9 @@ loc_13CC7:
     add si, dx
     add di, dx
 loc_13CCF:
-    add di, 130h
+    add di, 130h                         ; 320-byte screen stride
     pop cx
-    cmp di, 0FA00h
+    cmp di, 0FA00h                       ; stop at the bottom edge
     ja loc_13CDC
     loop loc_13CA2
 loc_13CDC:
@@ -27189,40 +27374,52 @@ loc_13CDC:
     pop cx
     pop ax
     ret
-fn_13CE3:
-    mov ax, word ptr [v_0F14]
-    add word ptr [v_0F1C], cx
-    cmp word ptr [v_0F1C], ax
+; ---------------------------------------------------------------------------
+; fn_MouseMoveBy (0x13CE3) - add CX/DX to the pending cursor position.
+; in:  CX/DX = movement
+; out: CX/DX = clamped screen position (with the 8-pixel hotspot)
+; Notes: clamps v_MouseNewX/v_MouseNewY to the bounds; cursors other than 0
+; and 1Dh get an 8-pixel offset in both axes.
+; ---------------------------------------------------------------------------
+fn_MouseMoveBy:
+    mov ax, word ptr [v_MouseMinX]
+    add word ptr [v_MouseNewX], cx       ; apply X motion
+    cmp word ptr [v_MouseNewX], ax
     jge loc_13CF3
-    mov word ptr [v_0F1C], ax
+    mov word ptr [v_MouseNewX], ax
 loc_13CF3:
-    mov ax, word ptr [v_0F12]
-    cmp word ptr [v_0F1C], ax
+    mov ax, word ptr [v_MouseMaxX]
+    cmp word ptr [v_MouseNewX], ax
     jle loc_13CFF
-    mov word ptr [v_0F1C], ax
+    mov word ptr [v_MouseNewX], ax
 loc_13CFF:
-    mov ax, word ptr [v_40F4]
-    add word ptr [v_0F1E], dx
-    cmp word ptr [v_0F1E], ax
+    mov ax, word ptr [v_MouseMinY]
+    add word ptr [v_MouseNewY], dx       ; apply Y motion
+    cmp word ptr [v_MouseNewY], ax
     jge loc_13D0F
-    mov word ptr [v_0F1E], ax
+    mov word ptr [v_MouseNewY], ax
 loc_13D0F:
-    mov ax, word ptr [v_40F2]
-    cmp word ptr [v_0F1E], ax
+    mov ax, word ptr [v_MouseMaxY]
+    cmp word ptr [v_MouseNewY], ax
     jle loc_13D1B
-    mov word ptr [v_0F1E], ax
+    mov word ptr [v_MouseNewY], ax
 loc_13D1B:
-    mov cx, word ptr [v_0F1C]
-    mov dx, word ptr [v_0F1E]
-    cmp word ptr [v_40E0], 0
+    mov cx, word ptr [v_MouseNewX]
+    mov dx, word ptr [v_MouseNewY]
+    cmp word ptr [v_MouseCursor], 0      ; 0/1Dh: no hotspot offset
     je loc_13D37
-    cmp word ptr [v_40E0], 1Dh
+    cmp word ptr [v_MouseCursor], 1Dh
     je loc_13D37
-    add cx, 8
+    add cx, 8                            ; 8-pixel hotspot
     add dx, 8
 loc_13D37:
     ret
-sub_13D38:
+; ---------------------------------------------------------------------------
+; sub_MouseRestoreBackground (0x13D38) - restore the saved area under cursor.
+; in:  v_MouseX/v_MouseY = position; DS:0E08h = 16x16 background
+; out: A000h restored; bit 4 of v_MouseState guards the copy
+; ---------------------------------------------------------------------------
+sub_MouseRestoreBackground:
     push ax
     push cx
     push dx
@@ -27230,25 +27427,25 @@ sub_13D38:
     push di
     push es
     mov ax, 140h
-    mul word ptr [v_40F0]
-    add ax, word ptr [v_0F10]
+    mul word ptr [v_MouseY]
+    add ax, word ptr [v_MouseX]          ; offset = 320*y + x
     mov di, ax
-    mov si, 0E08h
+    mov si, 0E08h                        ; saved background
     mov ax, 0A000h
     mov es, ax
-    mov cx, 10h
-    or word ptr [v_40F6], 4
+    mov cx, 10h                          ; 16 rows
+    or word ptr [v_MouseState], 4        ; guard the save/restore
 loc_13D5B:
     push cx
     mov cx, 8
-    rep movsw
-    add di, 130h
+    rep movsw                            ; 8 words = 16 pixels per row
+    add di, 130h                         ; 320-byte screen stride
     pop cx
-    cmp di, 0FA00h
+    cmp di, 0FA00h                       ; stop at the bottom edge
     ja loc_13D6E
     loop loc_13D5B
 loc_13D6E:
-    and word ptr [v_40F6], 0FFFBh
+    and word ptr [v_MouseState], 0FFFBh  ; clear guard
     pop es
     pop di
     pop si
@@ -27362,12 +27559,12 @@ fn_13E2F:
     mov word ptr [v_DrawSeg], ax
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     pop bx
     push cs
     call fn_13E8C
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_13E74:
     push word ptr [v_50E6]
@@ -27426,24 +27623,24 @@ loc_13ED6:
     retf
 loc_13EDE:
     call sub_146E9
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_13F28
     mov si, word ptr [v_5070]
     mov word ptr [si + 10h], 1
     call sub_14D71
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_13F28
     call sub_14F08
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_13F28
     mov word ptr [v_50DA], 0
     and word ptr [v_505E], 0FF00h
     call sub_148C4
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_13F28
     call sub_14CA1
     call sub_15419
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     jne loc_13ED3
 loc_13F28:
     call far ptr fn_FadeOut
@@ -27496,12 +27693,12 @@ fn_13F2E:
     mov word ptr [v_50FE], 0B9h
     mov bx, 7A87h
     call far ptr fn_13D92
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     call far ptr fn_FadeIn
     jmp short loc_140A3
 loc_1402D:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_146A1
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
@@ -27523,7 +27720,7 @@ loc_1402D:
     mov word ptr [v_50FE], 0B9h
     mov bx, 7A87h
     call far ptr fn_13D92
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_140A3:
     mov si, 5F84h
@@ -27535,9 +27732,9 @@ loc_140A3:
     je loc_140C9
     jmp short loc_140A3
 loc_140B9:
-    cmp byte ptr [v_0B9A], 44h
+    cmp byte ptr [v_KeyCode], 44h
     je loc_140D9
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     je loc_140D3
     jmp short loc_140A3
 loc_140C9:
@@ -27587,7 +27784,7 @@ loc_14135:
     call far ptr fn_0A692
     jmp near ptr loc_1402D
 loc_14149:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_146A1
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
@@ -27608,7 +27805,7 @@ loc_14149:
     mov bx, 7AA8h
     call far ptr fn_13D92
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_141B5:
     mov si, 5F84h
     call sub_158DD
@@ -27619,9 +27816,9 @@ loc_141B5:
     je loc_141DC
     jmp short loc_141B5
 loc_141CB:
-    cmp byte ptr [v_0B9A], 59h
+    cmp byte ptr [v_KeyCode], 59h
     je loc_141E9
-    cmp byte ptr [v_0B9A], 4Eh
+    cmp byte ptr [v_KeyCode], 4Eh
     jne loc_141B5
     jmp near ptr loc_1402D
 loc_141DC:
@@ -28076,7 +28273,7 @@ sub_146D9:
     rep stosw
     ret
 sub_146E9:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_146A1
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 19h
@@ -28134,7 +28331,7 @@ sub_146E9:
     call far ptr fn_13E08
     call sub_158AB
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_147EE:
     mov si, 66DCh
     call sub_158DD
@@ -28150,41 +28347,41 @@ loc_14803:
     jmp near ptr loc_14895
 loc_1480D:
     mov ax, 1
-    cmp byte ptr [v_0B9A], 46h
+    cmp byte ptr [v_KeyCode], 46h
     je loc_14895
     mov ax, 2
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     je loc_14895
     mov ax, 3
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     je loc_14895
     mov ax, 4
-    cmp byte ptr [v_0B9A], 4Fh
+    cmp byte ptr [v_KeyCode], 4Fh
     je loc_14895
     mov ax, 5
-    cmp byte ptr [v_0B9A], 41h
+    cmp byte ptr [v_KeyCode], 41h
     je loc_14895
     mov ax, 6
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     je loc_14895
     mov ax, 7
-    cmp byte ptr [v_0B9A], 47h
+    cmp byte ptr [v_KeyCode], 47h
     je loc_14895
     mov ax, 8
-    cmp byte ptr [v_0B9A], 44h
+    cmp byte ptr [v_KeyCode], 44h
     je loc_14895
     mov ax, 9
-    cmp byte ptr [v_0B9A], 4Bh
+    cmp byte ptr [v_KeyCode], 4Bh
     je loc_14895
     test word ptr [v_5064], 8000h
     je loc_1487A
-    cmp byte ptr [v_0B9A], 45h
+    cmp byte ptr [v_KeyCode], 45h
     je loc_14879
     jmp near ptr loc_147EE
 loc_14879:
     ret
 loc_1487A:
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_14884
     jmp near ptr loc_147EE
 loc_14884:
@@ -28192,7 +28389,7 @@ loc_14884:
     jne loc_1488F
     call sub_146D9
 loc_1488F:
-    mov byte ptr [v_0B9A], 51h
+    mov byte ptr [v_KeyCode], 51h
     ret
 loc_14895:
     mov si, word ptr [v_5070]
@@ -28201,7 +28398,7 @@ loc_14895:
     call sub_15365
     test word ptr [v_5064], 8000h
     jne loc_148B2
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_148B2:
     call sub_15605
@@ -28213,7 +28410,7 @@ loc_148B2:
 sub_148C4:
     mov word ptr [v_50DC], 0
 loc_148CA:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_146A1
     mov word ptr [v_0B26], 1
     mov word ptr [v_50E6], 8
@@ -28287,7 +28484,7 @@ loc_149B4:
 loc_149DF:
     call sub_158AB
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_149EC:
     mov si, 606Eh
     call sub_158DD
@@ -28302,13 +28499,13 @@ loc_149EC:
 loc_14A09:
     test word ptr [v_5064], 8000h
     je loc_14A19
-    cmp byte ptr [v_0B9A], 45h
+    cmp byte ptr [v_KeyCode], 45h
     jne loc_149EC
     ret
 loc_14A19:
-    cmp byte ptr [v_0B9A], 4Eh
+    cmp byte ptr [v_KeyCode], 4Eh
     je loc_14A74
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     jne loc_14A2A
     jmp near ptr loc_14AB2
 loc_14A2A:
@@ -28340,12 +28537,12 @@ loc_14A67:
     cmp ax, 10h
     jne loc_14A96
 loc_14A74:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    mov byte ptr [v_0B9A], 0
+    call far ptr fn_SetMouseCursor
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_14A96:
     cmp ax, 11h
@@ -28355,18 +28552,18 @@ loc_14A9E:
     test word ptr [v_5064], 8000h
     je loc_14AB2
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     ret
 loc_14AB2:
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     and word ptr [v_505E], 0FF00h
-    mov byte ptr [v_0B9A], 51h
+    mov byte ptr [v_KeyCode], 51h
     ret
 loc_14AD5:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_14ADF
     jmp near ptr loc_14B66
 loc_14ADF:
@@ -28375,7 +28572,7 @@ loc_14ADF:
     jmp near ptr loc_14C36
 loc_14AE9:
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, word ptr [v_40E2]
     mov ax, 0FF7Fh
     cmp bx, word ptr [v_0C18]
@@ -28405,10 +28602,10 @@ loc_14B37:
     mov word ptr [v_50DC], ax
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     dec word ptr [v_50DA]
 loc_14B66:
     cmp word ptr [v_50DA], 4
@@ -28416,8 +28613,8 @@ loc_14B66:
     call far ptr fn_0A692
     jmp near ptr loc_148CA
 loc_14B75:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6098h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -28465,15 +28662,15 @@ loc_14BE8:
     je loc_14C2D
     or word ptr [v_505E], bx
     call far ptr fn_02262
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
     mov word ptr [v_40E6], 0
     mov ax, word ptr [bx + 0Ah]
     mov word ptr [v_40E4], ax
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call sub_146A1
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     inc word ptr [v_50DA]
 loc_14C2D:
     mov word ptr [v_50DC], 0
@@ -28531,7 +28728,7 @@ sub_14CA1:
     mov word ptr [v_50FE], 33h
     mov bx, 0AFF8h
     mov cx, 0Dh
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     call far ptr fn_0D29A
     mov word ptr [v_0B26], 1
     test word ptr [v_5064], 8000h
@@ -28565,7 +28762,7 @@ loc_14D37:
     call far ptr fn_13E74
     ret
 sub_14D71:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_146A1
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 19h
@@ -28608,7 +28805,7 @@ loc_14E06:
     mov word ptr [v_0B26], 1
     call sub_158AB
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_14E1E:
     mov si, 6742h
     call sub_158DD
@@ -28621,24 +28818,24 @@ loc_14E1E:
     cmp ax, 0
     je loc_14E1E
     jg loc_14EBA
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jl loc_14E1E
-    cmp byte ptr [v_0B9A], 39h
+    cmp byte ptr [v_KeyCode], 39h
     jg loc_14E53
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     sub al, 30h
     xor ah, ah
     jmp short loc_14EBA
 loc_14E53:
     mov si, word ptr [v_5070]
     mov bx, word ptr [si + 10h]
-    cmp byte ptr [v_0B9A], 4Dh
+    cmp byte ptr [v_KeyCode], 4Dh
     jne loc_14E68
     cmp bx, 1
     je loc_14E1E
     jmp short loc_14E8F
 loc_14E68:
-    cmp byte ptr [v_0B9A], 46h
+    cmp byte ptr [v_KeyCode], 46h
     jne loc_14E76
     cmp bx, 2
     je loc_14E1E
@@ -28646,11 +28843,11 @@ loc_14E68:
 loc_14E76:
     test word ptr [v_5064], 8000h
     je loc_14E86
-    cmp byte ptr [v_0B9A], 45h
+    cmp byte ptr [v_KeyCode], 45h
     jne loc_14E1E
     ret
 loc_14E86:
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_14EA9
     jmp short loc_14E1E
 loc_14E8F:
@@ -28667,7 +28864,7 @@ loc_14EA9:
     jne loc_14EB4
     call sub_146D9
 loc_14EB4:
-    mov byte ptr [v_0B9A], 51h
+    mov byte ptr [v_KeyCode], 51h
     ret
 loc_14EBA:
     dec ax
@@ -28690,7 +28887,7 @@ loc_14ECA:
     mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 70h
     call far ptr fn_19E12
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 sub_14F08:
     call sub_15605
@@ -28726,13 +28923,13 @@ loc_14F72:
     je loc_14FA2
     jmp short loc_14F72
 loc_14F88:
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     jne loc_14F92
     jmp near ptr sub_14F08
 loc_14F92:
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     je loc_14FBD
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     je loc_14FA7
     jmp short loc_14F72
 loc_14FA2:
@@ -28740,7 +28937,7 @@ loc_14FA2:
     jne loc_14FB0
 loc_14FA7:
     call sub_146D9
-    mov byte ptr [v_0B9A], 51h
+    mov byte ptr [v_KeyCode], 51h
     ret
 loc_14FB0:
     cmp ax, 4
@@ -28749,7 +28946,7 @@ loc_14FB0:
     jne loc_14F72
     jmp near ptr sub_14F08
 loc_14FBD:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 sub_14FC3:
     mov si, word ptr [v_5070]
@@ -28782,7 +28979,7 @@ sub_14FC3:
     call sub_153A7
     ret
 sub_15046:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov si, word ptr [v_5070]
     mov word ptr [v_50E6], 0CBh
     mov word ptr [v_0BAC], 0Fh
@@ -28961,7 +29158,7 @@ loc_15301:
     call far ptr fn_13E74
 loc_15306:
     mov word ptr [v_0CC6], 0Fh
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_15312:
     call far ptr fn_02262
@@ -29087,7 +29284,7 @@ sub_15419:
     call far ptr fn_13E08
     call sub_158AB
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_154E1:
     mov si, 5F84h
     call sub_158DD
@@ -29098,23 +29295,23 @@ loc_154E1:
     je loc_15533
     jmp short loc_154E1
 loc_154F7:
-    cmp byte ptr [v_0B9A], 4Bh
+    cmp byte ptr [v_KeyCode], 4Bh
     jne loc_15501
     jmp near ptr loc_155C6
 loc_15501:
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     je loc_1555E
-    cmp byte ptr [v_0B9A], 50h
+    cmp byte ptr [v_KeyCode], 50h
     je loc_15573
-    cmp byte ptr [v_0B9A], 52h
+    cmp byte ptr [v_KeyCode], 52h
     je loc_15588
-    cmp byte ptr [v_0B9A], 49h
+    cmp byte ptr [v_KeyCode], 49h
     je loc_15596
-    cmp byte ptr [v_0B9A], 4Eh
+    cmp byte ptr [v_KeyCode], 4Eh
     jne loc_15527
     jmp near ptr loc_155AB
 loc_15527:
-    cmp byte ptr [v_0B9A], 51h
+    cmp byte ptr [v_KeyCode], 51h
     jne loc_15531
     jmp near ptr loc_155FC
 loc_15531:
@@ -29182,11 +29379,11 @@ loc_155C6:
     mov word ptr [v_50CC], 0Ah
     call far ptr fn_FileWrite
     call far ptr fn_18F17
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     ret
 loc_155FC:
     call sub_146D9
-    mov byte ptr [v_0B9A], 51h
+    mov byte ptr [v_KeyCode], 51h
     ret
 sub_15605:
     mov si, word ptr [v_5070]
@@ -29359,7 +29556,7 @@ loc_157DD:
     pop si
     ret
 sub_157E2:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0CCA], 3
     call far ptr fn_12691
     mov word ptr [v_50E6], 6Bh
@@ -29420,8 +29617,8 @@ loc_158D7:
     call far ptr fn_13E08
     ret
 sub_158DD:
-    call far ptr fn_1888A
-    call far ptr fn_0D0FE
+    call far ptr fn_MusicService
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je sub_158DD
     cmp word ptr [v_50CC], 7
@@ -29433,12 +29630,12 @@ sub_158DD:
     mov ax, 0FFFFh
     ret
 loc_15907:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     jmp short loc_15917
 loc_15910:
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
 loc_15917:
     call far ptr fn_0D1DE
     ret
@@ -29469,7 +29666,7 @@ fn_1591E:
     call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, word ptr [v_AFF8]
-    call far ptr fn_18800
+    call far ptr fn_PlayMusic
 loc_1596A:
     retf
 S1591 ends
@@ -30301,7 +30498,7 @@ fn_15FBC:
     push si
     push di
     push cx
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov si, 963Bh
     mov cx, 4
 loc_15FD2:
@@ -30317,12 +30514,12 @@ loc_15FD2:
     loop loc_15FD2
 loc_15FEB:
     call far ptr fn_1B382
-    mov word ptr [v_40E0], 0
+    mov word ptr [v_MouseCursor], 0
     and word ptr [v_505E], 0FF00h
     or word ptr [v_505E], 70h
     and word ptr [v_50F6], 1FFFh
     call far ptr fn_0EBD6
-    cmp byte ptr [v_0B9A], 0FFh
+    cmp byte ptr [v_KeyCode], 0FFh
     je loc_16018
     call far ptr fn_0F2C0
 loc_16018:
@@ -30352,12 +30549,12 @@ S15FB ends
 S1604 segment byte use16
     db 0h
 fn_16044:
-    cmp byte ptr [v_0B9A], 0
+    cmp byte ptr [v_KeyCode], 0
     je loc_1604E
     jmp near ptr loc_1610B
 loc_1604E:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 61C8h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -30400,7 +30597,7 @@ loc_160AF:
     je loc_160AE
     mov word ptr [v_0BA4], ax
     call far ptr fn_06EA4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     or word ptr [v_505E], 100h
     mov ax, si
     call far ptr fn_16024
@@ -30430,26 +30627,26 @@ loc_160F2:
 loc_160FD:
     call sub_16292
 loc_16100:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     retf
 loc_1610B:
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jne loc_16118
     mov si, word ptr [v_963B]
     jmp short loc_1613D
 loc_16118:
-    cmp byte ptr [v_0B9A], 32h
+    cmp byte ptr [v_KeyCode], 32h
     jne loc_16125
     mov si, word ptr [v_963D]
     jmp short loc_1613D
 loc_16125:
-    cmp byte ptr [v_0B9A], 33h
+    cmp byte ptr [v_KeyCode], 33h
     jne loc_16132
     mov si, word ptr [v_963F]
     jmp short loc_1613D
 loc_16132:
-    cmp byte ptr [v_0B9A], 34h
+    cmp byte ptr [v_KeyCode], 34h
     jne loc_16170
     mov si, word ptr [v_9641]
 loc_1613D:
@@ -30462,10 +30659,10 @@ loc_1613D:
     add si, ax
     or word ptr [v_505E], 100h
     call far ptr fn_06EA4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     or word ptr [v_505E], 100h
     call sub_16420
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_16170:
     retf
@@ -30932,9 +31129,9 @@ fn_1672C:
     push di
     push es
     push word ptr [v_50DA]
-    mov ax, word ptr [v_0F08]
+    mov ax, word ptr [v_MouseLeftX]
     sub ax, word ptr [v_5056]
-    mov bx, word ptr [v_0F0A]
+    mov bx, word ptr [v_MouseLeftY]
     sub bx, word ptr [v_505A]
     mov si, 60F4h
     call far ptr fn_0D1DE
@@ -30949,7 +31146,7 @@ loc_1675C:
     jmp near ptr loc_16919
 loc_1676C:
     call sub_16E64
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_167A5
     cmp word ptr [di], 0
     jne loc_1677E
@@ -31076,15 +31273,15 @@ loc_168B9:
 loc_168CD:
     mov di, bx
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call sub_16BE4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call sub_1711E
     push cs
     call fn_1658F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp short loc_16919
 loc_168F8:
     mov ax, word ptr [si + 118h]
@@ -31116,9 +31313,9 @@ fn_16925:
     push si
     push di
     push es
-    mov ax, word ptr [v_0F0C]
+    mov ax, word ptr [v_MouseRightX]
     sub ax, word ptr [v_5056]
-    mov bx, word ptr [v_0F0E]
+    mov bx, word ptr [v_MouseRightY]
     sub bx, word ptr [v_505A]
     mov si, 60F4h
     call far ptr fn_0D1DE
@@ -31137,7 +31334,7 @@ loc_16951:
     call far ptr fn_02262
     test word ptr [bx + 0Ch], 2000h
     jne loc_16996
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_1698D
     test word ptr [bx + 0Ch], 100h
     je loc_16983
@@ -31491,28 +31688,28 @@ sub_16D56:
     call far ptr fn_18F17
     ret
 sub_16D74:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call sub_1705F
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_1658F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_16D8B:
     mov ax, 6
-    call far ptr fn_1897C
-    call far ptr fn_13AC6
+    call far ptr fn_PlaySFX
+    call far ptr fn_HideMouse
     call sub_16BE4
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_1658F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_16DB0:
     mov ax, 6
-    call far ptr fn_1897C
-    call far ptr fn_13AC6
+    call far ptr fn_PlaySFX
+    call far ptr fn_HideMouse
     push word ptr [v_40E2]
     push word ptr [v_40E6]
     push word ptr [v_40E4]
@@ -31530,10 +31727,10 @@ sub_16DB0:
     pop word ptr [v_40E4]
     pop word ptr [v_40E6]
     pop word ptr [v_40E2]
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_1658F
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     ret
 sub_16E04:
     add di, si
@@ -32227,8 +32424,8 @@ loc_175C1:
 fn_1760E:
     push dx
     push si
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6372h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -32299,8 +32496,8 @@ fn_176EC:
     push si
     push di
     push es
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 6372h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -32333,7 +32530,7 @@ loc_17743:
     mov word ptr [v_50CC], 1
     jmp short loc_1779F
 loc_1774B:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_1775A
     cmp word ptr [di], 0
     je loc_17743
@@ -32372,27 +32569,27 @@ loc_1779F:
     retf
 loc_177A7:
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_40E2]
     mov word ptr [di], ax
     mov ax, word ptr [v_40E6]
     mov word ptr [di + 2], ax
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_40E2], 0
     mov word ptr [v_40E6], 0
     mov word ptr [v_40E4], 0
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_1755C
     call far ptr fn_06EA4
     call far ptr fn_076AC
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
     jmp short loc_1779F
 loc_177F6:
     mov ax, 6
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_40E2]
     push word ptr [v_40E2]
     push word ptr [v_40E6]
@@ -32423,7 +32620,7 @@ loc_1782C:
     mov word ptr [v_0CCA], ax
     mov word ptr [di], 0
 loc_17858:
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     push cs
     call fn_1755C
     mov ax, word ptr [v_40E2]
@@ -32452,8 +32649,8 @@ fn_1789B:
     push es
     test word ptr [v_946F], 1000h
     je loc_178EE
-    mov ax, word ptr [v_0F0C]
-    mov bx, word ptr [v_0F0E]
+    mov ax, word ptr [v_MouseRightX]
+    mov bx, word ptr [v_MouseRightY]
     mov si, 6372h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -32480,7 +32677,7 @@ loc_178EE:
     mov word ptr [v_50CC], 0
     jmp short loc_17949
 loc_178F6:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     jne loc_178EE
     cmp word ptr [di], 0
     je loc_178EE
@@ -32500,7 +32697,7 @@ loc_17917:
     mov word ptr [v_5108], 0
     mov word ptr [v_510E], 0
     mov word ptr [v_510A], 0
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_50CC], 2
 loc_17949:
     pop es
@@ -33994,10 +34191,51 @@ loc_187D0:
     pop si
     retf
 S187B ends
+; ===========================================================================
+; FM sound service - Creative SBFMDRV 1.34, a resident driver the game calls
+; through its own interrupt.
+;
+; CH2.BAT loads SBFMDRV.COM before the game; the game itself never touches the
+; SB hardware (no FM, IRQ or DMA ports here). sub_SoundCall (18B80h) is
+; `int 0; ret`, and sub_SoundFindDriver patches that 0 (its own second byte,
+; CS:3A1h) to the vector where it found the driver's "FMDRV" signature. The
+; driver is also handed the addresses of two status words it clears when idle:
+; DS:0C2Ch (command 1, checked as a byte for "busy") and DS:0C2Eh (command 5,
+; waited on by fn_SoundWaitIdle).
+;
+; State - v_SoundState (94D5h):
+;   0001 music path started (scan/int path)   0002 music enabled
+;   0004 pre-init done (far-entry path)       0008 sound effects enabled
+;   0040 no "FMDRV" signature found           0080 cleared on successful pre-init
+;   2000/4000/8000 environment / pre-init error flags
+; Buffers - v_MusicBufSeg (40F8h; size from the word table at 0CF27h),
+; v_SfxBufSeg (50CAh; size from the word table at 0D095h), v_SoundDataSeg
+; (F7B0h; 9Ch paragraphs read from WORLD.DAT).
+; Environment - v_SoundPort (50B2h, BLASTER "Axxx"), v_SoundIRQ (50B0h, "Ix");
+; v_94D1/v_94D3 are set when both were parsed (kept across WORLD.DAT reads).
+;
+; Commands used by this module (BX = command; via sub_SoundCall unless noted):
+;   1 install status pointer (DX:AX = segment:offset), 2 music block
+;   (DX = segment, AX/CX = header fields), 4 start/tempo, 6 start queued
+;   music, 7 stop, 8/9 stop/reset.
+; Far entry (v_SoundEntry), parameter meaning inferred from the call sites:
+;   1 base I/O port, 2 IRQ, 3 detect (AX = 0 on success), 4 enable, 5 status
+;   word (ES:DI), 6 play SFX block (ES:DI), 8/9 release.
+; Open question: v_SoundEntry is zero in the image and no writer was found in
+; the game, yet the pre-init path runs unconditionally - how it is filled in
+; must be black-boxed with the driver (docs/porting.md section 6, risk 1).
+; ===========================================================================
 S187E segment byte use16
-fn_187E8:
+; ---------------------------------------------------------------------------
+; fn_SoundWaitIdle (0x187E8) - wait for the sound driver to finish.
+; in:  -
+; out: AX = 0 sound effects ready, AX = 1 sound effects disabled
+; Notes: returns immediately unless v_SoundState bit 3 (SFX enabled) is set;
+;        otherwise spins until the driver clears the status word at 0C2Eh.
+; ---------------------------------------------------------------------------
+fn_SoundWaitIdle:
     mov ax, 1
-    test word ptr [v_94D5], 8
+    test word ptr [v_SoundState], 8
     je loc_187FC
 loc_187F3:
     cmp word ptr [v_0C2E], 0
@@ -34006,8 +34244,17 @@ loc_187F3:
 loc_187FC:
     cmp ax, 0
     retf
-fn_18800:
-    test word ptr [v_94D5], 2
+; ---------------------------------------------------------------------------
+; fn_PlayMusic (0x18800) - queue a music track for playback.
+; in:  AX = track id (0 = clear the id, nothing is loaded)
+; out: -
+; Notes: returns at once when music is disabled (bit 1 clear). When the driver
+;        is busy (0C2Ch nonzero) only v_MusicId is set; otherwise the track is
+;        read from WORLD.DAT into v_MusicBufSeg and the driver gets commands 2,
+;        4 and 6 with fields of the block header (layout not established).
+; ---------------------------------------------------------------------------
+fn_PlayMusic:
+    test word ptr [v_SoundState], 2
     jne loc_18809
     retf
 loc_18809:
@@ -34015,58 +34262,68 @@ loc_18809:
     push cx
     push dx
     push es
-    mov word ptr [v_0C40], ax
+    mov word ptr [v_MusicId], ax
     or ax, ax
     je loc_18885
     cmp byte ptr [v_0C2C], 0
     je loc_1881D
-    jmp short loc_18885
+    jmp short loc_18885        ; driver busy: only remember the request
 loc_1881D:
     push word ptr [v_9095]
-    mov ax, word ptr [v_40F8]
-    mov word ptr [v_9095], ax
+    mov ax, word ptr [v_MusicBufSeg]
+    mov word ptr [v_9095], ax   ; read the track into the music buffer
     xor ax, ax
-    mov bx, word ptr [v_0C40]
-    call far ptr fn_180F9
+    mov bx, word ptr [v_MusicId]
+    call far ptr fn_180F9       ; WORLD.DAT record locator (type 0)
     mov bx, 9093h
     mov word ptr [v_50CC], 7
     call far ptr fn_FileRead
     call far ptr fn_18F17
     pop word ptr [v_9095]
-    mov es, word ptr [v_40F8]
+    mov es, word ptr [v_MusicBufSeg]
     mov dx, es
     mov ax, word ptr es:[6]
     mov cx, word ptr es:[24h]
     mov bx, 2
-    call sub_18B80
-    mov es, word ptr [v_40F8]
+    call sub_SoundCall          ; cmd 2: music block (DX=seg, AX=+6, CX=+24h)
+    mov es, word ptr [v_MusicBufSeg]
     mov bx, word ptr es:[0Ch]
     mov dx, 12h
     mov ax, 34DCh
     div bx
     mov bx, 4
-    call sub_18B80
-    mov es, word ptr [v_40F8]
+    call sub_SoundCall          ; cmd 4: start/tempo (AX=34DCh/[+0Ch], DX=12h)
+    mov es, word ptr [v_MusicBufSeg]
     mov dx, es
     mov ax, word ptr es:[8]
     mov bx, 6
-    call sub_18B80
+    call sub_SoundCall          ; cmd 6: start queued music (DX=seg, AX=+8)
 loc_18885:
     pop es
     pop dx
     pop cx
     pop bx
     retf
-fn_1888A:
-    test word ptr [v_94D5], 2
+; ---------------------------------------------------------------------------
+; fn_MusicService (0x1888A) - per-frame music sequencer.
+; in:  -
+; out: -
+; Notes: called from the input wrappers while waiting. When the tick ISR has
+;        made the service due (v_5064 bit 10h) it picks the next track and
+;        calls fn_PlayMusic; otherwise it re-arms the 20-tick countdown
+;        (v_50F4, v_50F6 bit 200h). Track id: v_511A (scripted) wins, else
+;        v_94A3, except v_94A1 for map ids 1A4h..474h.
+; ---------------------------------------------------------------------------
+fn_MusicService:
+    test word ptr [v_SoundState], 2
     je loc_188C2
     cmp byte ptr [v_0C2C], 0
     jne loc_188C2
     test word ptr [v_5064], 10h
-    jne loc_188C3
+    jne loc_188C3               ; service due
     test word ptr [v_50F6], 200h
     jne loc_188C2
-    mov word ptr [v_50F4], 14h
+    mov word ptr [v_50F4], 14h  ; re-arm: 20 ticks
     cmp word ptr [v_511A], 0
     jne loc_188BC
     mov word ptr [v_50F4], 14h
@@ -34075,80 +34332,106 @@ loc_188BC:
 loc_188C2:
     retf
 loc_188C3:
-    mov ax, word ptr [v_511A]
+    mov ax, word ptr [v_511A]   ; scripted id first
     or ax, ax
     jne loc_188EC
-    mov ax, word ptr [v_94A3]
+    mov ax, word ptr [v_94A3]   ; per-map default
     cmp word ptr [v_94F1], 1A4h
     jl loc_188E0
     cmp word ptr [v_94F1], 474h
     jg loc_188E0
-    mov ax, word ptr [v_94A1]
+    mov ax, word ptr [v_94A1]   ; special-range default
 loc_188E0:
     or ax, ax
     je loc_188C2
     test word ptr [v_505E], 2000h
     je loc_188C2
 loc_188EC:
-    and word ptr [v_5064], 0FFEFh
-    mov word ptr [v_0C40], ax
+    and word ptr [v_5064], 0FFEFh   ; clear the due flag
+    mov word ptr [v_MusicId], ax
     push cs
-    call fn_18800
+    call fn_PlayMusic
     retf
-fn_188F9:
-    test word ptr [v_94D5], 4
+; ---------------------------------------------------------------------------
+; fn_SoundShutdown (0x188F9) - release the driver and every sound buffer.
+; in:  -
+; out: -
+; Notes: far-entry path (bit 2): commands 8/9, then free v_SoundDataSeg and
+;        v_SfxBufSeg. Int path (bit 0, when a driver was found): commands 7/8/3
+;        (AX = FFFFh), then free the music buffer. Called from the error exit.
+; ---------------------------------------------------------------------------
+fn_SoundShutdown:
+    test word ptr [v_SoundState], 4
     je loc_18926
-    cmp word ptr [v_F7B0], 0
+    cmp word ptr [v_SoundDataSeg], 0
     je loc_18926
     mov bx, 8
-    call dword ptr [v_F7AE]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, release (8)
     mov bx, 9
-    call dword ptr [v_F7AE]
-    mov es, word ptr [v_F7B0]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, release (9)
+    mov es, word ptr [v_SoundDataSeg]
     mov ah, 49h
-    int 21h
-    mov es, word ptr [v_50CA]
+    int 21h                 ; SEAM DOS: 49h - free driver data block
+    mov es, word ptr [v_SfxBufSeg]
     mov ah, 49h
-    int 21h
+    int 21h                 ; SEAM DOS: 49h - free SFX buffer
 loc_18926:
-    test word ptr [v_94D5], 1
+    test word ptr [v_SoundState], 1
     je loc_18953
-    cmp byte ptr cs:[3A1h], 0
+    cmp byte ptr cs:[3A1h], 0   ; driver vector patched in?
     je loc_18953
     mov bx, 7
-    call sub_18B80
+    call sub_SoundCall      ; cmd 7: stop
     mov bx, 8
-    call sub_18B80
+    call sub_SoundCall      ; cmd 8: reset
     mov ax, 0FFFFh
     mov bx, 3
-    call sub_18B80
-    mov es, word ptr [v_40F8]
+    call sub_SoundCall      ; cmd 3: reset (AX = FFFFh)
+    mov es, word ptr [v_MusicBufSeg]
     mov ah, 49h
-    int 21h
+    int 21h                 ; SEAM DOS: 49h - free music buffer
 loc_18953:
     retf
-fn_18954:
-    and word ptr [v_94D5], 0FFF0h
-    call sub_18B83
-    test word ptr [v_94D5], 0C000h
+; ---------------------------------------------------------------------------
+; fn_SoundInit (0x18954) - sound bring-up (called once from fn_01BE8).
+; in:  -
+; out: -
+; Notes: clears the four state bits, parses BLASTER/SOUND, then runs the scan
+;        path (sub_SoundFindDriver) unless v_5062 bit 1 is set and the
+;        far-entry path (sub_SoundPreInit) unless bit 0 is set. Stops early
+;        when the environment left a 0C000h error flag.
+; ---------------------------------------------------------------------------
+fn_SoundInit:
+    and word ptr [v_SoundState], 0FFF0h
+    call sub_SoundParseEnv
+    test word ptr [v_SoundState], 0C000h
     je loc_18965
-    retf
+    retf                        ; environment error: no sound this run
 loc_18965:
     test word ptr [v_5062], 2
     jne loc_18970
-    call sub_18A35
+    call sub_SoundFindDriver
 loc_18970:
     test word ptr [v_5062], 1
     jne loc_1897B
-    call sub_18ACE
+    call sub_SoundPreInit
 loc_1897B:
     retf
-fn_1897C:
-    test word ptr [v_94D5], 8
+; ---------------------------------------------------------------------------
+; fn_PlaySFX (0x1897C) - play a sound effect.
+; in:  AX = effect id
+; out: -
+; Notes: only id 3 makes a sound when effects are disabled (v_SoundState bit 3
+;        clear) - it falls back to the PC speaker beep. With effects enabled
+;        the block is read from WORLD.DAT into v_SfxBufSeg and the far entry
+;        plays it from the data offset stored at [buffer+14h].
+; ---------------------------------------------------------------------------
+fn_PlaySFX:
+    test word ptr [v_SoundState], 8
     jne loc_1898F
     cmp ax, 3
     jne loc_1898E
-    call far ptr fn_06E76
+    call far ptr fn_SpeakerBeep ; id 3 when SFX are off: beep
 loc_1898E:
     retf
 loc_1898F:
@@ -34166,18 +34449,18 @@ loc_1898F:
     push word ptr [v_909D]
     push word ptr [v_909F]
     mov bx, ax
-    mov ax, word ptr [v_50CA]
-    mov word ptr [v_9095], ax
+    mov ax, word ptr [v_SfxBufSeg]
+    mov word ptr [v_9095], ax   ; read the effect into the SFX buffer
     xor ax, ax
-    call far ptr fn_183BD
+    call far ptr fn_183BD       ; WORLD.DAT record locator (type 0)
     mov word ptr [v_50CC], 7
     mov bx, 9093h
     call far ptr fn_FileRead
     call far ptr fn_18F17
-    mov es, word ptr [v_50CA]
-    mov di, word ptr es:[14h]
+    mov es, word ptr [v_SfxBufSeg]
+    mov di, word ptr es:[14h]   ; data offset inside the block
     mov bx, 6
-    call dword ptr [v_F7AE]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, play SFX (6)
     pop word ptr [v_909F]
     pop word ptr [v_909D]
     pop word ptr [v_909B]
@@ -34192,14 +34475,22 @@ loc_1898F:
     pop cx
     pop bx
     retf
-fn_18A06:
-    test word ptr [v_94D5], 2
+; ---------------------------------------------------------------------------
+; fn_MusicStop (0x18A06) - stop music and re-arm the sequencer.
+; in:  -
+; out: -
+; Notes: no-op when music is disabled. Sends command 7, clears v_MusicId and
+;        makes sure the service will run again (v_50F4 = 14h, v_50F6 bit 200h
+;        set, v_5064 bit 10h cleared).
+; ---------------------------------------------------------------------------
+fn_MusicStop:
+    test word ptr [v_SoundState], 2
     jne loc_18A0F
     retf
 loc_18A0F:
     mov bx, 7
-    call sub_18B80
-    mov word ptr [v_0C40], 0
+    call sub_SoundCall      ; cmd 7: stop
+    mov word ptr [v_MusicId], 0
     test word ptr [v_50F6], 200h
     jne loc_18A2F
     mov word ptr [v_50F4], 14h
@@ -34207,26 +34498,38 @@ loc_18A0F:
 loc_18A2F:
     and word ptr [v_5064], 0FFEFh
     retf
-sub_18A35:
+; ---------------------------------------------------------------------------
+; sub_SoundFindDriver (0x18A35) - locate the resident FM driver, start music.
+; in:  -
+; out: -
+; Notes: scans vectors 80h..BEh with DOS 35h; null vectors and IRET stubs are
+;        skipped; a hit is a handler whose segment carries the 5-byte "FMDRV"
+;        signature at offset 103h. On success it patches the int number in
+;        sub_SoundCall (CS:3A1h), installs the status pointer (command 1,
+;        DX:AX = S1DEA:0C2Ch), sends 7 and 8, allocates the music buffer
+;        (largest of the v_515E words at 0CF27h, /16 + 2 paragraphs) and sets
+;        state bits 0+1. On failure it clears bits 0+1 and sets 40h.
+; ---------------------------------------------------------------------------
+sub_SoundFindDriver:
     mov cx, 3Fh
-    mov word ptr [v_0CCE], 80h
+    mov word ptr [v_SoundScanVec], 80h
 loc_18A3E:
-    mov ax, word ptr [v_0CCE]
+    mov ax, word ptr [v_SoundScanVec]
     mov ah, 35h
-    int 21h
+    int 21h                 ; SEAM DOS: 35h - get vector for the FMDRV scan
     or bx, bx
-    je loc_18A4F
+    je loc_18A4F             ; null vector: next
     cmp byte ptr es:[bx], 0CFh
-    jne loc_18A60
+    jne loc_18A60            ; not an IRET stub: check for the signature
 loc_18A4F:
-    inc word ptr [v_0CCE]
+    inc word ptr [v_SoundScanVec]
     loop loc_18A3E
-    and word ptr [v_94D5], 0FFFCh
-    or word ptr [v_94D5], 40h
-    ret
+    and word ptr [v_SoundState], 0FFFCh
+    or word ptr [v_SoundState], 40h
+    ret                     ; no driver found
 loc_18A60:
     push cx
-    mov si, 0CD0h
+    mov si, 0CD0h           ; "FMDRV",0
     mov di, 103h
     mov cx, 5
     repe cmpsb
@@ -34235,21 +34538,21 @@ loc_18A60:
     jmp short loc_18A4F
 loc_18A71:
     add sp, 2
-    mov ax, word ptr [v_0CCE]
-    mov byte ptr cs:[3A1h], al
+    mov ax, word ptr [v_SoundScanVec]
+    mov byte ptr cs:[3A1h], al   ; patch the int number in sub_SoundCall
     mov dx, S1DEA
     mov ax, 0C2Ch
     mov bx, 1
-    call sub_18B80
+    call sub_SoundCall      ; cmd 1: status pointer = S1DEA:0C2Ch
     mov bx, 7
-    call sub_18B80
+    call sub_SoundCall      ; cmd 7: stop
     mov bx, 8
-    call sub_18B80
-    mov bx, 0CF27h
+    call sub_SoundCall      ; cmd 8: reset
+    mov bx, 0CF27h          ; music track size table
     mov cx, word ptr [v_515E]
     mov ax, 0
 loc_18A9D:
-    cmp ax, word ptr [bx]
+    cmp ax, word ptr [bx]   ; largest entry
     jge loc_18AA3
     mov ax, word ptr [bx]
 loc_18AA3:
@@ -34259,55 +34562,67 @@ loc_18AA3:
     sar ax, 1
     sar ax, 1
     sar ax, 1
-    add ax, 2
+    add ax, 2              ; paragraphs
     mov bx, ax
     mov word ptr [v_50CC], 1
     call far ptr fn_DOSAlloc
-    mov word ptr [v_40F8], ax
-    or word ptr [v_94D5], 3
-    and word ptr [v_94D5], 0FFBFh
+    mov word ptr [v_MusicBufSeg], ax
+    or word ptr [v_SoundState], 3
+    and word ptr [v_SoundState], 0FFBFh
     ret
-sub_18ACE:
+; ---------------------------------------------------------------------------
+; sub_SoundPreInit (0x18ACE) - pre-initialize the driver through the far entry.
+; in:  -
+; out: -
+; Notes: reads a 9Ch-paragraph block from WORLD.DAT into v_SoundDataSeg
+;        (fn_181A6 locates record 0; the 9095h file struct buffer is pointed at
+;        the fresh block for the read), then calls the far entry: 1 base port,
+;        2 IRQ, 3 detect (AX must return 0), 4 enable (AX=1), 5 status word
+;        (ES:DI = S1DEA:0C2Eh). Finally allocates the SFX buffer (largest of
+;        the v_5160 words at 0D095h, /16 + 2 paragraphs) and sets bits 2+3; on
+;        detect failure it sets 8000h and clears bits 2+3.
+; ---------------------------------------------------------------------------
+sub_SoundPreInit:
     xor ax, ax
-    call far ptr fn_181A6
+    call far ptr fn_181A6       ; WORLD.DAT record locator (type 0)
     mov bx, 9Ch
     mov word ptr [v_50CC], 1
     call far ptr fn_DOSAlloc
     mov word ptr [v_9095], ax
-    mov word ptr [v_F7B0], ax
+    mov word ptr [v_SoundDataSeg], ax
     mov bx, 9093h
     mov word ptr [v_50CC], 8
     call far ptr fn_FileRead
     call far ptr fn_18F17
-    db 0C7h,6h,95h,90h
-    dw S1DEA
-    mov ax, word ptr [v_50B2]
+    db 0C7h,6h,95h,90h          ; mov word ptr [9095h], S1DEA (bytes keep the
+    dw S1DEA                    ; segment relocation the generator emitted)
+    mov ax, word ptr [v_SoundPort]
     mov bx, 1
-    call dword ptr [v_F7AE]
-    mov ax, word ptr [v_50B0]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, base port (1)
+    mov ax, word ptr [v_SoundIRQ]
     mov bx, 2
-    call dword ptr [v_F7AE]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, IRQ (2)
     mov bx, 3
-    call dword ptr [v_F7AE]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, detect (3)
     cmp ax, 0
     je loc_18B2E
-    or word ptr [v_94D5], 8000h
-    and word ptr [v_94D5], 0FFF3h
-    ret
+    or word ptr [v_SoundState], 8000h
+    and word ptr [v_SoundState], 0FFF3h
+    ret                     ; detect failed
 loc_18B2E:
     mov ax, 1
     mov bx, 4
-    call dword ptr [v_F7AE]
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, enable (4)
     mov ax, S1DEA
     mov es, ax
     mov di, 0C2Eh
     mov bx, 5
-    call dword ptr [v_F7AE]
-    mov bx, 0D095h
+    call dword ptr [v_SoundEntry]   ; SEAM SOUND: far entry, status word (5)
+    mov bx, 0D095h          ; SFX size table
     mov cx, word ptr [v_5160]
     mov ax, 0
 loc_18B51:
-    cmp ax, word ptr [bx]
+    cmp ax, word ptr [bx]   ; largest entry
     jae loc_18B57
     mov ax, word ptr [bx]
 loc_18B57:
@@ -34315,37 +34630,56 @@ loc_18B57:
     loop loc_18B51
     mov cx, 4
     shr ax, cl
-    add ax, 2
+    add ax, 2              ; paragraphs
     mov bx, ax
     mov word ptr [v_50CC], 1
     call far ptr fn_DOSAlloc
-    mov word ptr [v_50CA], ax
-    or word ptr [v_94D5], 0Ch
-    and word ptr [v_94D5], 0FF7Fh
+    mov word ptr [v_SfxBufSeg], ax
+    or word ptr [v_SoundState], 0Ch
+    and word ptr [v_SoundState], 0FF7Fh
     ret
-sub_18B80:
-    int 0
+; ---------------------------------------------------------------------------
+; sub_SoundCall (0x18B80) - call the resident FM driver.
+; in:  BX = command, AX/DX/ES/DI per command
+; out: AX = driver return
+; Notes: `int 0` at 18B80h; the vector byte at 18B81h (CS:3A1h) is patched by
+;        sub_SoundFindDriver to the driver's own vector, so this is
+;        self-modifying code (CS:3A1h doubles as its "driver found" flag).
+; ---------------------------------------------------------------------------
+sub_SoundCall:
+    int 0                   ; SEAM SOUND: resident FM driver call (int number patched)
     ret
-sub_18B83:
-    and word ptr [v_94D5], 3FF0h
-    mov ax, 0CBBh
+; ---------------------------------------------------------------------------
+; sub_SoundParseEnv (0x18B83) - read BLASTER/SOUND from the environment copy.
+; in:  -
+; out: -
+; Notes: fn_1DBB2 searches the copy at DS:0AFF8h. "SOUND=" is required (else
+;        8000h); "BLASTER=" is required (else 4000h|8000h). It then rescans
+;        the whole copy for 'A'/'a' and decodes the next three characters as
+;        the base port with 100h/10h/1 place values (decimal digits only - hex
+;        letters are not decoded), and for 'I'/'i' and decodes one digit as
+;        the IRQ. Results go to v_SoundPort/v_SoundIRQ; v_94D1/v_94D3 are set.
+; ---------------------------------------------------------------------------
+sub_SoundParseEnv:
+    and word ptr [v_SoundState], 3FF0h
+    mov ax, 0CBBh           ; "SOUND="
     mov bx, 0AFF8h
     call far ptr fn_1DBB2
     or ax, ax
     jne loc_18B9F
-    or word ptr [v_94D5], 8000h
+    or word ptr [v_SoundState], 8000h
     ret
 loc_18B9F:
-    mov ax, 0CB2h
+    mov ax, 0CB2h           ; "BLASTER="
     mov bx, 0AFF8h
     call far ptr fn_1DBB2
     or ax, ax
     jne loc_18BB5
 loc_18BAE:
-    or word ptr [v_94D5], 0C000h
+    or word ptr [v_SoundState], 0C000h
     ret
 loc_18BB5:
-    mov si, 0AFF8h
+    mov si, 0AFF8h          ; find "Axxx" (base I/O port)
 loc_18BB8:
     lodsb
     cmp al, 0
@@ -34372,8 +34706,8 @@ loc_18BC7:
     xor bh, bh
     xor bh, bh
     add dx, bx
-    mov word ptr [v_50B2], dx
-    mov si, 0AFF8h
+    mov word ptr [v_SoundPort], dx
+    mov si, 0AFF8h          ; find "Ix" (IRQ)
 loc_18BF4:
     lodsb
     cmp al, 0
@@ -34387,7 +34721,7 @@ loc_18C03:
     mov bl, byte ptr [si]
     sub bl, 30h
     xor bh, bh
-    mov word ptr [v_50B0], bx
+    mov word ptr [v_SoundIRQ], bx   ; single digit
     mov word ptr [v_94D3], 1
     mov word ptr [v_94D1], 1
     ret
@@ -34476,13 +34810,13 @@ loc_18F1F:
     jmp ax
 loc_18F36:
     push ax
-    call far ptr fn_0FE45
+    call far ptr fn_TickRestore
     call far ptr fn_1A0A0
-    call far ptr fn_188F9
-    test word ptr [v_40F6], 1
+    call far ptr fn_SoundShutdown
+    test word ptr [v_MouseState], 1
     je loc_18F53
     mov ax, 0
-    int 33h
+    int 33h                 ; SEAM MOUSE: 00h - reset driver (error exit)
 loc_18F53:
     mov ax, 3
     int 10h                 ; SEAM VIDEO: mode 3 (text, error exit)
@@ -34732,7 +35066,7 @@ fn_1916C:
     cmp word ptr [v_556C], 0
     jne loc_1917C
     mov ax, 0
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     retf
 loc_1917C:
     push bx
@@ -34894,7 +35228,7 @@ loc_192E7:
     test word ptr [si + 18h], 2
     je loc_192E6
 loc_192EE:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     push word ptr [v_946F]
     and word ptr [v_946F], 0AFFFh
     or word ptr [v_946F], 2000h
@@ -34989,7 +35323,7 @@ loc_19420:
     pop si
     call sub_1995A
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_06EA4
     mov word ptr [v_50E6], 0F1h
     mov word ptr [v_50FE], 57h
@@ -35012,11 +35346,11 @@ loc_19420:
     mov word ptr [v_50FE], 66h
     mov bx, 836Dh
     call far ptr fn_13E74
-    mov word ptr [v_40F4], 0
-    call far ptr fn_13BE3
+    mov word ptr [v_MouseMinY], 0
+    call far ptr fn_ShowMouse
     call far ptr fn_1A6B5
 loc_194C0:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_194C0
     cmp word ptr [v_50CC], 1
@@ -35025,7 +35359,7 @@ loc_194C0:
     jne loc_194C0
     jmp short loc_194E5
 loc_194DC:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_194C0
     jmp short loc_19546
 loc_194E5:
@@ -35058,12 +35392,12 @@ loc_1952B:
 loc_19544:
     inc word ptr [di]
 loc_19546:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_126DE
     pop word ptr [v_946F]
-    mov word ptr [v_40F4], 8
+    mov word ptr [v_MouseMinY], 8
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_10BF6
     call far ptr fn_1203A
     call far ptr fn_10E42
@@ -35072,7 +35406,7 @@ loc_19546:
     call far ptr fn_09F1C
     call far ptr fn_12602
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_19593:
     push ax
@@ -35317,7 +35651,7 @@ sub_19831:
     push word ptr [v_0B9C]
     push word ptr [v_0BA0]
     mov cx, 3
-    mov ax, word ptr [v_0F08]
+    mov ax, word ptr [v_MouseLeftX]
     sub ax, word ptr [v_50DA]
     shr ax, cl
     inc ax
@@ -35331,7 +35665,7 @@ loc_19851:
 loc_1985A:
     dec ax
     add word ptr [v_0B9C], ax
-    mov ax, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftY]
     sub ax, word ptr [v_50DC]
     shr ax, cl
     inc ax
@@ -35441,10 +35775,10 @@ S199A segment byte use16
 fn_199A8:
     call far ptr fn_11F83
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
 loc_199BD:
-    call far ptr fn_0D0FE
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_199BD
     cmp word ptr [v_50CC], 1
@@ -35453,12 +35787,12 @@ loc_199BD:
     jne loc_199BD
     jmp short loc_199E1
 loc_199D9:
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_199BD
     retf
 loc_199E1:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5ABCh
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -35477,26 +35811,26 @@ fn_199FB:
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_WorkSeg]
     mov word ptr [v_DrawSeg], ax
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     pop cx
     pop bx
     call far ptr fn_13E8C
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 fn_19A3D:
     push cs
     call fn_199A8
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_19A68
 loc_19A48:
     call far ptr fn_06EA4
     call far ptr fn_1A6B5
 loc_19A52:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13AC6
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_HideMouse
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 loc_19A68:
     call far ptr fn_11A11
@@ -35634,7 +35968,7 @@ loc_19B7F:
 loc_19BAB:
     test word ptr [v_9469], 2
     je loc_19BBE
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0A692
     retf
 loc_19BBE:
@@ -35677,11 +36011,11 @@ loc_19C1A:
     jne loc_19C3F
     test word ptr [v_5064], 1000h
     jne loc_19C34
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_18709
     retf
 loc_19C34:
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0A692
     retf
 loc_19C3F:
@@ -35733,7 +36067,7 @@ loc_19CC1:
     retf
 loc_19CC7:
     call far ptr fn_1B3D6
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     retf
 S19B4 ends
 S19CD segment byte use16
@@ -35744,14 +36078,14 @@ fn_19CD2:
     jmp short loc_19CF7
 loc_19CE1:
     call far ptr fn_199A8
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_19D03
 loc_19CED:
     call far ptr fn_06EA4
     call far ptr fn_1A6B5
 loc_19CF7:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     retf
 loc_19D03:
     call far ptr fn_11A11
@@ -35765,9 +36099,9 @@ loc_19D18:
     je loc_19D21
     jmp short loc_19D3A
 loc_19D21:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_19CED
 loc_19D30:
     mov ax, word ptr [si + 4]
@@ -35824,10 +36158,10 @@ loc_19DB1:
     test ah, bh
     je loc_19D85
 loc_19DB9:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_19DC8
     mov ax, word ptr [v_518A]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_19DC8:
     mov ax, word ptr [v_5564]
     or byte ptr [v_5569], al
@@ -36832,18 +37166,18 @@ fn_1A6B5:
     test word ptr [v_5064], 40h
     je loc_1A6D0
     mov ax, 9
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     and word ptr [v_5064], 0FFBFh
 loc_1A6D0:
     test word ptr [v_5064], 10h
     je loc_1A6DD
     and word ptr [v_5064], 0FFEFh
 loc_1A6DD:
-    or word ptr [v_40F6], 4
-    test word ptr [v_40F6], 2
+    or word ptr [v_MouseState], 4
+    test word ptr [v_MouseState], 2
     je loc_1A763
-    mov ax, word ptr [v_0F10]
-    mov bx, word ptr [v_40F0]
+    mov ax, word ptr [v_MouseX]
+    mov bx, word ptr [v_MouseY]
     call sub_1AC1B
     push ax
     mov si, ax
@@ -36872,9 +37206,9 @@ loc_1A729:
     push cx
     mov cx, 10h
     xor dx, dx
-    cmp word ptr [v_0F10], 130h
+    cmp word ptr [v_MouseX], 130h
     jle loc_1A741
-    mov dx, word ptr [v_0F10]
+    mov dx, word ptr [v_MouseX]
     sub dx, 130h
     sub cx, dx
 loc_1A741:
@@ -36908,7 +37242,7 @@ loc_1A763:
     rep movsw
     mov ax, S1DEA
     mov ds, ax
-    test word ptr [v_40F6], 2
+    test word ptr [v_MouseState], 2
     je loc_1A7A5
     pop di
     mov si, 0E08h
@@ -36927,7 +37261,7 @@ loc_1A7A0:
     mov ax, S1DEA
     mov ds, ax
 loc_1A7A5:
-    and word ptr [v_40F6], 0FFFBh
+    and word ptr [v_MouseState], 0FFFBh
     pop es
     pop bx
     pop cx
@@ -37637,16 +37971,16 @@ loc_1AD42:
     jmp short fn_1AD22
 loc_1AD5E:
     call far ptr fn_199A8
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_1AD8A
 loc_1AD6A:
     call far ptr fn_06EA4
     call far ptr fn_1A6B5
 loc_1AD74:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13AC6
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_HideMouse
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 loc_1AD8A:
     call far ptr fn_11A11
@@ -37660,9 +37994,9 @@ loc_1AD9F:
     je loc_1ADA8
     jmp short loc_1ADC1
 loc_1ADA8:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short loc_1AD6A
 loc_1ADB7:
     mov ax, word ptr [si + 4]
@@ -37694,7 +38028,7 @@ loc_1ADEE:
     cmp ax, 0
     je loc_1AE33
     mov ax, 4
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_179C4
     mov cx, 2
     mov bx, 7C8Ch
@@ -37706,10 +38040,10 @@ loc_1ADEE:
 loc_1AE30:
     jmp near ptr loc_1AD74
 loc_1AE33:
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     jne loc_1AE42
     mov ax, word ptr [v_518A]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_1AE42:
     mov ax, word ptr [v_5564]
     or byte ptr [v_5569], al
@@ -37782,8 +38116,8 @@ loc_1AEEF:
     call far ptr fn_1A6B5
 loc_1AF0B:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 sub_1AF1C:
     cmp bx, 52h
@@ -37862,8 +38196,8 @@ loc_1AFC5:
     call far ptr fn_1A6B5
 loc_1AFE1:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 fn_1AFF2:
     mov bx, word ptr [v_0CE2]
@@ -37878,8 +38212,8 @@ loc_1B005:
     jmp near ptr loc_1B124
 loc_1B00F:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 loc_1B020:
     call far ptr fn_11F83
@@ -38076,7 +38410,7 @@ loc_1B1E9:
     mov bx, 0AFFAh
     call far ptr fn_13E74
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_1B094
 loc_1B26A:
     test word ptr [v_5064], 1000h
@@ -38084,19 +38418,19 @@ loc_1B26A:
     mov ax, word ptr [v_5110]
     cmp ax, word ptr [v_5162]
     jne loc_1B288
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     call far ptr fn_0A692
     jmp near ptr loc_1B00F
 loc_1B288:
     call far ptr fn_11F83
     call far ptr fn_199A8
-    cmp byte ptr [v_0B9A], 1Bh
+    cmp byte ptr [v_KeyCode], 1Bh
     jne loc_1B29C
     jmp near ptr loc_1B00F
 loc_1B29C:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     call far ptr fn_179C4
     call sub_1B36A
     call far ptr fn_0D620
@@ -38137,8 +38471,8 @@ loc_1B317:
     ret
 sub_1B32E:
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     mov ax, 12h
     call far ptr fn_0A834
     cmp ax, 0
@@ -38169,17 +38503,17 @@ loc_1B381:
 S1AEA ends
 S1B38 segment byte use16
 fn_1B382:
-    call far ptr fn_18A06
-    call far ptr fn_187E8
+    call far ptr fn_MusicStop
+    call far ptr fn_SoundWaitIdle
     jne loc_1B396
     mov ax, 13h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_1B396:
     call sub_1B3B4
     mov word ptr [v_0CCA], 1
     call far ptr fn_12691
     call far ptr fn_1270C
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     call far ptr fn_1A6B5
     retf
 sub_1B3B4:
@@ -38226,9 +38560,9 @@ loc_1B41C:
 loc_1B422:
     cmp word ptr [v_5110], 26Dh
     jne loc_1B438
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     mov ax, 8
-    call far ptr fn_18800
+    call far ptr fn_PlayMusic
     retf
 loc_1B438:
     cmp word ptr [v_5110], 246h
@@ -38291,7 +38625,7 @@ sub_1B4C8:
     cmp word ptr [v_94E9], 6Eh
     jne loc_1B541
     mov ax, 0Eh
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov bx, 8DC1h
     mov cx, 3
     call far ptr fn_13E8C
@@ -38313,7 +38647,7 @@ loc_1B541:
     ret
 sub_1B552:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
@@ -38338,7 +38672,7 @@ sub_1B552:
     ret
 sub_1B5C3:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
@@ -38459,7 +38793,7 @@ loc_1B793:
     jmp near ptr loc_1B858
 loc_1B7AE:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     and word ptr [v_5062], 1FFFh
     call far ptr fn_179C4
     call far ptr fn_1A6B5
@@ -38488,11 +38822,11 @@ loc_1B7AE:
     call far ptr fn_02262
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
-    mov word ptr [v_40E0], ax
+    mov word ptr [v_MouseCursor], ax
     mov ax, word ptr [bx + 0Ah]
     mov word ptr [v_40E4], ax
     mov word ptr [v_40E6], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     ret
 loc_1B858:
     mov bx, 8DE0h
@@ -38505,9 +38839,9 @@ sub_1B869:
     push word ptr [v_94E9]
     push word ptr [v_94E5]
     push word ptr [v_9469]
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     and word ptr [v_9469], 0FFF8h
     or word ptr [v_9469], 1
     mov word ptr [v_94E7], 154h
@@ -38520,10 +38854,10 @@ sub_1B869:
     call far ptr fn_117AC
     call far ptr fn_1A6B5
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_06342
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_WaitKey
     mov word ptr [v_0CCA], 0Bh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     pop word ptr [v_9469]
     pop word ptr [v_94E5]
     pop word ptr [v_94E9]
@@ -38534,9 +38868,9 @@ sub_1B869:
     call far ptr fn_11836
     call far ptr fn_117AC
     call far ptr fn_1A6B5
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     ret
 S1B3D ends
 S1B91 segment byte use16
@@ -38613,7 +38947,7 @@ S1B9D segment byte use16
 fn_1B9D0:
     push word ptr [v_94D1]
     push word ptr [v_94D3]
-    push word ptr [v_94D5]
+    push word ptr [v_SoundState]
     mov ax, 944Fh
     mov bx, 9093h
     call far ptr fn_181E2
@@ -38631,7 +38965,7 @@ loc_1BA18:
     and word ptr [si + 15Ch], 0F7FFh
     add si, 1F4h
     loop loc_1BA18
-    pop word ptr [v_94D5]
+    pop word ptr [v_SoundState]
     pop word ptr [v_94D3]
     pop word ptr [v_94D1]
     mov word ptr [v_94D7], 5
@@ -38778,7 +39112,7 @@ loc_1BC1F:
     jmp short loc_1BBFD
 loc_1BC40:
     call far ptr fn_06F86
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov word ptr [v_0B22], 0Fh
     mov word ptr [v_0B24], 17h
     mov word ptr [v_0B26], 1
@@ -38866,11 +39200,11 @@ loc_1BD34:
     mov cx, 0Dh
     call far ptr fn_19010
     mov si, bx
-    call far ptr fn_13BE3
-    call far ptr fn_06342
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_1BDF4
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     jmp short loc_1BD34
 loc_1BD95:
     mov word ptr [v_50E6], 1Ah
@@ -38894,8 +39228,8 @@ loc_1BDDF:
     mov cx, word ptr [v_411A]
     call far ptr fn_19010
 loc_1BDEA:
-    call far ptr fn_13BE3
-    call far ptr fn_06342
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
 loc_1BDF4:
     call far ptr fn_1A6B5
     mov word ptr [v_0CEC], 0
@@ -38919,14 +39253,14 @@ loc_1BE0D:
 loc_1BE3A:
     call far ptr fn_19010
     mov si, bx
-    call far ptr fn_13BE3
-    call far ptr fn_06342
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_1BE65
     cmp word ptr [v_411A], 0Bh
     jle loc_1BE65
     sub word ptr [v_411A], 0Bh
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     jmp short loc_1BE0D
 loc_1BE65:
     call far ptr fn_1A6B5
@@ -38951,14 +39285,14 @@ loc_1BE7E:
 loc_1BEAB:
     call far ptr fn_19010
     mov si, bx
-    call far ptr fn_13BE3
-    call far ptr fn_06342
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_1BED6
     cmp word ptr [v_411A], 10h
     jle loc_1BED6
     sub word ptr [v_411A], 10h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     jmp short loc_1BE7E
 loc_1BED6:
     call far ptr fn_1A6B5
@@ -38991,14 +39325,14 @@ loc_1BF1C:
     pop cx
     call far ptr fn_19010
     mov si, bx
-    call far ptr fn_13BE3
-    call far ptr fn_06342
-    cmp byte ptr [v_0B9A], 1Bh
+    call far ptr fn_ShowMouse
+    call far ptr fn_WaitKey
+    cmp byte ptr [v_KeyCode], 1Bh
     je loc_1BF62
     cmp word ptr [v_411A], 10h
     jle loc_1BF62
     sub word ptr [v_411A], 10h
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     jmp short loc_1BEEF
 loc_1BF62:
     call far ptr fn_1A6B5
@@ -39070,8 +39404,8 @@ fn_1BFFC:
     push word ptr [v_50E2]
     mov word ptr [v_50E2], 0
     or word ptr [v_5064], 9
-    call far ptr fn_18A06
-    call far ptr fn_13AC6
+    call far ptr fn_MusicStop
+    call far ptr fn_HideMouse
     call far ptr fn_FadeOut
     call far ptr fn_04F2A
     mov ax, word ptr [v_WorkSeg]
@@ -39083,9 +39417,9 @@ fn_1BFFC:
     mov word ptr [v_511A], ax
     and word ptr [v_5066], 0FF9Fh
     call far ptr fn_0305C
-    call far ptr fn_18A06
+    call far ptr fn_MusicStop
     call far ptr fn_FadeOut
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     call far ptr fn_04C46
     call far ptr fn_FadeIn
     cmp word ptr [v_50E2], 0
@@ -39111,8 +39445,8 @@ S1BFF ends
 S1C09 segment byte use16
 fn_1C09C:
     mov ax, 4
-    call far ptr fn_1897C
-    call far ptr fn_13AC6
+    call far ptr fn_PlaySFX
+    call far ptr fn_HideMouse
     mov ax, word ptr [v_40E2]
     call far ptr fn_02262
     mov bx, word ptr [v_0CE2]
@@ -39127,8 +39461,8 @@ loc_1C0C2:
 loc_1C0C4:
     or word ptr [v_9471], ax
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 S1C09 ends
 S1C0D segment byte use16
@@ -39470,8 +39804,8 @@ loc_1C3CD:
     call far ptr fn_1A6B5
     call far ptr fn_FadeIn
 loc_1C3E4:
-    call far ptr fn_1888A
-    call far ptr fn_0D0FE
+    call far ptr fn_MusicService
+    call far ptr fn_PollInput
     cmp word ptr [v_50CC], 0
     je loc_1C3E4
     cmp word ptr [v_50CC], 1
@@ -39482,31 +39816,31 @@ loc_1C3E4:
     je loc_1C446
     jmp short loc_1C3E4
 loc_1C40C:
-    cmp byte ptr [v_0B9A], 31h
+    cmp byte ptr [v_KeyCode], 31h
     jl loc_1C3E4
-    cmp byte ptr [v_0B9A], 39h
+    cmp byte ptr [v_KeyCode], 39h
     jg loc_1C426
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     sub al, 30h
     xor ah, ah
     add ax, 9
     jmp short loc_1C4A0
 loc_1C426:
-    cmp byte ptr [v_0B9A], 44h
+    cmp byte ptr [v_KeyCode], 44h
     je loc_1C46E
     jmp short loc_1C3E4
 loc_1C42F:
-    cmp byte ptr [v_0B9A], 3Bh
+    cmp byte ptr [v_KeyCode], 3Bh
     jl loc_1C3E4
-    cmp byte ptr [v_0B9A], 43h
+    cmp byte ptr [v_KeyCode], 43h
     jg loc_1C3E4
-    mov al, byte ptr [v_0B9A]
+    mov al, byte ptr [v_KeyCode]
     sub al, 3Ah
     xor ah, ah
     jmp short loc_1C477
 loc_1C446:
-    mov ax, word ptr [v_0F08]
-    mov bx, word ptr [v_0F0A]
+    mov ax, word ptr [v_MouseLeftX]
+    mov bx, word ptr [v_MouseLeftY]
     mov si, 5B58h
     call far ptr fn_0D1DE
     cmp ax, 0
@@ -39587,7 +39921,7 @@ loc_1C50A:
     add di, 2
     loop loc_1C50A
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_1C3E4
 loc_1C51F:
     mov word ptr [di], ax
@@ -39595,8 +39929,8 @@ loc_1C51F:
     mov word ptr [v_0CCA], 12h
 loc_1C52D:
     mov ax, 4
-    call far ptr fn_1897C
-    call far ptr fn_13AC6
+    call far ptr fn_PlaySFX
+    call far ptr fn_HideMouse
     mov bx, word ptr [v_50DA]
     dec bx
     mov ax, 28h
@@ -39612,7 +39946,7 @@ loc_1C52D:
     mov word ptr [v_0B26], 0
     mov word ptr [v_DrawSeg], 0A000h
     call far ptr fn_19E12
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_1C3E4
 sub_1C576:
     and word ptr [v_505E], 0FDFFh
@@ -39696,7 +40030,7 @@ S1C64 segment byte use16
 fn_1C64A:
     mov word ptr [v_50DA], ax
     call far ptr fn_19AC4
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
 loc_1C657:
     mov ax, word ptr [v_94F5]
     cmp ax, 0
@@ -39748,7 +40082,7 @@ loc_1C6CE:
     jmp short loc_1C701
 loc_1C6E6:
     mov ax, word ptr [v_5138]
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 6
     mov bx, 8307h
     call far ptr fn_199FB
@@ -39761,7 +40095,7 @@ loc_1C701:
     jmp short loc_1C72C
 loc_1C70E:
     mov ax, 7
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov cx, 2
     mov bx, 834Ch
     call far ptr fn_199FB
@@ -39848,7 +40182,7 @@ loc_1C7F8:
     je loc_1C803
     jmp near ptr loc_1D771
 loc_1C803:
-    mov byte ptr [v_0B9A], 0
+    mov byte ptr [v_KeyCode], 0
     retf
 loc_1C809:
     mov ax, word ptr [v_5AB8]
@@ -39922,7 +40256,7 @@ loc_1C8B9:
     jmp near ptr loc_1C803
 loc_1C8C1:
     mov ax, 0Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_5A82]
     mov bx, word ptr [v_5A80]
     cmp bx, 1
@@ -39966,12 +40300,12 @@ loc_1C91C:
     call far ptr fn_1A6B5
     jmp near ptr loc_1C803
 loc_1C933:
-    cmp word ptr [v_40E0], 0
+    cmp word ptr [v_MouseCursor], 0
     je loc_1C93D
     jmp near ptr loc_1CA3A
 loc_1C93D:
     mov ax, 33h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_5A84]
     or ax, ax
     jne loc_1C95C
@@ -39988,7 +40322,7 @@ loc_1C95C:
     mov word ptr [v_40E6], ax
     mov ax, word ptr [bx + 8]
     mov word ptr [v_0CCA], ax
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     jmp near ptr loc_1C803
 loc_1C97E:
     mov word ptr [v_0B9C], 0
@@ -40058,7 +40392,7 @@ loc_1CA2F:
     jmp near ptr loc_1CB92
 loc_1CA3A:
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_50E6], 0F0h
@@ -40121,7 +40455,7 @@ loc_1CAEE:
 loc_1CB01:
     loop loc_1CAB6
     mov ax, 31h
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_1CB0B:
     mov ax, word ptr [v_5096]
     mov word ptr [v_94E7], ax
@@ -40207,7 +40541,7 @@ loc_1CBD9:
     cmp word ptr [v_50CC], 0
     jne loc_1CBD6
     mov ax, 3Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_1CB0B
 loc_1CC13:
     mov si, word ptr [v_5070]
@@ -40284,7 +40618,7 @@ loc_1CCD9:
     jmp near ptr loc_1CA3A
 loc_1CCF7:
     mov ax, 3Bh
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_5564]
     or byte ptr [v_5569], al
     mov ax, 5569h
@@ -40337,7 +40671,7 @@ loc_1CD93:
     jmp near ptr loc_1CA3A
 loc_1CDB1:
     mov ax, 2Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     mov ax, word ptr [v_5564]
     or byte ptr [v_5569], al
     mov ax, 5569h
@@ -40385,7 +40719,7 @@ loc_1CE33:
     jmp near ptr loc_1CA3A
 loc_1CE58:
     mov ax, 2Ah
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     test word ptr [v_556A], 80h
     je loc_1CE70
     mov cx, 2
@@ -40473,7 +40807,7 @@ loc_1CF40:
     jmp short loc_1CF35
 loc_1CF64:
     call far ptr fn_12FC6
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, word ptr [v_5A76]
     call sub_1DAD2
     call far ptr fn_1C211
@@ -40674,7 +41008,7 @@ loc_1D1F0:
     call far ptr fn_1345B
 loc_1D20A:
     call far ptr fn_1A6B5
-    call far ptr fn_13BE3
+    call far ptr fn_ShowMouse
     jmp near ptr loc_1C803
 loc_1D217:
     push word ptr [v_50C8]
@@ -40846,7 +41180,7 @@ loc_1D426:
     mov ax, word ptr [v_5A78]
     cmp ax, 0
     je loc_1D46D
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
 loc_1D46D:
     call sub_1DA16
     inc word ptr [v_0CCA]
@@ -41392,7 +41726,7 @@ loc_1DAC9:
     ret
 sub_1DAD2:
     push ax
-    call far ptr fn_187E8
+    call far ptr fn_SoundWaitIdle
     je loc_1DAE4
     pop ax
     mov ax, 6
@@ -41402,7 +41736,7 @@ loc_1DAE4:
     pop ax
     cmp ax, 0
     je loc_1DAE4
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     ret
 sub_1DAF0:
     mov word ptr [v_0C36], 0
@@ -41592,9 +41926,9 @@ loc_1DC73:
     call far ptr fn_199FB
 loc_1DC7E:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13AC6
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_HideMouse
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     retf
 S1DC4 ends
 S1DC9 segment byte use16
@@ -41616,7 +41950,7 @@ loc_1DCBC:
     cmp ax, 7
     je loc_1DD36
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp short fn_1DC94
 loc_1DCD0:
     test word ptr [v_5064], 1000h
@@ -41625,7 +41959,7 @@ loc_1DCD0:
     je loc_1DCF3
 loc_1DCE0:
     mov ax, 3
-    call far ptr fn_1897C
+    call far ptr fn_PlaySFX
     jmp near ptr loc_1DDB4
 loc_1DCEB:
     test word ptr [v_5A9C], 400h
@@ -41651,8 +41985,8 @@ loc_1DD18:
     jmp near ptr loc_1DDC4
 loc_1DD36:
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     call far ptr fn_06EA4
     call sub_1DDE1
     call far ptr fn_1A6B5
@@ -41667,7 +42001,7 @@ loc_1DD36:
     call far ptr fn_0A692
     jmp short loc_1DD36
 loc_1DD76:
-    call far ptr fn_13AC6
+    call far ptr fn_HideMouse
     mov ax, word ptr [v_5AA6]
     call far ptr fn_17F5E
     mov si, word ptr [v_50C0]
@@ -41686,8 +42020,8 @@ loc_1DD76:
     call far ptr fn_179C4
 loc_1DDB4:
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
 loc_1DDC4:
     call sub_1DE24
     call far ptr fn_09F1C
@@ -41739,19 +42073,19 @@ loc_1DE42:
     ret
 sub_1DE43:
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     mov ax, 12h
     call far ptr fn_0A834
     mov word ptr [v_5AB6], ax
     mov ax, word ptr [v_50C0]
     mov word ptr [v_5AB8], ax
     mov word ptr [v_0CCA], 0
-    call far ptr fn_13B8A
+    call far ptr fn_SetMouseCursor
     ret
 fn_1DE6B:
     mov word ptr [v_0CCA], 0Fh
-    call far ptr fn_13B8A
-    call far ptr fn_13BE3
+    call far ptr fn_SetMouseCursor
+    call far ptr fn_ShowMouse
     mov ax, 12h
     call far ptr fn_0A834
     cmp ax, 0
@@ -42052,7 +42386,7 @@ v_0B96:
     db 0h,0h
 v_0B98:
     db 0h,0h
-v_0B9A:
+v_KeyCode:                          ; 0B9Ah - current key/scancode (0FFh = none)
     db 0h,0h
 v_0B9C:
     db 0h,0h
@@ -42100,10 +42434,10 @@ v_0C28:
     db 0h,0h
 v_0C2A:
     db 0h,0h
-v_0C2C:
-    db 0FFh,0h
-v_0C2E:
-    db 0FFh,0FFh
+v_0C2C:                             ; sound driver status byte: 0 = idle
+    db 0FFh,0h                      ; (address handed over by command 1)
+v_0C2E:                             ; driver flag waited on by fn_SoundWaitIdle
+    db 0FFh,0FFh                    ; (address handed over by command 5)
 v_0C30:
     db 0h,0h
 v_0C32:
@@ -42118,7 +42452,7 @@ v_0C3A:
     db 0h,0h
 v_0C3C:
     db 0h,0h,0h,0h
-v_0C40:
+v_MusicId:                          ; 0C40h - current music track id (0 = none)
     db 0h,0h
 v_0C42:
     db 0h,0h
@@ -42145,8 +42479,10 @@ v_0CAE:
     db 0h,0h
 v_0CB0:
     db 0h,0h
+v_EnvBlaster:                       ; 0CB2h - BLASTER= environment key
     db 'BLASTER='
     db 0h
+v_EnvSound:                         ; 0CBBh - SOUND= environment key
     db 'SOUND='
     db 0h
 v_0CC2:
@@ -42161,9 +42497,10 @@ v_0CCA:
     db 0h,0h
 v_0CCC:
     db 0h,0h
-v_0CCE:
+v_SoundScanVec:
     db 0h,0h
-    db 'FMDRV'
+v_SoundSig:                         ; 0CD0h - driver signature, searched at
+    db 'FMDRV'                      ; handler-segment:103h by sub_SoundFindDriver
     db 0h
 v_0CD6:
     db 0h,0h
@@ -42216,28 +42553,33 @@ v_0E00:
 v_0E02:
     db 0h,0h,0h,0h
 v_0E06:
-    db 258 dup(0h)
-v_0F08:
     db 0h,0h
-v_0F0A:
+v_MouseSaveBuf:                     ; 0E08h - 16x16 background under the cursor
+    db 256 dup(0h)
+v_MouseLeftX:                       ; 0F08h - left button press X
     db 0h,0h
-v_0F0C:
+v_MouseLeftY:                       ; 0F0Ah - left button press Y
     db 0h,0h
-v_0F0E:
+v_MouseRightX:                      ; 0F0Ch - right button press X
     db 0h,0h
-v_0F10:
+v_MouseRightY:                      ; 0F0Eh - right button press Y
     db 0h,0h
-v_0F12:
+v_MouseX:                           ; 0F10h - cursor X (drawn)
+    db 0h,0h
+v_MouseMaxX:                        ; 0F12h - cursor X max (316)
     db 3Ch,1h
-v_0F14:
+v_MouseMinX:                        ; 0F14h - cursor X min (1)
     db 1h,0h,0h,0h,0h,0h
 v_0F1A:
     db 0h,0h
-v_0F1C:
+v_MouseNewX:                        ; 0F1Ch - pending cursor X
     db 0h,0h
-v_0F1E:
-    db 12738 dup(0h)
-v_40E0:
+v_MouseNewY:
+    db 0h,0h
+    db 12480 dup(0h)                ; 0F20h..3FDFh - scratch
+v_MouseCursorBuf:                   ; 3FE0h - 16x16 cursor image (0FFh transparent)
+    db 256 dup(0h)
+v_MouseCursor:                      ; 40E0h - cursor shape
     db 0h,0h
 v_40E2:
     db 0h,0h
@@ -42245,23 +42587,23 @@ v_40E4:
     db 0h,0h
 v_40E6:
     db 0h,0h
-v_40E8:
+v_MouseLeftReleaseX:                ; 40E8h - left release X (written, not read)
     db 0h,0h
-v_40EA:
+v_MouseLeftReleaseY:                ; 40EAh - left release Y (written, not read)
     db 0h,0h
-v_40EC:
+v_MouseRightReleaseX:               ; 40ECh - right release X (written, not read)
     db 0h,0h
-v_40EE:
+v_MouseRightReleaseY:               ; 40EEh - right release Y (written, not read)
     db 0h,0h
-v_40F0:
+v_MouseY:                           ; 40F0h - cursor Y (drawn)
     db 0h,0h
-v_40F2:
+v_MouseMaxY:                        ; 40F2h - cursor Y max (195)
     db 0C3h,0h
-v_40F4:
+v_MouseMinY:                        ; 40F4h - cursor Y min (8)
     db 8h,0h
-v_40F6:
+v_MouseState:                       ; 40F6h - mouse state (bits in the banner)
     db 0h,0h
-v_40F8:
+v_MusicBufSeg:                      ; 40F8h - music data buffer segment
     db 0h,0h
 v_CacheSlots0:                      ; 40FAh - cached slots per picture class
     db 1h,0h
@@ -42396,9 +42738,9 @@ v_50AC:
     db 0h,0h
 v_50AE:
     db 0h,0h
-v_50B0:
+v_SoundIRQ:                         ; 50B0h - BLASTER "Ix" (single digit)
     db 0h,0h
-v_50B2:
+v_SoundPort:                        ; 50B2h - BLASTER "Axxx" base I/O port
     db 0h,0h
 v_50B4:
     db 0h,0h
@@ -42422,7 +42764,7 @@ v_50C6:
     db 0h,0h
 v_50C8:
     db 0h,0h
-v_50CA:
+v_SfxBufSeg:                        ; 50CAh - SFX data buffer segment
     db 0h,0h
 v_50CC:
     db 0h,0h
@@ -44415,7 +44757,7 @@ v_94D1:
     db 3h,0h
 v_94D3:
     db 3h,0h
-v_94D5:
+v_SoundState:                       ; 94D5h - FM driver state/error bits
     db 0Ah,0h
 v_94D7:
     db 0h,0h
@@ -45831,9 +46173,9 @@ v_F796:
     db 0h,0h
 v_F7AC:
     db 0h,0h
-v_F7AE:
-    db 0h,0h
-v_F7B0:
+v_SoundEntry:                       ; F7AEh - far entry, pre-init path (no
+    db 0h,0h                        ; writer in the game image - see S187E)
+v_SoundDataSeg:                     ; F7B0h - 9Ch-paragraph WORLD.DAT block
     db 0h,0h
 IFDEF STREAM
 v_StreamSeg:                        ; STREAM build state block segment (0 = off)
@@ -46000,7 +46342,7 @@ fn_StreamPresent:
     cmp word ptr [v_StreamSeg], 0
     je sp_done
     mov ah, 0
-    int 1Ah                         ; CX:DX = BIOS tick count
+    int 1Ah                 ; SEAM TICK: 00h - BIOS tick count (stream pacing)
     mov ax, word ptr [v_StreamSeg]
     mov es, ax
     mov ax, dx
@@ -46009,7 +46351,7 @@ fn_StreamPresent:
     jb sp_done
     mov word ptr es:[STREAM_LASTTICK], dx
     mov ah, 0Fh
-    int 10h                         ; AL = current video mode
+    int 10h                 ; SEAM VIDEO: 0Fh - get the current video mode
     cmp al, 13h
     jne sp_done
     mov ax, word ptr [v_StreamSeg]
