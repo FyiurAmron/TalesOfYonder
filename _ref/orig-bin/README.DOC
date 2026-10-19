@@ -1,0 +1,593 @@
+========================================================
+	  YENDORIAN TALES BOOK I - CHAPTER 2 
+			 v2.10
+     Copyright 1996 SW Games -- All Rights Reserved
+	Published by Spectrum Pacific Publishing
+========================================================
+
+--------------------------------------------------------
+ System Requirements:
+--------------------------------------------------------
+  IBM PC or 100% compatible, VGA graphics card
+  2 Mb of RAM
+  16 Mb free on the hard disk
+  Microsoft 100% compatible mouse and driver
+  EMM386 or other EMS memory manager
+  MSDOS 3.30 or later
+
+ Recommendations:
+  Sound Blaster or 100% compatible sound card
+  386 40Mhz or faster
+  MSDOS 5.00 or later
+
+--------------------------------------------------------
+ Troubleshooting:
+--------------------------------------------------------
+  Your system must either load EMM386 or another memory
+  manager that provides access to EXPANDED memory.  The
+  program requires a minimum of 2 Mb of RAM, but will 
+  use up to 8 Mb if it is available.
+      CONFIG.SYS Example:
+	 DEVICE=C:\DOS\EMM386.EXE RAM
+
+  Your mouse driver must be loaded prior to running the
+  game.  This is normally done in the AUTOEXEC.BAT file.
+
+  If you are using a Sound Blaster compatible or if you
+  have a non-standard Sound Blaster installation, you
+  must insure that the "SOUND" and "BLASTER" environment
+  variables are BOTH properly set in the AUTOEXEC.BAT
+  file.
+      Example:
+	 SET SOUND=C:\SB16
+	 SET BLASTER=A220 I5 D1 H5 P330 E620 T6
+
+  If your system does not use the standard Sound Blaster
+  FM driver (SBFMDRV) you will need to modify the batch
+  file (CH2.BAT) to load the proper driver.
+
+  In all cases, the BLASTER environment variable is
+  required for proper sound operation.
+
+  If you run this software under windows and experience
+  problems, run the game in a "pure" DOS environment.
+
+  For Windows 95, insure you have the shortcut set to
+  "Auto" for EMS memory (found on the properties page).
+
+--------------------------------------------------------
+ To Play Yendorian Tales Book I - Chapter 2
+--------------------------------------------------------
+  Contents:
+
+  1.  Overview
+  2.  Character Creation
+  3.  Using the existing party
+  4.  Using the mouse or keyboard
+  5.  Icons
+  6.  Conversations
+  7.  Battle / Magic
+  8.  Manipulating Items
+  9.  On-line Cluebook
+ 10.  Recent History
+ 11.  Ordering Information
+ 12.  Other Games from Spectrum Pacific Publishing
+
+--------------------------------------------------------
+  1.  Overview
+--------------------------------------------------------
+  After loading the game and watching the introduction,
+  you can create your characters by selecting the
+  "Character Creation" option.  After creating the 
+  characters you need to "Assemble A Party", then "Enter 
+  the Game". Be sure to save your game when presented 
+  with the disk panel, otherwise if you die, you will 
+  have to create your party again.
+
+  The goals of the game are to create a four character 
+  party, get rid of all the monsters, use and sell items 
+  that you find, and talk to all of the people and do 
+  what they ask of you.
+
+--------------------------------------------------------
+  2.  Character Creation
+--------------------------------------------------------
+  The options will appear on the left side of the screen
+  with the character and its statistics appearing on the
+  right side.  The options may be selected with a left
+  mouse click or a "hot key" (the orange letter).
+
+  The player's attributes will range from 45 to 60.  
+  When "picking" up items, left click an item and left 
+  click again to drop it on the player or back on the 
+  left side. See the manipulating items section (#8) for 
+  specifics.
+
+  Character Classes:
+     Fighter - 100% Fighter
+     Merchant - 50-75% Fighter 25-50% Thief
+     Rogue - 100% Thief
+
+     Monk - 100% Cleric (Wisdom is important)
+     Alchemist - 75% Cleric 25% Wizard (WIS and INT)
+     Paladin - 50% Cleric 50% Fighter
+
+     Mage - 100% Wizard (Intelligence is important)
+     Druid - 75% Wizard 25% Cleric (INT and WIS)
+     Marksman - 50% Wizard  50% Fighter
+
+  Attributes:
+     The most important things to watch when creating 
+     your characters are slashing, bashing or polearm, 
+     and projectile.  The attributes which make up your 
+     Health and Magic points are also important (Stamina 
+     and Intelligence or Wisdom, or both).
+
+     STRength - determines how much weight you can carry 
+     DEXterity - in battle, the person with the highest 
+		 dexterity goes first
+     STAmina - decides the number of health points
+     INTelligence - establishes the number of magic 
+		    points a wizard type will have
+     WISdom - magic points for cleric types are based on 
+	      this attribute
+     CHArisma - determines number of bonus points in 
+		training (up to 15)
+     DAMage - damage of equipped hand to hand weapon
+     ABSorption - total absorption of equipped armor.
+
+  Skills:
+     Survival - the party's average determines how much 
+		you know about a monster in combat
+     Projectile - accuracy used when shooting 
+		  projectiles
+     Slashing - accuracy used when equipped with a 
+	       slashing type weapon (dagger)
+     Bashing - accuracy when using a bashing weapon
+	       (club)
+     Polearm - accuracy when using a polearm (staff)
+     Casting - accuracy when casting a spell
+     Mapping - party average is used to determine if the
+	       overhead map can be used and how much
+	       information is displayed on the party map
+     Navigation - the party's average establishes the 
+		  range in which transportation can be 
+		  used
+
+  Once you have entered the world, the following skills 
+  can be highlighted by clicking with the mouse.  
+  Otherwise, you will be asked who will perform each 
+  function when the time comes.
+
+     Bartering - the higher this skill, the more you 
+		profit in transactions with a shop
+     Repair - used when repairing broken items
+     Thievery - used when picking locks or diffusing 
+		traps
+     Linguistics - translates foreign languages
+     Chemistry - used when converting ore with a brown 
+		 potion
+
+  Items:
+     You should give everyone a SLING and use them at 
+     every opportunity in the game.  The DAGGER should 
+     only be equipped on those characters that have a 
+     slashing skill higher than their other fighting 
+     skills.  The CLUB is for bashers and the STAFF for 
+     those with a good polearm skill.
+
+--------------------------------------------------------
+  3.  Using the existing party
+--------------------------------------------------------
+  If you want to play the game without creating your own
+  party, do the following:
+     Go to "Assemble a Party"
+     Click the portraits to preview the characters
+     "Check" the four bottom characters if you want them
+     Click "Done"
+     Enter the Game
+
+--------------------------------------------------------
+  4.  Using the mouse or keyboard
+--------------------------------------------------------
+  Left click
+     select icons, options, etc.
+     select graphs and bubbles
+     spend bonus points (in training)
+     pick up items
+     drop items
+
+  Double left click
+     on portrait - display the statistics
+     on item - displays a description
+     on spell - will cast the spell
+     on clue book list - select that line
+
+  Right click
+     use an item
+     repair a broken item
+     in the playing area it uses what you are standing 
+     on talk to an NPC (tables and beds)
+     on portrait- toggle display of one inventory panel
+
+  Double right click
+     on portrait- toggle display of all inventory panels
+
+  Keyboard keys
+     Cursor UP    - move forward
+	    DOWN  - move backward
+	    LEFT  - turn left
+	    RIGHT - turn right
+     Ctl-LEFT - step left
+     Ctl-RIGHT - step right
+     "A" attack
+     "C" cast spell
+     "D" disk icon
+     "K" uses the keyring (if you have it)
+     "M" uses the party map (if you have it)
+     "P" toggles all player panels
+     "R" rest (1 food per person needed)
+     "S" shoot projectiles
+     "T" uses the hourglass (when you have it)
+     "V" display program version
+     "1-4" character HP, MP and weight
+     "F1-F4" character statistic panel
+     "F5" toggles map window
+     "F8" On-line clue book
+     "SPACE" uses the space you are standing on
+	     casts highlighted spell
+	     selects clue book option
+
+--------------------------------------------------------
+  5.  Icons
+--------------------------------------------------------
+  Four buttons located on the right side.
+
+  The first icon is used to "SHOOT" or "ATTACK".
+  The second is used to "CAST" magic.
+  The third is used to "REST" (1 food for each person).
+  The last is used to access the "DISK" panel.
+
+--------------------------------------------------------
+  6.  Conversations
+--------------------------------------------------------
+  Initiated by right clicking on a table or bed.
+  Keywords are listed in yellow on the top of the panel,
+  responses are shown on the lower part of the panel.
+  At the end of the conversation, any key or click will
+  close the panel.
+
+--------------------------------------------------------
+  7.  Battle / Magic
+--------------------------------------------------------
+  When a monster is directly in front of you, "SHOOT" it
+  with your projectiles.  When in hand to hand, "ATTACK"
+  with your hand to hand weapon.
+
+  Spells are used to damage monsters or heal characters.
+  If a spell is invalid now, it will be "grayed out".
+
+--------------------------------------------------------
+  8.  Manipulating items
+--------------------------------------------------------
+  Equipping items:
+     helmets on the head area
+     armor on the chest area
+     gloves on either hand
+     rings on either circular slot
+     leggings on the lower body
+     boots on the foot area
+     projectiles on the slot to the left of the head
+     containers on the slot to the right of the head
+     weapons on the slot to the left of the legs
+     shields on the slot to the right of the legs
+
+  Containers:
+     drop item onto a closed container
+     "USE" the container to open it
+     "USE" an open container to close it
+     containers can be placed in any of the 8 upper 
+     slots containers can also be placed inside other 
+     containers
+
+   Dropping on the portrait:
+     The item will be placed in the first available
+     appropriate slot.  (Dropping a sword on a player 
+     without a weapon would equip the sword.)
+
+--------------------------------------------------------
+  9.  On-line Cluebook
+--------------------------------------------------------
+  You can press "F8" at any time to use the cluebook.
+  The shareware version of the cluebook contains 
+  limited data on maps, monsters, spells, items, and a 
+  walk through.
+
+--------------------------------------------------------
+  10.  Recent History
+--------------------------------------------------------
+
+		       - Book I -
+
+  During your first adventure in Yendor, a challenge 
+  from the governors sent you into the mines and forests 
+  to battle the evil monsters that seemed to be growing 
+  more and more numerous.  Zamora, Dean of the Athaneum, 
+  had been working for many years on a solution to the 
+  problem ...a magical orb, which he would present to 
+  all of Yendor.
+
+  During the ceremony, an invisible intruder took 
+  possession of the orb, which caused Zamora to fall 
+  into a catatonic state. Your job was now to track down 
+  the mysterious culprit and return the orb.
+
+  Through the course of your journey you met with 
+  members of the "Society of Wizards".  They sent you on 
+  precarious quests to find ingredients that, when mixed 
+  together, would diffuse the power of the orb and 
+  separate it from its captor.
+
+  After many courageous battles, you finally came face 
+  to face with the dark-souled being that had taken the 
+  orb and used it to wreak havoc on Yendor.  This evil 
+  wizard's name...Paltivar. Before you could destroy 
+  him, the members of the "Society of Wizards" informed 
+  you that Paltivar was once one of them, but he had 
+  chosen a darker path of magic. 
+
+  Now the wizards were faced with a dilemma.  Because of 
+  an ancient agreement, they could not kill Paltivar. 
+  So, with their combined power, they banished him into 
+  time itself. 
+
+  With the orb back in the presence of Zamora, he was 
+  revived. And with his gratitude you became one of the 
+  greatest heroes that Yendor has ever known.
+
+  And so the story continues...
+
+--------------------------------------------------------
+  11  Ordering Information
+--------------------------------------------------------
+  11.1  Why Register Yendor 2
+  11.2  USA and Canada orders                          
+  11.3  Australia and New Zealand
+  11.4  Japan  
+  11.5  Germany, Austria and Switzerland    
+  11.6  Czechia and Slovakia           
+  11.7  Scandinavia          
+  11.8  Netherlands and Belgium             
+  11.9  Spain and Portugal     
+  11.10 All other countries orders
+
+--------------------------------------------------------
+  11.1  Why Register Yendor 2?
+--------------------------------------------------------
+  Order the full version of Yendor 2 and you will 
+  receive:
+
+  - A huge world filled with wonders, excitement and 
+    action.
+  - A complete On-line Cluebook with all the 
+    statistical information on various monsters, spells,
+    items, complete maps as well as the complete game 
+    walk-through.
+  - Attractive packaging.
+  - Easy to setup instructions and troubleshooting 
+    information.
+
+--------------------------------------------------------
+  11.2  USA and Canada
+--------------------------------------------------------
+
+  Webfoot Technologies, Inc.
+  P.O. Box 15
+  Lemont, IL  60439
+  USA
+
+  Toll Free (ORDERS ONLY!) :
+  1-800-4WEBTEC (1-800-493-2832)
+
+  Fax Orders to: 1-630-257-0942
+
+  Questions: 1-630-257-1224
+  Tech support is available ONLY for registered users of 
+  this game!
+
+  E-mail: Webfoot@msn.com
+  Home site: www.WebfootGames.com
+  Anonymous FTP: ftp.WebfootGames.com
+
+  Price: $24.95
+  Add Shipping and Handling: $4.00
+  Pay by check, cashiers check, money order, Visa, 
+  MasterCard, Discover or American Express
+
+--------------------------------------------------------
+  11.3  Australia and New Zealand
+--------------------------------------------------------
+
+  Spectrum Pacific Publishing
+  P.O.Box 190
+  Cherrybrook NSW 2126
+  Australia
+
+  Tel: 02-9980-8900 (orders only)
+  Fax: 02-9980-9723
+  E-mail: sales@SpectrumPacific.com.au
+  Home site: www.SpectrumPacific.com.au 
+  Home BBS: www.NPGX.com.au
+
+  Price: $29.95 (AUD) + $4 postage
+  Pay by cheque, money order, Visa, MasterCard or 
+  Bankcard.
+
+--------------------------------------------------------
+  11.4  Japan
+--------------------------------------------------------
+  Register this program in Japan for yen 3,800. 
+  For more information, contact:
+ 
+  P. & A. Shareware 
+  1-3-6-2 Kamisuna
+  Tachikawa, Tokyo 190
+  Japan
+
+  Tel: 0425-35-9901
+  Fax: 0425-35-9902
+  NIFTYServe: PAF02461
+  E-mail: sales@pandasw.com
+
+--------------------------------------------------------
+  11.5  Germany, Austria and Switzerland
+--------------------------------------------------------
+  Juergen Egeling Computer
+  c/o Ticsoft
+  Waldstr. 49
+  76133 Karlsruhe 
+  Germany
+
+  Tel: 0721 9109 520
+  Fax: 0721 9109 599
+  E-mail: info@ticsoft.de
+  Hilfe: help@ticsoft.de
+
+  Yendorian Tales Chapter 2:  39.90
+  zzgl. Porto und Verpackung   8.05
+  Nachnahme             plus   6.45
+
+  Direktbestellung via Internet http://www.ticsoft.de/
+
+-------------------------------------------------------
+  11.6  Czechia and Slovakia
+-------------------------------------------------------
+  JIMAZ Ltd.
+  Hermanova 37
+  170 00 Praha 7
+  Czech Republic
+  
+  Tel: +42-2-379498, +42-2-379870, +42-2-379871
+  Fax: +42-2-378103
+  E-mail: jimaz@jimaz.cz
+  Home site: www.jimaz.cz
+
+  Call for prices!
+
+--------------------------------------------------------
+  11.7  Scandinavia (Sweden, Denmark, Norway, Finland 
+	and Iceland)
+--------------------------------------------------------
+  Scandinavian Software Agency
+  Box 11
+  SE-124 21 Bandhagen
+  Sweden
+   
+  Tel/Fax +46 8 99 70 37
+  E-mail: scand@softagency.se
+
+  Receive orders using the Postal Giro Services, 
+  Postgirot:
+
+  Denmark:  order product# DK250, pay 265DKK    
+	    to account no: 1-649-6472
+  Finland:  order product# FI250, pay 205FIM     
+	    to account no: 800057-1090161
+  Iceland:  order product# IS250, pay 2950ISK     
+	    to account no: 602604
+  Norway:   order product# NO250, pay 295NOK   
+	    to account no: 0806 1907581   
+  Sweden:   order product# SE250, pay 295SEK   
+	    to account no: 163 24 51 - 9   
+   
+  Credit Card customers using: American Express, 
+  Diners Club, Eurocard, MasterCard or VISA are welcome.
+
+  Please specify whether you prefer CDROM or 3,5" floppy 
+  disks. 
+
+--------------------------------------------------------
+  11.8  Nederland en Belgie
+--------------------------------------------------------
+  JeKa Software
+  Postbus 40
+  1440 AA   Purmerend
+  Netherlands
+
+  Tel/Fax  : 0299 - 423217  
+  (vanuit Belgie : +31.299.423217)
+  E-mail   : jkreitse@inter.nl.net
+
+  Giro     : 72.32.978
+  ABN-AMRO : 44.08.43.308
+  Prijs    : F 50.00 (inclusief btw)
+
+  Betaling vanuit Belgie : 
+    - Eurocheque in guldens (voorkeur) -of-
+    - overschrijving naar onze giro of bank (Let op : 
+      bijkomende kosten voor uw eigen rekening !)
+    
+  Betaling vanuit Nederland :
+    - Overschrijving op giro/bank -of- 
+    - cheque aan ons opsturen -of-
+    - verzending onder rembours (F 15.00 verzendkosten 
+      extra)
+
+--------------------------------------------------------
+  11.9  Spain and Portugal
+--------------------------------------------------------
+
+  Cat…leg Creatius, S.L.
+  Poeta Maragall,1 
+  08100 Mollet (Barcelona) 
+  Spain
+
+  Tel: + 343 570 64 58 
+  Fax: + 343 570 65 17
+  E-mail: Cataleg@SpainMail.com
+
+  Spain: Price: 3.500 Ptas
+	 Postage and handling: 125 Ptas
+  
+  Portugal: Price: 4125 Escudos
+	    Postage and handling: 150 Escudos
+
+  Pay by cheque, money order, Visa or Mastercard.
+
+--------------------------------------------------------
+  11.10  All other countries
+--------------------------------------------------------
+
+  Spectrum Pacific Publishing
+  P.O.Box 190
+  Cherrybrook NSW 2126
+  Australia
+
+  Tel: 02-9980-8900 (orders only)
+  Fax: 02-9980-9723
+  E-mail: sales@SpectrumPacific.com.au
+  Home site: www.SpectrumPacific.com.au 
+
+  Price: $29.95 (AUD) + $6 postage
+  Pay by cheque, money order, Visa, MasterCard or 
+  Bankcard.
+
+--------------------------------------------------------
+  12.  Other games from Spectrum Pacific Publishing
+--------------------------------------------------------
+
+  Keep an eye out for other games soon to be available
+  from Spectrum Pacific Publishing, including Inner
+  Worlds, Powball, Subhunt, Slicks'N'Slide, Delta Hydra, 
+  and many more!
+
+  COMING SOON, the anticipated sequel to Yendor 2:
+		 Tyrants of Thaine
+
+========================================================
+	  Yendorian Tales Chapter I - Book 2
+			v2.10
+
+	(C)1996 SW Games, ALL RIGHTS RESERVED
+       Published by Spectrum Pacific Publishing
+========================================================
