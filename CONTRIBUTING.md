@@ -11,7 +11,7 @@ read them in order:
 
 | Path | What |
 |---|---|
-| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly), `oracle.md` (DOSBox-X harness) |
+| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly), `oracle.md` (DOSBox-X harness), `asm-style.md` (annotation rules) |
 | `AGENTS.md`, `CONTRIBUTING.md` | agent rules and this file — the only root-level markdown |
 | `_ref/` | **read-only reference** — original distribution, the frozen disassembly generation pipeline (incl. the historic MASM source), and the vendored mining project. Copy from it, never edit it. |
 | `asm/` | the working `SWREG.EXE` disassembly: source in `asm/src/`, build/verify machinery in `asm/tools/` (outputs land in `build/uasm/`) |
@@ -28,8 +28,10 @@ read them in order:
    must leave the rebuild identical to the reference (`SWREG.EXE` MD5
    `c3bdd3054e55a1e0b57c9780654dc982`, SHA-256 `3671ce1d…`).
 3. **No build artifacts in git.** If a tool produced it, it belongs under `build/`.
-4. **Small, focused commits on `main`**, imperative subject with a scope:
-   `disasm: annotate EMS manager`, `tools: add listing parser`, `docs: …`.
+4. **Small, focused commits on `main`**, Conventional Commits style:
+   `<type>(<scope>): <summary>` — `feat`, `fix`, `docs`, `test`, `build`, `chore`, `refactor`;
+   e.g. `docs(disasm): annotate the EMS manager`, `test: add the oracle harness`.
+   Keep a feature's code and docs in the same commit; squash later fixes into the commit they fix.
 5. **Don't rewrite published history** (amend/rebase/force-push) unless explicitly agreed.
 6. **Docs live in `docs/`** as lowercase kebab-case files (`docs/porting.md`, `docs/protocol.md`);
    only `AGENTS.md` and `CONTRIBUTING.md` stay at the root.
@@ -50,9 +52,9 @@ reports the exact instruction(s) with expected vs got bytes.
 Notes:
 - MASM is historic only: the frozen MASM source (`_ref/disasm/masm/`) is reference-only; UASM is the build path.
 - UASM ≥ 2.53 is required (2.57 tested). Manual assembler invocations should target `build/tmp/`.
-- Annotation style is defined in `docs/asm-style.md` (created with the M1 pilot). Until then:
-  semantic names (`fn_LoadWorldData`, `v_GameState`), `EQU` for struct offsets, `loc_XXXXX` stays,
-  macros only where they expand to the exact proven encodings.
+- Annotation style: `docs/asm-style.md` (semantic names, routine headers, `; SEAM` tags, the
+  verify gate). `loc_XXXXX` labels stay; macros only where they expand to the exact proven
+  encodings; batches stay per module.
 - Keep batches verifiable — if a batch takes much longer than a minute to check, split it.
 
 ## Working on the tooling (Python)

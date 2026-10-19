@@ -35,7 +35,10 @@ adds agent-specific operational rules.
 - Keep the plan honest: add dated progress-log entries to `docs/porting.md` when milestones move.
 - If a task needs a GUI or the user's machine (DOSBox-X runs, real hardware), say so and leave a
   runnable script plus expected output instead of guessing.
-- Keep commits small and scoped: `disasm: …`, `tools: …`, `docs: …`.
+- Keep commits small and feature-scoped, Conventional Commits style:
+  `<type>(<scope>): <summary>` (`feat`, `fix`, `docs`, `test`, `build`, `chore`, `refactor`).
+  A feature's code and docs travel in the same commit; squash follow-up fixes into the commit
+  they fix.
 
 ## Environment on this machine
 
@@ -60,6 +63,7 @@ adds agent-specific operational rules.
 
 ## Current focus
 
-Check `docs/porting.md` §10 before acting. As of the last update: M0 is done (oracle
-profile + headless baseline in `harness/`, artifacts under `build/oracle/`); next is the
-M1 pilot — EMS-manager annotation plus `docs/asm-style.md`.
+Check `docs/porting.md` §10 before acting. As of the last update: M0 is done — the oracle
+profile and headless baseline are in place; the annotation style guide (`docs/asm-style.md`)
+and the Conventional Commits policy are in place. Next is the M1 pilot: annotate the EMS
+manager / picture cache, the DOS file service, the palette and the video boundary.
