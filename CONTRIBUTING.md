@@ -11,10 +11,11 @@ read them in order:
 
 | Path | What |
 |---|---|
-| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly) |
+| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly), `oracle.md` (DOSBox-X harness) |
 | `AGENTS.md`, `CONTRIBUTING.md` | agent rules and this file — the only root-level markdown |
 | `_ref/` | **read-only reference** — original distribution, the frozen disassembly generation pipeline (incl. the historic MASM source), and the vendored mining project. Copy from it, never edit it. |
 | `asm/` | the working `SWREG.EXE` disassembly: source in `asm/src/`, build/verify machinery in `asm/tools/` (outputs land in `build/uasm/`) |
+| `harness/` | oracle/test harness: DOSBox-X profile + headless runner (`baseline.sh`), X11 helpers (`keys.py`, `snap.py`); outputs under `build/oracle/` |
 | `build/` | **all** build outputs and scratch (gitignored); scratch goes to `build/tmp/` |
 
 ## Ground rules
@@ -78,6 +79,7 @@ Not started yet; the rules that will apply are in `docs/porting.md` §3 and `doc
 | Area | Gate before commit |
 |---|---|
 | `asm/` | `verify.sh` ends `OK` + `IDENTICAL`; no commit ever changes `_ref/` |
+| `harness/` | `sh harness/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |
 
