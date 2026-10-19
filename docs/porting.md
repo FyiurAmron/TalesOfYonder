@@ -264,6 +264,15 @@ emulator-hook demo, not this port).
     (identical) and negative (localised instruction + data range);
   - base tree settled: the disassembly sits directly in `asm/` (no per-target wrapper); files grouped
     by kind — `asm/` is `src/` (source) + `tools/` (machinery), all docs live in `docs/`; the repo
-    keeps `_ref/`, `docs/`, `build/` at the top level;
-  - remaining for M0: DOSBox-X oracle profile + baseline run. `STYLE.md` comes with the M1 pilot.
+    keeps `_ref/`, `docs/`, `build/` at the top level.
+- 2026-10-19 — M0 oracle (done):
+  - `harness/`: the oracle profile (`dosbox-x.conf` — svga_s3/VBE 1.2, EMS+XMS+UMB, SB16+OPL3,
+    16 MB, fixed 30 000 cycles, autosave of save states), the headless runner (`baseline.sh` —
+    Xvfb, `CH2.BAT`, original distribution from `_ref/orig-bin/`, md5-checked per run) and X11
+    helpers (`keys.py` — XTEST key injection via ctypes; `snap.py` — `XGetImage` window snapshots);
+  - baseline (no input) captured under `build/oracle/<stamp>/`: 3 screen snapshots (title screen,
+    intro), 4 save states (slots 1–4, 15 s interval), DOSBox-X logs, `SWREG.EXE: OK`;
+  - quirk: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts on the game's VESA mode (libpng
+    misuse) — snapshots come from the X window instead; Xvfb falls back to abstract sockets on
+    this host (the `/tmp/.X11-unix` listener errors in `xvfb.log` are benign).
 

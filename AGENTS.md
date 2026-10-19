@@ -53,11 +53,13 @@ adds agent-specific operational rules.
 - Verifier: `asm/tools/verify_asm.py` (`--help`).
 - Build/verify scripts: `asm/tools/{build.sh,verify.sh,build.bat}` — outputs land in
   `build/uasm/`; the build stages the minimum game files there so the result runs as-is.
+- Oracle harness: `harness/` (DOSBox-X profile + `baseline.sh`; helpers `keys.py`, `snap.py`);
+  outputs in `build/oracle/`.
 - Guard hook: `.githooks/pre-commit` blocks any commit touching `_ref/`.
 - Reference hashes: `SWREG.EXE` MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 
 ## Current focus
 
-Check `docs/porting.md` §10 before acting. As of the last update: M0 remaining item is the DOSBox-X
-oracle profile + baseline (configs in `harness/`, outputs under `build/`); next is the M1 pilot —
-EMS-manager annotation plus `docs/asm-style.md`.
+Check `docs/porting.md` §10 before acting. As of the last update: M0 is done (oracle
+profile + headless baseline in `harness/`, artifacts under `build/oracle/`); next is the
+M1 pilot — EMS-manager annotation plus `docs/asm-style.md`.
