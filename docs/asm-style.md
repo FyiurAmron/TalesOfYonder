@@ -47,7 +47,13 @@ about a minute. Annotate what is about to be ported; do not sweep the file.
 - `EQU` for constants and struct field offsets once a layout is understood and used in
   several places. Single-use immediates stay numeric with a comment; do not convert a numeric
   operand to a symbol unless it is already written as one elsewhere (immediate encodings and
-  relocations must stay identical).
+  relocations must stay identical). A layout shared by several segments lives in one block at
+  the top of the file (before the first segment), e.g. `FILE_*` for the DOS file structs;
+  module-local constants stay in the module banner.
+- DGROUP structures and buffers that had no generated label get a `v_` anchor label with the
+  offset kept in a trailing comment (`v_FileWorld:  ; 9093h`, `v_PalCurrent:  ; 4124h`).
+  Anchors are orientation only: instructions keep their numeric immediates — writing
+  `OFFSET v_FileWorld` would introduce a relocation.
 
 ## Comments
 

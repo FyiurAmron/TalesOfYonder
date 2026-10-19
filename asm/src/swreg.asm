@@ -17,6 +17,16 @@ endm
 x_cmp_al_bl macro
     db 38h,0D8h
 endm
+; File struct layout: DOS handle + block I/O (see the DOS file service module).
+; The four structs are packed in DGROUP; fields at these offsets:
+FILE_HANDLE  equ 0                  ; u16 DOS handle (0FFFFh = closed)
+FILE_SEG     equ 2                  ; u16 buffer segment
+FILE_OFF     equ 4                  ; u16 buffer offset
+FILE_COUNT   equ 6                  ; u16 block size in bytes
+FILE_INDEX   equ 8                  ; u16 block index
+FILE_BASE_LO equ 0Ah                ; u16 base offset, low word
+FILE_BASE_HI equ 0Ch                ; u16 base offset, high word
+FILE_NAME    equ 0Eh                ; ASCIIZ file name
 S0000 segment byte use16
 fn_00000:
     mov ax, 1
@@ -139,13 +149,13 @@ loc_00139:
     mov word ptr [bx + 0Ah], 0
     mov word ptr [bx + 0Ch], 0
     mov word ptr [bx + 6], 0
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     mov bx, 904Bh
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
     test word ptr [v_505E], 8000h
     je loc_00168
     mov bx, 9093h
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
 loc_00168:
     jmp near ptr loc_00799
 loc_0016B:
@@ -660,14 +670,14 @@ loc_00799:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     call far ptr fn_1A0A0
     call far ptr fn_188F9
-    call far ptr fn_02332
+    call far ptr fn_EMSClose
     mov ax, 0
     int 33h
     mov ax, 3
-    int 10h
+    int 10h                 ; SEAM VIDEO: mode 3 (text, exit)
     mov dx, 8E91h
     mov ah, 9
     int 21h
@@ -675,7 +685,7 @@ loc_00799:
     call far ptr fn_1803B
     mov bx, 9093h
     mov word ptr [v_50CC], 63h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov cx, 370h
     mov si, 0AFF8h
@@ -878,10 +888,10 @@ loc_00981:
     or word ptr [v_5064], 8
     call far ptr fn_18A06
     call far ptr fn_13AC6
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_04F2A
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     and word ptr [v_505E], 0FBFFh
     and word ptr [v_50F6], 17FFh
     and word ptr [v_5066], 101Fh
@@ -889,7 +899,7 @@ loc_00981:
     mov word ptr [v_511A], ax
     call far ptr fn_04FD9
     call far ptr fn_04A1F
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
 loc_009C7:
     and word ptr [v_5066], 0FF9Fh
     mov word ptr [v_0B90], 0
@@ -1235,7 +1245,7 @@ loc_00DEB:
     jmp near ptr loc_009D7
 loc_00DF8:
     call far ptr fn_18A06
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_13AC6
     call far ptr fn_04C46
     mov ax, 4424h
@@ -1243,10 +1253,10 @@ loc_00DF8:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     call far ptr fn_0FE77
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     and word ptr [v_5064], 0FF7h
     cmp word ptr [v_50E2], 0
     je loc_00E51
@@ -1321,7 +1331,7 @@ fn_00ECD:
     call far ptr fn_1854A
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, word ptr [v_0B9C]
     shl bx, 1
@@ -1828,8 +1838,8 @@ fn_01488:
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCC], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCA], 5
     call far ptr fn_19E12
     and word ptr [v_5062], 0F7FFh
@@ -1838,9 +1848,9 @@ fn_01488:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 3
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov di, 4D56h
     mov si, 4424h
     mov cx, 300h
@@ -1911,7 +1921,7 @@ loc_01564:
     jne loc_01564
 loc_015C2:
     call sub_01702
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     and word ptr [v_5062], 0F7FFh
     and word ptr [v_50F6], 7FFFh
     and word ptr [v_505E], 0FBFFh
@@ -1920,9 +1930,9 @@ loc_015C2:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_13BE3
     and word ptr [v_5064], 0FFF7h
     retf
@@ -1937,7 +1947,7 @@ loc_01624:
     cmp byte ptr [v_0B9A], 1Bh
     ret
 sub_0162A:
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov di, 6900h
     xor ax, ax
     mov cx, 44C0h
@@ -1949,7 +1959,7 @@ sub_01639:
     mov ax, 3
     mov bx, 1
     mov cx, 10h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     pop dx
     pop cx
     ret
@@ -1959,7 +1969,7 @@ sub_0164C:
     mov ax, 4
     mov bx, 1
     mov cx, 10h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     pop dx
     pop cx
     ret
@@ -2005,7 +2015,7 @@ loc_016B9:
     mov cx, word ptr [v_411C]
     mov si, 4754h
     add si, word ptr [v_4A54]
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     pop cx
     loop loc_0168B
     ret
@@ -2050,20 +2060,20 @@ fn_0171C:
     or word ptr [v_5062], 800h
     or word ptr [v_50F6], 8000h
     mov ax, 0Ah
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 14h
     call far ptr fn_18800
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCA], 7
     call far ptr fn_19E12
     call far ptr fn_1A6B5
     mov ax, 28h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 0FFFFh
     mov bx, 0C9DBh
     mov cx, 2
@@ -2075,13 +2085,13 @@ fn_0171C:
     call sub_01B56
     call far ptr fn_1A6B5
     mov ax, 64h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call sub_01A72
     mov bx, 14h
     mov cx, 71h
     mov dx, 0
     mov ax, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 0FFFFh
     mov bx, 0CA33h
     mov cx, 0Ch
@@ -2093,7 +2103,7 @@ fn_0171C:
     call sub_01B56
     call far ptr fn_1A6B5
     mov ax, 12Ch
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 0Ah
     call far ptr fn_1897C
     and word ptr [v_50F6], 0EFFFh
@@ -2107,14 +2117,14 @@ fn_0171C:
     call far ptr fn_19E12
     call far ptr fn_1A6B5
     mov ax, 14h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 5
     mov bx, 3Fh
     mov cx, 0FFh
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 28h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 0FFFFh
     mov bx, 0CB3Ch
     mov cx, 0Ah
@@ -2126,9 +2136,9 @@ fn_0171C:
     call sub_01B56
     call far ptr fn_1A6B5
     mov ax, 15Eh
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     and word ptr [v_5062], 0F7FFh
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCA], 0Ah
     call far ptr fn_19E12
@@ -2139,9 +2149,9 @@ fn_0171C:
     mov word ptr [v_0CCA], 21h
     call far ptr fn_19E12
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     mov ax, 28h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     or word ptr [v_5062], 800h
     mov ax, 0FFFFh
     mov bx, 0CC6Fh
@@ -2151,12 +2161,12 @@ fn_0171C:
     mov word ptr [v_0CC6], 89h
     mov word ptr [v_0B1C], 83h
     mov word ptr [v_0B26], 1
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     call sub_01B56
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov ax, 15Eh
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call far ptr fn_1A6B5
     mov ax, 46h
     mov bx, 0CD91h
@@ -2172,8 +2182,8 @@ fn_0171C:
     call sub_01AEE
     call sub_01B28
     mov ax, 64h
-    call far ptr fn_084D4
-    call far ptr fn_15B78
+    call far ptr fn_DelayTicks
+    call far ptr fn_FadeOut
     call sub_01A64
     mov word ptr [v_0B22], 39h
     mov word ptr [v_0B24], 31h
@@ -2183,63 +2193,63 @@ fn_0171C:
     call far ptr fn_19E12
     call far ptr fn_1A6B5
     mov ax, 1Eh
-    call far ptr fn_084D4
-    call far ptr fn_15B94
+    call far ptr fn_DelayTicks
+    call far ptr fn_FadeIn
     mov ax, 32h
-    call far ptr fn_084D4
-    call far ptr fn_15B78
+    call far ptr fn_DelayTicks
+    call far ptr fn_FadeOut
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
     mov word ptr [bx + 8], 4
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCA], 0Bh
     call far ptr fn_19E12
     call far ptr fn_1A6B5
     mov ax, 0Ah
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 1
     mov bx, 3Fh
     mov cx, 40h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 1Eh
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 1
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 40h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 1Eh
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 1
     mov bx, 3Fh
     mov cx, 90h
     mov dx, 6Fh
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 64h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     test word ptr [v_94D5], 2
     je loc_01A5D
 loc_01A56:
     cmp byte ptr [v_0C2C], 0
     jne loc_01A56
 loc_01A5D:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     retf
 fn_01A63:
     ret
 sub_01A64:
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
     xor ax, ax
     mov cx, 7D00h
@@ -2285,7 +2295,7 @@ loc_01B0F:
     call far ptr fn_1A6B5
     inc word ptr [v_0CCA]
     mov ax, 2
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     loop loc_01B0F
     ret
 sub_01B28:
@@ -2359,13 +2369,13 @@ sub_01BCA:
     mov bx, 0
     mov cx, 0FFh
     mov si, 4D56h
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     ret
 S0171 ends
 S01BE segment byte use16
 fn_01BE8:
-    call far ptr fn_02385
-    call far ptr fn_0275F
+    call far ptr fn_EMSInit
+    call far ptr fn_CacheInit
     call far ptr fn_18F17
     call sub_01D7E
     call sub_01DFC
@@ -2376,7 +2386,7 @@ fn_01BE8:
     mov word ptr [v_50CC], 2
     mov bx, 9061h
     mov al, 0
-    call far ptr fn_08538
+    call far ptr fn_FileOpen
     call far ptr fn_18F17
     mov word ptr [v_50CC], 9
     mov bx, 9093h
@@ -2385,13 +2395,13 @@ fn_01BE8:
     jne loc_01C36
     mov al, 0
 loc_01C36:
-    call far ptr fn_08538
+    call far ptr fn_FileOpen
     call far ptr fn_18F17
     call sub_021FB
     call sub_02158
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08516
+    call far ptr fn_FileCreate
     call far ptr fn_18F17
     call sub_01D84
     call sub_02064
@@ -2402,7 +2412,7 @@ loc_01C36:
     call far ptr fn_18954
     mov word ptr [v_94D7], 5
     call sub_021BA
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov byte ptr [v_0B9A], 0
     test word ptr [v_505E], 8000h
     jne loc_01CEE
@@ -2425,7 +2435,7 @@ loc_01CB2:
 loc_01CCC:
     call far ptr fn_13BE3
     call sub_021BA
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     test word ptr [v_505E], 4000h
     jne loc_01D0D
     call far ptr fn_0D36C
@@ -2450,9 +2460,9 @@ loc_01D0D:
 loc_01D25:
     mov word ptr [v_50CC], 1
     mov bx, 0BE3h
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_0CFC], ax
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_1270C
     and word ptr [v_505E], 0FF00h
     test word ptr [v_505E], 4000h
@@ -2499,12 +2509,12 @@ loc_01DA2:
     or byte ptr [di + 1], 80h
     mov word ptr [v_50CC], 0Bh
     mov al, 0
-    call far ptr fn_08538
+    call far ptr fn_FileOpen
     call far ptr fn_18F17
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
     mov ax, 944Fh
     mov bx, di
     add bx, 2
@@ -2605,52 +2615,52 @@ sub_01DFC:
     mov word ptr [bx + 108h], ax
     ret
 sub_02001:
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55E6h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     xor ax, ax
     mov bx, 9093h
     call far ptr fn_1845E
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [bx + 2], ax
     mov word ptr [bx + 6], 3CF0h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov word ptr [v_9095], ds
     ret
 sub_02032:
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55E6h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, 3CF0h
     mov bx, 9093h
     call far ptr fn_1847C
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [bx + 2], ax
     mov word ptr [bx + 6], 460h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov word ptr [v_9095], ds
     ret
 sub_02064:
     mov ax, 0B4Ah
     mov word ptr [v_0CE0], ax
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55C2h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     xor ax, ax
     mov bx, 9093h
     call far ptr fn_1849A
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [bx + 2], ax
     mov word ptr [bx + 6], 9E5Eh
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     xor dx, dx
     mov bx, 10h
     mov ax, 9E5Eh
     div bx
-    add ax, word ptr [v_0CAA]
+    add ax, word ptr [v_EMSFrameSeg]
     push ax
     mov ax, dx
     mov bx, 9093h
@@ -2658,46 +2668,46 @@ sub_02064:
     pop word ptr [bx + 2]
     mov word ptr [bx + 6], 0D98h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
-    mov dx, word ptr [v_0C9C]
+    call far ptr fn_FileRead
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55F0h
-    call far ptr fn_0235B
-    mov ax, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [v_9095], ax
     xor ax, ax
     mov bx, 9093h
     call far ptr fn_183E6
     mov word ptr [bx + 6], 0AF0h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 0AF0h
     mov bx, 9093h
     call far ptr fn_18404
     mov word ptr [bx + 6], 0CE4h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 17D4h
     mov bx, 9093h
     call far ptr fn_18422
     mov word ptr [bx + 6], 7D0h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 1FA4h
     mov bx, 9093h
     call far ptr fn_18440
     mov word ptr [bx + 6], 8E8h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_9095], ds
     ret
 sub_02158:
     mov word ptr [v_50CC], 1
     mov bx, 677h
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_0CF4], ax
     xor ax, ax
     mov bx, 9093h
@@ -2705,21 +2715,21 @@ sub_02158:
     mov ax, word ptr [v_0CF4]
     mov word ptr [bx + 2], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov word ptr [v_9095], ds
     ret
 sub_02189:
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 560Ch
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     xor ax, ax
     mov bx, 9093h
     call far ptr fn_184F0
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [bx + 2], ax
     mov word ptr [bx + 6], 2710h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov word ptr [v_9095], ds
     ret
 sub_021BA:
@@ -2728,20 +2738,20 @@ sub_021BA:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 2
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_021FB:
     mov word ptr [v_50CC], 1
     mov bx, 49Ah
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_50B6], ax
     xor ax, ax
     mov bx, 9093h
@@ -2749,7 +2759,7 @@ sub_021FB:
     mov ax, word ptr [v_50B6]
     mov word ptr [bx + 2], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov word ptr [v_9095], ds
     ret
 sub_0222C:
@@ -2788,9 +2798,9 @@ fn_02262:
     mov cx, 29h
     xor ax, ax
     rep stosw
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55C2h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     pop ax
     or ax, ax
     jne loc_0228A
@@ -2801,14 +2811,14 @@ loc_0228A:
     mov bx, 3Ah
     mul bx
     mov si, ax
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov cx, 1Dh
     rep movsw
     mov ax, S1DEA
     mov ds, ax
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55F0h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov word ptr [v_0CE4], 0
     mov si, 0B4Ah
     mov si, word ptr [si + 2]
@@ -2816,7 +2826,7 @@ loc_0228A:
     je loc_022D5
     mov di, 0B3Ah
     mov word ptr [v_0CE4], di
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov cx, 8
     rep movsw
     mov ax, S1DEA
@@ -2846,7 +2856,7 @@ loc_02302:
 loc_02312:
     mov di, 0B2Eh
     mov word ptr [v_0CE2], di
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     rep movsw
 loc_0231F:
     mov ax, S1DEA
@@ -2860,9 +2870,39 @@ loc_0231F:
     pop cx
     retf
 S0226 ends
+; ===========================================================================
+; Picture cache (EMS)
+;
+; Requires an EMS 4.0 driver ('EMMXXXX0' at the int 67h vector). Two handles
+; are held:
+;   v_EMSWorkHandle  (0C9Ch) 0x20 pages (512 KB): working set; fn_EMSMapPages
+;                   maps static page lists (DS:55C2 ...) into the frame
+;   v_EMSCacheHandle (0C9Eh) the rest of free EMS, capped at 0x180 pages
+;                   (6 MB): the picture cache for PICTURES.VGA
+;   v_EMSFrameSeg    (0CAAh) the 64 KB page frame, the only window into EMS
+;   v_EMSCachePages  (0CA8h) pages available for the cache = free - 0x20
+;   v_EMSLastMapTable (0C9Ah) page list currently mapped (redundancy check)
+;
+; The cache serves ten picture classes (static table at DS:7834, 16-byte
+; entries):
+;   +0 u16  segment of the class's DOS block holding chunk descriptors
+;   +2 u16  cached slots for this class
+;   +4 u16  image size in bytes (width * height)
+;   +6 u16  reserved (0)
+;   +8 u16  width
+;   +A u16  height
+;   +C u32  file offset of the class's pictures in PICTURES.VGA
+; A slot lives at (page, offset) in the cache handle; its 6-byte descriptor
+; {0FFFFh, page, offset} is built by sub_CacheBuildClassTable.
+; ===========================================================================
 S0233 segment byte use16
     db 0h
-fn_02332:
+; ---------------------------------------------------------------------------
+; fn_EMSClose (0x02332) - release both EMS handles.
+; in:  -
+; out: -
+; ---------------------------------------------------------------------------
+fn_EMSClose:
     push ax
     push bx
     push cx
@@ -2870,17 +2910,17 @@ fn_02332:
     push es
     push si
     push di
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     cmp dx, -1
     je loc_02346
     mov ah, 45h
-    int 67h
+    int 67h                 ; SEAM EMS: 45h - release handle (work set)
 loc_02346:
-    mov dx, word ptr [v_0C9E]
+    mov dx, word ptr [v_EMSCacheHandle]
     cmp dx, -1
     je loc_02353
     mov ah, 45h
-    int 67h
+    int 67h                 ; SEAM EMS: 45h - release handle (picture cache)
 loc_02353:
     pop di
     pop si
@@ -2890,17 +2930,25 @@ loc_02353:
     pop bx
     pop ax
     retf
-fn_0235B:
+; ---------------------------------------------------------------------------
+; fn_EMSMapPages (0x0235B) - map a page list into the EMS frame.
+; in:  DX = EMS handle, BX -> list: u16 count, then per entry
+;      u16 logical page, u16 physical page
+; out: -
+; Notes: skips the call when this exact list is already mapped
+; (v_EMSLastMapTable). A mapping error sets error code 6 and reports it.
+; ---------------------------------------------------------------------------
+fn_EMSMapPages:
     push cx
     push si
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_02382
-    mov word ptr [v_0C9A], bx
+    mov word ptr [v_EMSLastMapTable], bx
     mov cx, word ptr [bx]
     add bx, 2
     mov si, bx
     mov ax, 5000h
-    int 67h
+    int 67h                 ; SEAM EMS: 50h/00h - map multiple handle pages
     or ah, ah
     je loc_02382
     mov word ptr [v_50CC], 6
@@ -2909,7 +2957,16 @@ loc_02382:
     pop si
     pop cx
     retf
-fn_02385:
+; ---------------------------------------------------------------------------
+; fn_EMSInit (0x02385) - initialise EMS and size the picture cache.
+; in:  -
+; out: -
+; Requires EMS 4.0 ('EMMXXXX0'). Takes the work handle (0x20 pages = 512 KB)
+; and the cache handle (all remaining pages, capped at 0x180 = 6 MB), then
+; picks the slot counts per picture class by the available pages
+; (v_CacheSlots0..9; class table at DS:7834).
+; ---------------------------------------------------------------------------
+fn_EMSInit:
     push ax
     push bx
     push cx
@@ -2917,227 +2974,231 @@ fn_02385:
     push es
     push si
     push di
-    mov word ptr [v_50CC], 4
+    mov word ptr [v_50CC], 4    ; error code if anything below fails
     mov al, 67h
     mov ah, 35h
-    int 21h
-    mov di, 0Ah
-    mov si, 0CA0h
+    int 21h                 ; SEAM DOS: 35h - get the int 67h vector
+    mov di, 0Ah             ; driver name field at vector:000Ah,
+    mov si, 0CA0h           ; compared with the local 'EMMXXXX0'
     mov cx, 8
     cld
     repe cmpsb
     je loc_023AB
-    call far ptr fn_18F17
+    call far ptr fn_18F17   ; no EMS driver -> error 4
 loc_023AB:
     mov ah, 40h
-    int 67h
+    int 67h                 ; SEAM EMS: 40h - get manager status
     or ah, ah
     je loc_023B8
     call far ptr fn_18F17
 loc_023B8:
     mov ah, 46h
-    int 67h
+    int 67h                 ; SEAM EMS: 46h - get version
     or ah, ah
     je loc_023C5
     call far ptr fn_18F17
 loc_023C5:
-    cmp al, 40h
+    cmp al, 40h             ; EMS 4.0 required
     jae loc_023CE
     call far ptr fn_18F17
 loc_023CE:
     mov ah, 41h
-    int 67h
+    int 67h                 ; SEAM EMS: 41h - get page frame segment
     or ah, ah
     je loc_023DB
     call far ptr fn_18F17
 loc_023DB:
-    mov word ptr [v_0CAA], bx
+    mov word ptr [v_EMSFrameSeg], bx
     mov word ptr [v_50CC], 5
     mov ah, 42h
-    int 67h
-    cmp bx, 40h
+    int 67h                 ; SEAM EMS: 42h - unallocated page count
+    cmp bx, 40h             ; need 64 pages (1 MB) free
     jge loc_023F3
     call far ptr fn_18F17
 loc_023F3:
-    sub bx, 20h
-    mov word ptr [v_0CA8], bx
+    sub bx, 20h                 ; 0x20 pages are reserved for the work handle
+    mov word ptr [v_EMSCachePages], bx
     mov word ptr [v_50CC], 0Ch
     mov bx, 20h
     mov ah, 43h
-    int 67h
+    int 67h                 ; SEAM EMS: 43h - allocate pages (work handle)
     or ah, ah
     je loc_02410
     call far ptr fn_18F17
 loc_02410:
-    mov word ptr [v_0C9C], dx
-    mov word ptr [v_0C9A], 0
+    mov word ptr [v_EMSWorkHandle], dx
+    mov word ptr [v_EMSLastMapTable], 0
     mov word ptr [v_50CC], 0Ch
-    mov bx, word ptr [v_0CA8]
-    cmp bx, 180h
+    mov bx, word ptr [v_EMSCachePages]
+    cmp bx, 180h            ; cache handle at most 0x180 pages (6 MB)
     jle loc_0242D
     mov bx, 180h
 loc_0242D:
     mov ah, 43h
-    int 67h
+    int 67h                 ; SEAM EMS: 43h - allocate pages (cache handle)
     or ah, ah
     je loc_0243A
     call far ptr fn_18F17
 loc_0243A:
-    mov word ptr [v_0C9E], dx
-    mov word ptr [v_40FA], 1
-    cmp word ptr [v_0CA8], 180h
+    mov word ptr [v_EMSCacheHandle], dx
+    mov word ptr [v_CacheSlots0], 1     ; one full-screen (318x198) slot
+    ; slot counts per class for the available cache pages: this compare chain
+    ; falls through from 0x180 down to the < 0x40 minimum at loc_0270B
+    cmp word ptr [v_EMSCachePages], 180h
     jl loc_02485
-    mov word ptr [v_40FC], 3Ch
-    mov word ptr [v_40FE], 5Ch
-    mov word ptr [v_4100], 42h
-    mov word ptr [v_4102], 2Ch
-    mov word ptr [v_4104], 2Dh
-    mov word ptr [v_4106], 0Ah
-    mov word ptr [v_4108], 1Eh
-    mov word ptr [v_410A], 0E4h
-    mov word ptr [v_410C], 9Eh
+    mov word ptr [v_CacheSlots1], 3Ch
+    mov word ptr [v_CacheSlots2], 5Ch
+    mov word ptr [v_CacheSlots3], 42h
+    mov word ptr [v_CacheSlots4], 2Ch
+    mov word ptr [v_CacheSlots5], 2Dh
+    mov word ptr [v_CacheSlots6], 0Ah
+    mov word ptr [v_CacheSlots7], 1Eh
+    mov word ptr [v_CacheSlots8], 0E4h
+    mov word ptr [v_CacheSlots9], 9Eh
     jmp near ptr loc_02741
 loc_02485:
-    cmp word ptr [v_0CA8], 160h
+    cmp word ptr [v_EMSCachePages], 160h
     jl loc_024C6
-    mov word ptr [v_40FC], 35h
-    mov word ptr [v_40FE], 58h
-    mov word ptr [v_4100], 38h
-    mov word ptr [v_4102], 2Ah
-    mov word ptr [v_4104], 2Ah
-    mov word ptr [v_4106], 0Ah
-    mov word ptr [v_4108], 1Eh
-    mov word ptr [v_410A], 0E6h
-    mov word ptr [v_410C], 0A1h
+    mov word ptr [v_CacheSlots1], 35h
+    mov word ptr [v_CacheSlots2], 58h
+    mov word ptr [v_CacheSlots3], 38h
+    mov word ptr [v_CacheSlots4], 2Ah
+    mov word ptr [v_CacheSlots5], 2Ah
+    mov word ptr [v_CacheSlots6], 0Ah
+    mov word ptr [v_CacheSlots7], 1Eh
+    mov word ptr [v_CacheSlots8], 0E6h
+    mov word ptr [v_CacheSlots9], 0A1h
     jmp near ptr loc_02741
 loc_024C6:
-    cmp word ptr [v_0CA8], 140h
+    cmp word ptr [v_EMSCachePages], 140h
     jl loc_02507
-    mov word ptr [v_40FC], 30h
-    mov word ptr [v_40FE], 50h
-    mov word ptr [v_4100], 34h
-    mov word ptr [v_4102], 25h
-    mov word ptr [v_4104], 25h
-    mov word ptr [v_4106], 0Ah
-    mov word ptr [v_4108], 1Ch
-    mov word ptr [v_410A], 0DCh
-    mov word ptr [v_410C], 0A2h
+    mov word ptr [v_CacheSlots1], 30h
+    mov word ptr [v_CacheSlots2], 50h
+    mov word ptr [v_CacheSlots3], 34h
+    mov word ptr [v_CacheSlots4], 25h
+    mov word ptr [v_CacheSlots5], 25h
+    mov word ptr [v_CacheSlots6], 0Ah
+    mov word ptr [v_CacheSlots7], 1Ch
+    mov word ptr [v_CacheSlots8], 0DCh
+    mov word ptr [v_CacheSlots9], 0A2h
     jmp near ptr loc_02741
 loc_02507:
-    cmp word ptr [v_0CA8], 120h
+    cmp word ptr [v_EMSCachePages], 120h
     jl loc_02548
-    mov word ptr [v_40FC], 2Ah
-    mov word ptr [v_40FE], 46h
-    mov word ptr [v_4100], 30h
-    mov word ptr [v_4102], 22h
-    mov word ptr [v_4104], 23h
-    mov word ptr [v_4106], 0Ah
-    mov word ptr [v_4108], 1Ah
-    mov word ptr [v_410A], 0B4h
-    mov word ptr [v_410C], 89h
+    mov word ptr [v_CacheSlots1], 2Ah
+    mov word ptr [v_CacheSlots2], 46h
+    mov word ptr [v_CacheSlots3], 30h
+    mov word ptr [v_CacheSlots4], 22h
+    mov word ptr [v_CacheSlots5], 23h
+    mov word ptr [v_CacheSlots6], 0Ah
+    mov word ptr [v_CacheSlots7], 1Ah
+    mov word ptr [v_CacheSlots8], 0B4h
+    mov word ptr [v_CacheSlots9], 89h
     jmp near ptr loc_02741
 loc_02548:
-    cmp word ptr [v_0CA8], 100h
+    cmp word ptr [v_EMSCachePages], 100h
     jl loc_02589
-    mov word ptr [v_40FC], 26h
-    mov word ptr [v_40FE], 3Eh
-    mov word ptr [v_4100], 2Bh
-    mov word ptr [v_4102], 1Eh
-    mov word ptr [v_4104], 1Eh
-    mov word ptr [v_4106], 9
-    mov word ptr [v_4108], 18h
-    mov word ptr [v_410A], 89h
-    mov word ptr [v_410C], 70h
+    mov word ptr [v_CacheSlots1], 26h
+    mov word ptr [v_CacheSlots2], 3Eh
+    mov word ptr [v_CacheSlots3], 2Bh
+    mov word ptr [v_CacheSlots4], 1Eh
+    mov word ptr [v_CacheSlots5], 1Eh
+    mov word ptr [v_CacheSlots6], 9
+    mov word ptr [v_CacheSlots7], 18h
+    mov word ptr [v_CacheSlots8], 89h
+    mov word ptr [v_CacheSlots9], 70h
     jmp near ptr loc_02741
 loc_02589:
-    cmp word ptr [v_0CA8], 0E0h
+    cmp word ptr [v_EMSCachePages], 0E0h
     jl loc_025CA
-    mov word ptr [v_40FC], 21h
-    mov word ptr [v_40FE], 32h
-    mov word ptr [v_4100], 26h
-    mov word ptr [v_4102], 1Dh
-    mov word ptr [v_4104], 1Dh
-    mov word ptr [v_4106], 8
-    mov word ptr [v_4108], 14h
-    mov word ptr [v_410A], 71h
-    mov word ptr [v_410C], 64h
+    mov word ptr [v_CacheSlots1], 21h
+    mov word ptr [v_CacheSlots2], 32h
+    mov word ptr [v_CacheSlots3], 26h
+    mov word ptr [v_CacheSlots4], 1Dh
+    mov word ptr [v_CacheSlots5], 1Dh
+    mov word ptr [v_CacheSlots6], 8
+    mov word ptr [v_CacheSlots7], 14h
+    mov word ptr [v_CacheSlots8], 71h
+    mov word ptr [v_CacheSlots9], 64h
     jmp near ptr loc_02741
 loc_025CA:
-    cmp word ptr [v_0CA8], 0C0h
+    cmp word ptr [v_EMSCachePages], 0C0h
     jl loc_0260B
-    mov word ptr [v_40FC], 1Eh
-    mov word ptr [v_40FE], 29h
-    mov word ptr [v_4100], 1Eh
-    mov word ptr [v_4102], 1Ah
-    mov word ptr [v_4104], 1Ah
-    mov word ptr [v_4106], 8
-    mov word ptr [v_4108], 14h
-    mov word ptr [v_410A], 64h
-    mov word ptr [v_410C], 55h
+    mov word ptr [v_CacheSlots1], 1Eh
+    mov word ptr [v_CacheSlots2], 29h
+    mov word ptr [v_CacheSlots3], 1Eh
+    mov word ptr [v_CacheSlots4], 1Ah
+    mov word ptr [v_CacheSlots5], 1Ah
+    mov word ptr [v_CacheSlots6], 8
+    mov word ptr [v_CacheSlots7], 14h
+    mov word ptr [v_CacheSlots8], 64h
+    mov word ptr [v_CacheSlots9], 55h
     jmp near ptr loc_02741
 loc_0260B:
-    cmp word ptr [v_0CA8], 0A0h
+    cmp word ptr [v_EMSCachePages], 0A0h
     jl loc_0264C
-    mov word ptr [v_40FC], 19h
-    mov word ptr [v_40FE], 24h
-    mov word ptr [v_4100], 19h
-    mov word ptr [v_4102], 14h
-    mov word ptr [v_4104], 14h
-    mov word ptr [v_4106], 7
-    mov word ptr [v_4108], 10h
-    mov word ptr [v_410A], 4Dh
-    mov word ptr [v_410C], 4Bh
+    mov word ptr [v_CacheSlots1], 19h
+    mov word ptr [v_CacheSlots2], 24h
+    mov word ptr [v_CacheSlots3], 19h
+    mov word ptr [v_CacheSlots4], 14h
+    mov word ptr [v_CacheSlots5], 14h
+    mov word ptr [v_CacheSlots6], 7
+    mov word ptr [v_CacheSlots7], 10h
+    mov word ptr [v_CacheSlots8], 4Dh
+    mov word ptr [v_CacheSlots9], 4Bh
     jmp near ptr loc_02741
 loc_0264C:
-    cmp word ptr [v_0CA8], 80h
+    cmp word ptr [v_EMSCachePages], 80h
     jl loc_0268D
-    mov word ptr [v_40FC], 12h
-    mov word ptr [v_40FE], 21h
-    mov word ptr [v_4100], 12h
-    mov word ptr [v_4102], 0Fh
-    mov word ptr [v_4104], 0Fh
-    mov word ptr [v_4106], 7
-    mov word ptr [v_4108], 0Fh
-    mov word ptr [v_410A], 3Ch
-    mov word ptr [v_410C], 3Eh
+    mov word ptr [v_CacheSlots1], 12h
+    mov word ptr [v_CacheSlots2], 21h
+    mov word ptr [v_CacheSlots3], 12h
+    mov word ptr [v_CacheSlots4], 0Fh
+    mov word ptr [v_CacheSlots5], 0Fh
+    mov word ptr [v_CacheSlots6], 7
+    mov word ptr [v_CacheSlots7], 0Fh
+    mov word ptr [v_CacheSlots8], 3Ch
+    mov word ptr [v_CacheSlots9], 3Eh
     jmp near ptr loc_02741
 loc_0268D:
-    cmp word ptr [v_0CA8], 60h
+    cmp word ptr [v_EMSCachePages], 60h
     jl loc_026CC
-    mov word ptr [v_40FC], 0Ch
-    mov word ptr [v_40FE], 18h
-    mov word ptr [v_4100], 0Eh
-    mov word ptr [v_4102], 0Ch
-    mov word ptr [v_4104], 0Ch
-    mov word ptr [v_4106], 5
-    mov word ptr [v_4108], 0Ch
-    mov word ptr [v_410A], 32h
-    mov word ptr [v_410C], 31h
+    mov word ptr [v_CacheSlots1], 0Ch
+    mov word ptr [v_CacheSlots2], 18h
+    mov word ptr [v_CacheSlots3], 0Eh
+    mov word ptr [v_CacheSlots4], 0Ch
+    mov word ptr [v_CacheSlots5], 0Ch
+    mov word ptr [v_CacheSlots6], 5
+    mov word ptr [v_CacheSlots7], 0Ch
+    mov word ptr [v_CacheSlots8], 32h
+    mov word ptr [v_CacheSlots9], 31h
     jmp short loc_02741
 loc_026CC:
-    cmp word ptr [v_0CA8], 40h
+    cmp word ptr [v_EMSCachePages], 40h
     jl loc_0270B
-    mov word ptr [v_40FC], 8
-    mov word ptr [v_40FE], 10h
-    mov word ptr [v_4100], 8
-    mov word ptr [v_4102], 8
-    mov word ptr [v_4104], 8
-    mov word ptr [v_4106], 4
-    mov word ptr [v_4108], 7
-    mov word ptr [v_410A], 2Ah
-    mov word ptr [v_410C], 2Ah
+    mov word ptr [v_CacheSlots1], 8
+    mov word ptr [v_CacheSlots2], 10h
+    mov word ptr [v_CacheSlots3], 8
+    mov word ptr [v_CacheSlots4], 8
+    mov word ptr [v_CacheSlots5], 8
+    mov word ptr [v_CacheSlots6], 4
+    mov word ptr [v_CacheSlots7], 7
+    mov word ptr [v_CacheSlots8], 2Ah
+    mov word ptr [v_CacheSlots9], 2Ah
     jmp short loc_02741
+; minimum cache (< 0x40 pages available)
 loc_0270B:
-    mov word ptr [v_40FC], 4
-    mov word ptr [v_40FE], 7
-    mov word ptr [v_4100], 3
-    mov word ptr [v_4102], 4
-    mov word ptr [v_4104], 4
-    mov word ptr [v_4106], 3
-    mov word ptr [v_4108], 7
-    mov word ptr [v_410A], 14h
-    mov word ptr [v_410C], 17h
+    mov word ptr [v_CacheSlots1], 4
+    mov word ptr [v_CacheSlots2], 7
+    mov word ptr [v_CacheSlots3], 3
+    mov word ptr [v_CacheSlots4], 4
+    mov word ptr [v_CacheSlots5], 4
+    mov word ptr [v_CacheSlots6], 3
+    mov word ptr [v_CacheSlots7], 7
+    mov word ptr [v_CacheSlots8], 14h
+    mov word ptr [v_CacheSlots9], 17h
 loc_02741:
+    ; copy the ten slot counts into the class table (entry word +2, stride 16)
     mov si, 7834h
     mov di, 40FAh
     mov cx, 0Ah
@@ -3155,83 +3216,103 @@ loc_0274A:
     pop bx
     pop ax
     retf
-fn_0275F:
+; ---------------------------------------------------------------------------
+; fn_CacheInit (0x0275F) - build the picture-cache tables and start mode 13h.
+; in:  -
+; out: -
+; Allocates one DOS block per class for the 6-byte chunk descriptors
+; (sub_CacheBuildClassTable), laying the classes out inside the cache handle;
+; then allocates the 64 000-byte work buffer (v_WorkSeg), clears it and the EMS
+; frame, and selects mode 13h.
+; ---------------------------------------------------------------------------
+fn_CacheInit:
+    ; cache cursor: running EMS page (v_50D6) and byte offset (v_50D8)
     mov word ptr [v_50D6], 0
     mov word ptr [v_50D8], 0
-    mov cx, word ptr [v_40FA]
-    call sub_02884
-    mov dx, 0F5F4h
-    mov si, 0
-    call sub_0283F
-    mov cx, word ptr [v_40FC]
-    call sub_02884
+    mov cx, word ptr [v_CacheSlots0]
+    call sub_CacheClassParas
+    mov dx, 0F5F4h          ; class 0: 62964 bytes (318x198) per slot
+    mov si, 0               ; class entry offset in the table at DS:7834
+    call sub_CacheBuildClassTable
+    ; classes 1..9: same pattern, sizes from the class table
+    mov cx, word ptr [v_CacheSlots1]
+    call sub_CacheClassParas
     mov dx, 5622h
     mov si, 10h
-    call sub_0283F
-    mov cx, word ptr [v_40FE]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots2]
+    call sub_CacheClassParas
     mov dx, 54C4h
     mov si, 20h
-    call sub_0283F
-    mov cx, word ptr [v_4100]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots3]
+    call sub_CacheClassParas
     mov dx, 51A4h
     mov si, 30h
-    call sub_0283F
-    mov cx, word ptr [v_4102]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots4]
+    call sub_CacheClassParas
     mov dx, 40C0h
     mov si, 40h
-    call sub_0283F
-    mov cx, word ptr [v_4104]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots5]
+    call sub_CacheClassParas
     mov dx, 3640h
     mov si, 50h
-    call sub_0283F
-    mov cx, word ptr [v_4106]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots6]
+    call sub_CacheClassParas
     mov dx, 1DC0h
     mov si, 60h
-    call sub_0283F
-    mov cx, word ptr [v_4108]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots7]
+    call sub_CacheClassParas
     mov dx, 400h
     mov si, 70h
-    call sub_0283F
-    mov cx, word ptr [v_410A]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots8]
+    call sub_CacheClassParas
     mov dx, 100h
     mov si, 80h
-    call sub_0283F
-    mov cx, word ptr [v_410C]
-    call sub_02884
+    call sub_CacheBuildClassTable
+    mov cx, word ptr [v_CacheSlots9]
+    call sub_CacheClassParas
     mov dx, 40h
     mov si, 90h
-    call sub_0283F
-    mov bx, 0FA1h
-    call far ptr fn_06324
-    mov word ptr [v_50B8], ax
+    call sub_CacheBuildClassTable
+    mov bx, 0FA1h           ; 64 016 bytes = one 320x200 page
+    call far ptr fn_DOSAlloc
+    mov word ptr [v_WorkSeg], ax   ; offscreen work buffer (64 KB, a draw target)
     mov es, ax
     xor di, di
     xor ax, ax
     mov cx, 7D00h
-    rep stosw
-    mov dx, word ptr [v_0C9C]
-    mov bx, 55D4h
+    rep stosw               ; clear 0x7D00 words = 64 000 bytes
+    mov dx, word ptr [v_EMSWorkHandle]
+    mov bx, 55D4h           ; work pages 4-7 -> frame
     push cs
-    call fn_0235B
-    mov es, word ptr [v_0CAA]
+    call fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     xor di, di
     xor ax, ax
     mov cx, 7D00h
-    rep stosw
+    rep stosw               ; clear the mapped frame as well
     mov ax, 13h
-    int 10h
+    int 10h                 ; SEAM VIDEO: mode 13h (320x200x256)
     retf
-sub_0283F:
+; ---------------------------------------------------------------------------
+; sub_CacheBuildClassTable (0x0283F) - build one class's chunk descriptors.
+; in:  BX = paragraphs for the descriptor block (from sub_CacheClassParas),
+;      CX = slot count, DX = slot size in bytes, SI = class entry offset
+; out: -
+; Stores the block segment in class table word +0, then writes one 6-byte
+; descriptor per slot: {0FFFFh, EMS page, offset}. The cursor in v_50D6/v_50D8
+; runs across calls, so the classes tile the cache handle without overlap.
+; ---------------------------------------------------------------------------
+sub_CacheBuildClassTable:
     mov word ptr [v_50CC], 1
     add si, 7834h
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [si], ax
     mov es, ax
     xor di, di
@@ -3254,7 +3335,12 @@ loc_0287A:
     mov word ptr [v_50D6], ax
     mov word ptr [v_50D8], bx
     ret
-sub_02884:
+; ---------------------------------------------------------------------------
+; sub_CacheClassParas (0x02884) - paragraphs for one class's descriptors.
+; in:  CX = slot count
+; out: BX = paragraphs (6 bytes per slot, rounded up)
+; ---------------------------------------------------------------------------
+sub_CacheClassParas:
     mov ax, 6
     mul cx
     mov bx, 10h
@@ -3983,7 +4069,7 @@ loc_0305B:
 fn_0305C:
     mov word ptr [v_50D6], 1
     call sub_030BD
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_13BE3
 loc_0306F:
     call far ptr fn_0D0FE
@@ -4420,7 +4506,7 @@ loc_036A6:
     mov word ptr [v_909B], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_0CC6], 0Dh
     mov word ptr [v_50E6], 0Ah
@@ -4457,7 +4543,7 @@ loc_0373D:
     mov word ptr [v_909B], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_0CC6], 0Dh
     mov word ptr [v_50E6], 0Ah
@@ -4850,7 +4936,7 @@ loc_03C5E:
     call far ptr fn_180D0
     mov bx, 9093h
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 0AFF8h
     mov bx, 7
@@ -4867,7 +4953,7 @@ loc_03CB8:
     push cx
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 0AFF8h
     call far ptr fn_13E74
@@ -5021,7 +5107,7 @@ loc_03ECA:
     mov word ptr [v_909B], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 0BC78h
     mov bx, 1
@@ -5032,7 +5118,7 @@ loc_03ECA:
     mov word ptr [v_909B], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     call far ptr fn_1244A
     inc word ptr [v_50AA]
@@ -5074,7 +5160,7 @@ sub_03F6B:
     mov word ptr [bx + 8], ax
     mov word ptr [bx + 6], 1Ah
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     push word ptr [v_0B26]
     mov word ptr [v_0B26], 0
@@ -5101,12 +5187,12 @@ sub_03FE4:
     mov bx, 4
     call far ptr fn_180D0
     mov bx, 0CBh
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_50E2], ax
     mov word ptr [v_9095], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     pop word ptr [v_9095]
     ret
@@ -5428,7 +5514,7 @@ loc_04493:
     call far ptr fn_04A81
     call far ptr fn_1A6B5
     mov ax, 2
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     jmp near ptr sub_04022
 loc_044B0:
     and word ptr [v_505E], 0FBFFh
@@ -5445,7 +5531,7 @@ loc_044C6:
     mov ax, 32h
     call far ptr fn_1850E
     mov bx, 0Ah
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_50E2], ax
     mov word ptr [v_9095], ax
     mov cx, 4Eh
@@ -5456,7 +5542,7 @@ loc_044C6:
     call far ptr fn_18F17
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, ds
     mov word ptr [v_9095], ax
@@ -5819,7 +5905,7 @@ fn_0495A:
     push es
     push di
     push cx
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
     mov ah, al
     mov cx, 7D00h
@@ -5861,7 +5947,7 @@ fn_049CF:
     call far ptr fn_1850E
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 0B037h
     call far ptr fn_06F6A
@@ -6054,12 +6140,12 @@ fn_04C46:
     push si
     push di
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 5612h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov cx, 7D00h
-    mov es, word ptr [v_50B8]
-    mov si, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov si, word ptr [v_EMSFrameSeg]
     mov ds, si
     mov si, 0
     mov di, 0
@@ -6067,12 +6153,12 @@ fn_04C46:
     pop ds
     call far ptr fn_1A6B5
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 5624h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov cx, 7D00h
-    mov es, word ptr [v_50B8]
-    mov si, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov si, word ptr [v_EMSFrameSeg]
     mov ds, si
     mov si, 0
     mov di, 0
@@ -6235,7 +6321,7 @@ fn_04E04:
     shr bx, 1
     shr bx, 1
     inc bx
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_50E2], ax
     mov es, ax
     xor di, di
@@ -6262,9 +6348,9 @@ fn_04E04:
     stosw
     mov ax, word ptr [v_0C46]
     stosw
-    mov ax, word ptr [v_0C9C]
+    mov ax, word ptr [v_EMSWorkHandle]
     stosw
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     stosw
     mov ax, word ptr [v_0CC6]
     stosw
@@ -6312,7 +6398,7 @@ fn_04E04:
     stosw
     mov ax, word ptr [v_509A]
     stosw
-    mov ax, word ptr [v_50D2]
+    mov ax, word ptr [v_DrawSeg]
     stosw
     mov ax, word ptr [v_50D4]
     stosw
@@ -6362,11 +6448,11 @@ fn_04F2A:
     push si
     push di
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 5612h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov cx, 7D00h
-    mov si, word ptr [v_0CAA]
+    mov si, word ptr [v_EMSFrameSeg]
     mov es, si
     mov di, 0A000h
     mov ds, di
@@ -6375,13 +6461,13 @@ fn_04F2A:
     rep movsw
     pop ds
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 5624h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov cx, 7D00h
-    mov si, word ptr [v_0CAA]
+    mov si, word ptr [v_EMSFrameSeg]
     mov es, si
-    mov di, word ptr [v_50B8]
+    mov di, word ptr [v_WorkSeg]
     mov ds, di
     mov si, 0
     mov di, 0
@@ -6434,9 +6520,9 @@ loc_04FF4:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 5
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
@@ -6449,26 +6535,26 @@ loc_04FF4:
     mov bx, 3Fh
     mov cx, 0AFh
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 1Eh
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, 1
     mov bx, 3Fh
     mov cx, 0Fh
     mov dx, 0B0h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 23h
-    call far ptr fn_084D4
-    call far ptr fn_15B78
+    call far ptr fn_DelayTicks
+    call far ptr fn_FadeOut
     and word ptr [v_5062], 0F7FFh
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
 loc_050AE:
     mov word ptr [v_0CCA], 1Dh
     call far ptr fn_13B8A
@@ -6503,7 +6589,7 @@ loc_050F7:
     cmp byte ptr [v_0B9A], 1Bh
     ret
 sub_050FD:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     and word ptr [v_5062], 0F7FFh
     and word ptr [v_50F6], 7FFFh
     and word ptr [v_505E], 0FBFFh
@@ -6512,16 +6598,16 @@ sub_050FD:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     cmp word ptr [v_5058], 0
     je loc_05148
     mov es, word ptr [v_5058]
     mov ah, 49h
     int 21h
 loc_05148:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_05177
     test word ptr [v_94D5], 2
     je loc_0516C
@@ -6529,13 +6615,13 @@ loc_05148:
     je loc_0516C
     call far ptr fn_18A06
     mov ax, 14h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
 loc_0516C:
     call far ptr fn_13BE3
     and word ptr [v_5064], 0FFF7h
     ret
 sub_05177:
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
     xor ax, ax
     mov cx, 7D00h
@@ -6550,7 +6636,7 @@ sub_05185:
     mov di, 0
     mov si, 0
     mov cx, 7D00h
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov ax, word ptr [v_50E2]
     mov ds, ax
     rep movsw
@@ -6700,7 +6786,7 @@ loc_0530C:
 loc_0531F:
     mov cx, 5
     call sub_06097
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov es, ax
     mov word ptr [v_5096], 10Ch
     mov word ptr [v_509C], 8
@@ -6757,16 +6843,16 @@ loc_053BC:
 loc_053C5:
     mov cx, 0Ah
     call sub_06097
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     mov ax, word ptr [v_50E2]
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 58h
     mov word ptr [v_50FE], 0BFh
     mov word ptr [v_0CC6], 0FFh
     mov word ptr [v_0B26], 1
     mov bx, 901Bh
     call far ptr fn_13E74
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     mov cx, 3Fh
     call sub_050DF
     jne loc_05402
@@ -6777,12 +6863,12 @@ loc_05402:
     mov bx, 1
     mov cx, 30h
     mov dx, 50h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 4
     mov bx, 1
     mov cx, 1
     mov dx, 0FFh
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     test word ptr [v_505E], 400h
     je loc_05430
     call sub_05185
@@ -6807,28 +6893,28 @@ loc_05448:
     mov bx, 1
     mov cx, 30h
     mov dx, 50h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 3
     mov bx, 1
     mov cx, 1
     mov dx, 0FFh
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     test word ptr [v_505E], 400h
     je loc_0547C
     call sub_05185
 loc_0547C:
     pop cx
     loop loc_05448
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     mov ax, word ptr [v_50E2]
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 0
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0CCA], 5
     call far ptr fn_19E12
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     ret
 sub_054B1:
     mov word ptr [v_0B9C], 0
@@ -6856,7 +6942,7 @@ loc_054F1:
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 50h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov cx, 80h
 loc_05505:
     add word ptr [v_50E2], 14h
@@ -6875,12 +6961,12 @@ loc_05519:
     mov bx, 3Fh
     mov cx, 6
     mov dx, 93h
-    call far ptr fn_15BB0
-    push word ptr [v_50D2]
+    call far ptr fn_PaletteFade
+    push word ptr [v_DrawSeg]
     push word ptr [v_0B26]
     mov word ptr [v_0B26], 1
     mov ax, word ptr [v_50E2]
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0Ah
     mov word ptr [v_50FE], 8
     mov word ptr [v_0B1C], 93h
@@ -6890,7 +6976,7 @@ loc_05519:
     mov ax, 0FFFFh
     call sub_060E7
     pop word ptr [v_0B26]
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     call sub_050DF
     jne loc_0557D
     ret
@@ -6928,7 +7014,7 @@ loc_055BD:
     mov bx, 1
     mov cx, 0FFh
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     test word ptr [v_505E], 400h
     je loc_055DA
     call sub_05185
@@ -6951,13 +7037,13 @@ loc_055F2:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_05177
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0Ah
     mov word ptr [v_50FE], 0AEh
     mov word ptr [v_0B1C], 93h
@@ -6997,8 +7083,8 @@ loc_0566D:
     ret
 loc_056B0:
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0Ah
     mov word ptr [v_50FE], 8
     mov bx, 0C135h
@@ -7045,7 +7131,7 @@ loc_0571D:
     mov bx, 3Fh
     mov cx, 0FFh
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     call sub_050DF
     jne loc_05770
     ret
@@ -7063,8 +7149,8 @@ loc_05770:
     ret
 loc_05796:
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 1Ch
     mov word ptr [v_50FE], 8
     mov bx, 0C180h
@@ -7075,7 +7161,7 @@ loc_05796:
     call sub_060E7
     call far ptr fn_1A6B5
     call sub_060DA
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov es, ax
     mov di, 8C0h
     xor ax, ax
@@ -7090,8 +7176,8 @@ loc_05796:
 loc_057EC:
     or word ptr [v_5062], 800h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0Ah
     mov word ptr [v_50FE], 8
     mov bx, 0C1ADh
@@ -7120,18 +7206,18 @@ loc_0583E:
     mov bx, 3Fh
     mov cx, 60h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 3
     mov bx, 3Fh
     mov cx, 40h
     mov dx, 80h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 3
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 0D0h
-    call far ptr fn_15BB0
-    mov ax, word ptr [v_50B8]
+    call far ptr fn_PaletteFade
+    mov ax, word ptr [v_WorkSeg]
     mov es, ax
     mov di, 8C0h
     xor ax, ax
@@ -7145,8 +7231,8 @@ loc_0583E:
 loc_058A3:
     or word ptr [v_5062], 800h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 1Ch
     mov word ptr [v_50FE], 8
     mov bx, 0C219h
@@ -7164,7 +7250,7 @@ loc_058A3:
     jne loc_058F0
     ret
 loc_058F0:
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov es, ax
     mov di, 8C0h
     xor ax, ax
@@ -7213,7 +7299,7 @@ loc_059C8:
     mov bx, 3Fh
     mov cx, 20h
     mov dx, 0A0h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov dx, 30h
     call sub_0607B
     and word ptr [v_5062], 0F7FFh
@@ -7266,7 +7352,7 @@ loc_05A6B:
     mov word ptr [v_0CCC], 10h
     mov word ptr [v_0CCA], 27h
     call far ptr fn_19E12
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov di, 6753h
     mov cx, 2Ah
 loc_05A98:
@@ -7288,7 +7374,7 @@ loc_05AB4:
     mov bx, 3Fh
     mov cx, 0FFh
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov cx, 0Ah
     call sub_06086
     call sub_050DF
@@ -7300,15 +7386,15 @@ loc_05AD1:
     mov bx, 3Fh
     mov cx, 0C0h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 3
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 0D0h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0Ah
     mov word ptr [v_50FE], 8
     mov bx, 0C251h
@@ -7325,7 +7411,7 @@ loc_05AD1:
     mov ax, word ptr [v_5058]
     mov word ptr [v_50E2], ax
     mov es, ax
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     rep movsw
     mov ax, S1DEA
@@ -7344,12 +7430,12 @@ loc_05B54:
     mov bx, 3Fh
     mov cx, 0C0h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 2
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 0D0h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     call sub_050DF
     jne loc_05B98
     ret
@@ -7386,12 +7472,12 @@ loc_05BCE:
     mov bx, 3Fh
     mov cx, 0C0h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ax, 3
     mov bx, 3Fh
     mov cx, 30h
     mov dx, 0D0h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     call sub_050DF
     jne loc_05C0A
     ret
@@ -7402,15 +7488,15 @@ loc_05C0A:
     mov si, 6DCAh
     and word ptr [si], 3FFFh
     and word ptr [v_5062], 0F7FFh
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov ax, 4424h
     mov bx, 9093h
     call far ptr fn_1821A
     mov word ptr [bx + 8], 3
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_050DF
     jne loc_05C50
     ret
@@ -7421,8 +7507,8 @@ loc_05C50:
     call far ptr fn_1897C
     call sub_060DA
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 22h
     mov word ptr [v_50FE], 0AEh
     mov bx, 0C0FEh
@@ -7455,7 +7541,7 @@ loc_05CAE:
     mov ax, word ptr [v_5058]
     mov word ptr [v_50E2], ax
     mov es, ax
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     rep movsw
     mov ax, S1DEA
@@ -7464,7 +7550,7 @@ loc_05CAE:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
 loc_05CEE:
     test word ptr [v_505E], 400h
     je loc_05CEE
@@ -7482,8 +7568,8 @@ loc_05CEE:
     ret
 loc_05D1C:
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 22h
     mov word ptr [v_50FE], 8
     mov bx, 0C2F1h
@@ -7503,11 +7589,11 @@ sub_05D5B:
     je loc_05D74
     call far ptr fn_18A06
     mov ax, 14h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
 loc_05D74:
     mov word ptr [v_50CC], 1
     mov bx, 1F41h
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_5058], ax
     mov word ptr [v_50E2], ax
     mov es, ax
@@ -7528,11 +7614,11 @@ loc_05D74:
     mov word ptr [v_0CCC], 0
     mov ax, word ptr [v_50E2]
     add ax, 0F50h
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCA], 6
     call far ptr fn_19E12
     mov ax, word ptr [v_50E2]
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCA], 5
     call far ptr fn_19E12
     and word ptr [v_5062], 0F7FFh
@@ -7541,15 +7627,15 @@ loc_05D74:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 3
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0B22], 0
     mov word ptr [v_0B24], 0
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCC], 20h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCA], 0Ah
     mov cx, 9
 loc_05E32:
@@ -7635,8 +7721,8 @@ loc_05E4C:
     mov word ptr [si + 0Ch], 2Eh
     mov word ptr [si + 0Eh], 69h
     mov word ptr [si + 10h], 49h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call sub_05185
     or word ptr [v_50F6], 8000h
     and word ptr [v_505E], 0FBFFh
@@ -7648,7 +7734,7 @@ sub_05FC7:
     mov ax, 3
     mov bx, 1
     mov cx, 10h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     pop dx
     pop cx
     ret
@@ -7658,7 +7744,7 @@ sub_05FDA:
     mov ax, 4
     mov bx, 1
     mov cx, 10h
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     pop dx
     pop cx
     ret
@@ -7704,7 +7790,7 @@ loc_06047:
     mov cx, word ptr [v_411C]
     mov si, 4754h
     add si, word ptr [v_4A54]
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     pop cx
     loop loc_06019
     ret
@@ -7826,7 +7912,7 @@ sub_0615B:
     mov bx, 0
     mov cx, 0FFh
     mov si, 4D56h
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     ret
 S050C ends
 S0617 segment byte use16
@@ -7853,9 +7939,9 @@ loc_06194:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 7
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0CCA], 0Fh
     mov word ptr [v_50DA], 23h
     call sub_0622A
@@ -7874,13 +7960,13 @@ loc_06202:
     cmp byte ptr [v_0B9A], 1Bh
     ret
 sub_06208:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_0621C
     and word ptr [v_5062], 0F7FFh
     call far ptr fn_13BE3
     ret
 sub_0621C:
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
     xor ax, ax
     mov cx, 7D00h
@@ -7898,7 +7984,7 @@ sub_0622A:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov cx, word ptr [v_50DA]
 loc_06262:
     call sub_061EA
@@ -7911,12 +7997,12 @@ loc_06268:
     pop cx
     loop loc_06262
 loc_06279:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     pop cx
     ret
 sub_06280:
     or word ptr [v_5062], 800h
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     cmp byte ptr [v_0C2C], 0
     je loc_0629E
     cmp word ptr [v_0C40], 1
@@ -7931,9 +8017,9 @@ loc_0629E:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_0621C
     or word ptr [v_50F6], 8000h
     call far ptr fn_13AC6
@@ -7980,9 +8066,15 @@ loc_06323:
     retf
 S062E ends
 S0632 segment byte use16
-fn_06324:
+; ---------------------------------------------------------------------------
+; fn_DOSAlloc (0x06324) - allocate a DOS memory block.
+; in:  BX = paragraphs
+; out: AX = segment; v_50CC = 0 on success. On failure the caller's error code
+; is reported and the game exits with code 0FFFFh.
+; ---------------------------------------------------------------------------
+fn_DOSAlloc:
     mov ah, 48h
-    int 21h
+    int 21h                 ; SEAM DOS: 48h - allocate memory (BX paragraphs)
     jae loc_0633A
     call far ptr fn_18F17
     mov word ptr [v_50CC], 0FFFFh
@@ -8109,8 +8201,8 @@ loc_064B4:
     mov ax, word ptr [bx + 2]
     mov word ptr [v_50C0], ax
 loc_064BE:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov bx, word ptr [v_5390]
     mov ax, word ptr [bx + 2]
     mov word ptr [v_50C0], ax
@@ -8245,7 +8337,7 @@ loc_06635:
     test word ptr [v_5062], 20h
     je loc_0665B
     mov ax, 0Ah
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
 loc_0665B:
     call far ptr fn_13BE3
     jmp near ptr loc_064BE
@@ -8375,8 +8467,8 @@ loc_06799:
     mov word ptr [v_0B22], 0EFh
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 4
     call far ptr fn_19E12
@@ -8421,8 +8513,8 @@ loc_0683F:
     mov word ptr [v_0B22], 0EFh
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 3
     call far ptr fn_19E12
@@ -8488,7 +8580,7 @@ sub_0690D:
     call far ptr fn_135B2
     pop word ptr [v_50CC]
     mov ax, 0Ah
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
 loc_0694F:
     cmp word ptr [v_50CC], 0
     je loc_06957
@@ -8552,7 +8644,7 @@ loc_069F2:
     je loc_06A04
 loc_069F9:
     mov ax, 0Ch
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     jmp near ptr loc_06AAA
 loc_06A04:
     mov si, word ptr [v_50A0]
@@ -8996,7 +9088,7 @@ fn_06E76:
     or al, 3
     out 61h, al
     mov ax, 4
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     in al, 61h
     and al, 0FCh
     out 61h, al
@@ -9015,10 +9107,10 @@ loc_06EAD:
     push di
     push es
     push cx
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     test word ptr [v_5064], 1000h
     je loc_06ECA
     jmp short loc_06F36
@@ -9043,7 +9135,7 @@ loc_06EE9:
     add di, 0F8h
     pop cx
     loop loc_06EE9
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov di, 78F0h
     mov cx, 3Ch
     mov ax, 404h
@@ -9083,7 +9175,7 @@ loc_06F3F:
     add di, 0F7h
     pop cx
     loop loc_06F3F
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov di, 6C70h
     mov cx, 6Dh
     mov ax, 404h
@@ -9386,7 +9478,7 @@ loc_071B8:
     call far ptr fn_1A6B5
     call far ptr fn_06F86
     call far ptr fn_13AC6
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0B1C], 4
@@ -9510,8 +9602,8 @@ loc_07339:
 sub_07342:
     push es
     and word ptr [v_5060], 0FFBFh
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov es, ax
     mov di, 0C8F1h
     mov cx, 23h
@@ -9774,7 +9866,7 @@ loc_07648:
     mov bx, 904Bh
     call far ptr fn_18330
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 2
     push ax
@@ -9847,7 +9939,7 @@ fn_07727:
     mov bx, 904Bh
     call far ptr fn_18330
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     xor dx, dx
     mov ax, word ptr [v_5562]
@@ -9864,11 +9956,11 @@ fn_07727:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55E6h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, word ptr [v_5558]
     mov bx, 1Ah
     mul bx
@@ -9876,7 +9968,7 @@ fn_07727:
     mov es, word ptr [v_0C44]
     mov di, 556Ah
     mov cx, 0Dh
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     rep movsw
     mov ax, S1DEA
     mov ds, ax
@@ -9912,11 +10004,11 @@ fn_077C4:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55E6h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, word ptr [v_5558]
     mov bx, 4
     mul bx
@@ -9928,7 +10020,7 @@ fn_077C4:
     mov es, word ptr [v_0C44]
     mov di, 556Ah
     mov cx, 2
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     rep movsw
     mov ax, S1DEA
     mov ds, ax
@@ -9949,8 +10041,8 @@ fn_0784D:
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_13AC6
     mov si, word ptr [v_5070]
     mov bx, 7BEBh
@@ -10088,7 +10180,7 @@ loc_07A00:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_1916C
     cmp byte ptr [v_0B9A], 0
@@ -10177,7 +10269,7 @@ loc_07B01:
     mov bx, 904Bh
     call far ptr fn_18330
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     ret
 sub_07B1D:
@@ -10755,7 +10847,7 @@ loc_08187:
     je loc_081A8
 loc_081A0:
     mov ax, 0Ch
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
 loc_081A8:
     call far ptr fn_12602
     call far ptr fn_1A6B5
@@ -11077,17 +11169,22 @@ loc_084D3:
     ret
 S0812 ends
 S084D segment byte use16
-fn_084D4:
+; ---------------------------------------------------------------------------
+; fn_DelayTicks (0x084D4) - wait AX BIOS ticks (~18.2 Hz).
+; in:  AX = ticks to wait (16-bit count; only DX is compared)
+; out: -
+; ---------------------------------------------------------------------------
+fn_DelayTicks:
     push bx
     push cx
     push dx
     xchg bx, ax
     xor ah, ah
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     add bx, dx
 loc_084DE:
     xor ah, ah
-    int 1Ah
+    int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     cmp dx, bx
     jb loc_084DE
     pop dx
@@ -11096,13 +11193,38 @@ loc_084DE:
     retf
 S084D ends
 S084E segment byte use16
-fn_084EA:
+; ===========================================================================
+; DOS file service
+;
+; All disk access goes through four file structs and these wrappers. Struct
+; layout (FILE_* equates at the top of the file):
+;   +0  u16  DOS handle (0FFFFh = closed)
+;   +2  u16  buffer segment          +4  u16 buffer offset
+;   +6  u16  block size in bytes     +8  u16 block index
+;   +A  u16  base offset, low        +C  u16 base offset, high
+;   +E  ASCIIZ file name
+;
+; Read/write seek to base + index * block size, then transfer one block
+; (count bytes) through the buffer. On success a wrapper clears the error
+; code (v_50CC); on failure the caller's code stays set for fn_18F17.
+;
+; Structs (packed back to back in DGROUP, buffers default to DS):
+;   904Bh v_FileCURGAME, 9061h v_FilePictures, 907Ch v_FileSaveGame, 9093h v_FileWorld
+; (the SAVEGAMEX name's trailing letter is replaced per save slot elsewhere.)
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; fn_FileClose (0x084EA) - close a file struct's handle.
+; in:  BX -> file struct
+; out: on success handle = 0FFFFh and v_50CC = 0; on error the DOS error code
+; is left in AX with CF set
+; ---------------------------------------------------------------------------
+fn_FileClose:
     push dx
     push cx
     push bx
     mov bx, word ptr [bx]
     mov ah, 3Eh
-    int 21h
+    int 21h                 ; SEAM DOS: 3Eh - close file
     pop bx
     jb loc_08503
     mov word ptr [bx], 0FFFFh
@@ -11114,25 +11236,36 @@ loc_08503:
     pop cx
     pop dx
     retf
-fn_08506:
+; ---------------------------------------------------------------------------
+; fn_FileSeekEnd (0x08506) - move the position to end of file.
+; in:  BX -> file struct
+; out: DX:AX = new position (= file size)
+; Unused in this build (no callers).
+; ---------------------------------------------------------------------------
+fn_FileSeekEnd:
     push cx
     xor cx, cx
     xor dx, dx
     push bx
     mov bx, word ptr [bx]
     mov ax, 4202h
-    int 21h
+    int 21h                 ; SEAM DOS: 4202h - seek to end
     pop bx
     pop cx
     retf
-fn_08516:
+; ---------------------------------------------------------------------------
+; fn_FileCreate (0x08516) - create/truncate the struct's file.
+; in:  BX -> file struct
+; out: handle stored at +0 (0FFFFh on failure); v_50CC = 0 on success
+; ---------------------------------------------------------------------------
+fn_FileCreate:
     push dx
     push cx
     mov dx, bx
-    add dx, 0Eh
-    mov ax, 3C00h
+    add dx, FILE_NAME       ; name at +0Eh
+    mov ax, 3C00h           ; attributes: none
     xor cx, cx
-    int 21h
+    int 21h                 ; SEAM DOS: 3C00h - create file
     jb loc_08531
     mov word ptr [bx], ax
     mov word ptr [v_50CC], 0
@@ -11144,13 +11277,18 @@ loc_08531:
     pop cx
     pop dx
     retf
-fn_08538:
+; ---------------------------------------------------------------------------
+; fn_FileOpen (0x08538) - open the struct's file.
+; in:  BX -> file struct; AL = DOS open mode (0 = read, 2 = read/write)
+; out: handle stored at +0 (0FFFFh on failure); v_50CC = 0 on success
+; ---------------------------------------------------------------------------
+fn_FileOpen:
     push dx
     push cx
     mov dx, bx
-    add dx, 0Eh
+    add dx, FILE_NAME       ; name at +0Eh
     mov ah, 3Dh
-    int 21h
+    int 21h                 ; SEAM DOS: 3Dh - open file (AL = mode)
     jb loc_08550
     mov word ptr [bx], ax
     mov word ptr [v_50CC], 0
@@ -11162,22 +11300,27 @@ loc_08550:
     pop cx
     pop dx
     retf
-fn_08557:
+; ---------------------------------------------------------------------------
+; fn_FileRead (0x08557) - read one block into the struct's buffer.
+; in:  BX -> file struct (handle, buffer, count, index, base)
+; out: v_50CC = 0 only when the full block was read
+; ---------------------------------------------------------------------------
+fn_FileRead:
     push dx
     push cx
     push ds
     push bx
-    call sub_085AD
-    mov cx, word ptr [bx + 6]
-    mov dx, word ptr [bx + 4]
-    mov ax, word ptr [bx + 2]
-    mov bx, word ptr [bx]
+    call sub_FileSeek
+    mov cx, word ptr [bx + FILE_COUNT]
+    mov dx, word ptr [bx + FILE_OFF]
+    mov ax, word ptr [bx + FILE_SEG]
+    mov bx, word ptr [bx]           ; handle
     mov ds, ax
     mov ah, 3Fh
-    int 21h
+    int 21h                         ; SEAM DOS: 3Fh - read into buffer
     pop bx
     pop ds
-    cmp ax, word ptr [bx + 6]
+    cmp ax, word ptr [bx + FILE_COUNT]
     jne loc_0857F
     mov word ptr [v_50CC], 0
     pop cx
@@ -11187,22 +11330,27 @@ loc_0857F:
     pop cx
     pop dx
     retf
-fn_08582:
+; ---------------------------------------------------------------------------
+; fn_FileWrite (0x08582) - write one block from the struct's buffer.
+; in:  BX -> file struct (handle, buffer, count, index, base)
+; out: v_50CC = 0 only when the full block was written
+; ---------------------------------------------------------------------------
+fn_FileWrite:
     push dx
     push cx
     push ds
     push bx
-    call sub_085AD
-    mov cx, word ptr [bx + 6]
-    mov dx, word ptr [bx + 4]
-    mov ax, word ptr [bx + 2]
-    mov bx, word ptr [bx]
+    call sub_FileSeek
+    mov cx, word ptr [bx + FILE_COUNT]
+    mov dx, word ptr [bx + FILE_OFF]
+    mov ax, word ptr [bx + FILE_SEG]
+    mov bx, word ptr [bx]           ; handle
     mov ds, ax
     mov ah, 40h
-    int 21h
+    int 21h                         ; SEAM DOS: 40h - write from buffer
     pop bx
     pop ds
-    cmp ax, word ptr [bx + 6]
+    cmp ax, word ptr [bx + FILE_COUNT]
     jne loc_085AA
     mov word ptr [v_50CC], 0
     pop cx
@@ -11212,20 +11360,26 @@ loc_085AA:
     pop cx
     pop dx
     retf
-sub_085AD:
+; ---------------------------------------------------------------------------
+; sub_FileSeek (0x085AD) - seek to base + index * block size.
+; in:  BX -> file struct
+; out: -
+; Intra-module helper for fn_FileRead / fn_FileWrite.
+; ---------------------------------------------------------------------------
+sub_FileSeek:
     push bx
-    mov ax, word ptr [bx + 6]
-    mul word ptr [bx + 8]
-    mov cx, dx
+    mov ax, word ptr [bx + FILE_COUNT]
+    mul word ptr [bx + FILE_INDEX]
+    mov cx, dx                      ; high word of count * index
     mov dx, ax
-    add dx, word ptr [bx + 0Ah]
+    add dx, word ptr [bx + FILE_BASE_LO]
     jae loc_085BE
     inc cx
 loc_085BE:
-    add cx, word ptr [bx + 0Ch]
+    add cx, word ptr [bx + FILE_BASE_HI]
     mov ax, 4200h
-    mov bx, word ptr [bx]
-    int 21h
+    mov bx, word ptr [bx]           ; handle
+    int 21h                         ; SEAM DOS: 4200h - seek from start
     pop bx
     ret
 S084E ends
@@ -11641,7 +11795,7 @@ loc_08A7A:
     test word ptr [v_5062], 20h
     je loc_08ABB
     mov ax, 0Ah
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call sub_09032
     call far ptr fn_1A6B5
     call far ptr fn_13BE3
@@ -12194,7 +12348,7 @@ sub_09157:
     mov bx, 904Bh
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_09175:
@@ -12219,16 +12373,16 @@ loc_091B5:
     call far ptr fn_16024
     call far ptr fn_16BB9
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, 140h
     mul word ptr [v_505A]
     add ax, word ptr [v_5056]
     mov bx, ax
     mov cx, 88h
-    mov es, word ptr [v_50B8]
-    mov ds, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov ds, word ptr [v_EMSFrameSeg]
 loc_091E6:
     push cx
     mov cx, 1Ch
@@ -12297,14 +12451,14 @@ loc_0925E:
     ret
 sub_092C2:
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, 0A08h
     mov bx, ax
     mov cx, 88h
-    mov es, word ptr [v_50B8]
-    mov ds, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov ds, word ptr [v_EMSFrameSeg]
 loc_092DF:
     push cx
     mov cx, 70h
@@ -12320,14 +12474,14 @@ sub_092F2:
     test word ptr [v_5060], 7800h
     jne loc_09329
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, 0A08h
     mov bx, ax
     mov cx, 88h
-    mov es, word ptr [v_0CAA]
-    mov ds, word ptr [v_50B8]
+    mov es, word ptr [v_EMSFrameSeg]
+    mov ds, word ptr [v_WorkSeg]
 loc_09317:
     push cx
     mov cx, 70h
@@ -13184,10 +13338,10 @@ loc_09CA7:
 fn_09CAC:
     push dx
     push cx
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     push word ptr [v_0B26]
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov cx, 0Bh
     mov bx, 0AFF8h
     mov byte ptr [v_0B9A], 0
@@ -13240,7 +13394,7 @@ loc_09D24:
     mov word ptr [v_50CC], 1
 loc_09D36:
     pop word ptr [v_0B26]
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     pop cx
     pop dx
     retf
@@ -13939,13 +14093,13 @@ sub_0A412:
     mov bx, 904Bh
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_0A430:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     ret
 S0A35 ends
@@ -14086,8 +14240,8 @@ loc_0A5AF:
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_13AC6
     mov bx, 7BD1h
     call far ptr fn_13E74
@@ -14169,7 +14323,7 @@ fn_0A692:
     mov word ptr [v_0CCA], 0Eh
     call far ptr fn_13B8A
     mov ax, 7
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop word ptr [v_0CCA]
     call far ptr fn_13B8A
     retf
@@ -14223,20 +14377,20 @@ loc_0A6D7:
     call far ptr fn_1A6B5
 loc_0A755:
     call far ptr fn_13AC6
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     push word ptr [v_0B26]
     mov word ptr [v_50E6], 16h
     mov word ptr [v_50FE], 6Dh
     mov word ptr [v_0B1C], 44h
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov cx, 22h
     mov bx, 0AFF8h
     mov byte ptr [v_0B9A], 0
     call far ptr fn_0D29A
     pop word ptr [v_0B26]
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     cmp word ptr [v_50CC], 2
     jne loc_0A7AD
     call far ptr fn_13BE3
@@ -14283,7 +14437,7 @@ S0A6B ends
 S0A83 segment byte use16
     db 0h
 fn_0A834:
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     push bx
     push cx
     push dx
@@ -14300,7 +14454,7 @@ fn_0A834:
     jmp near ptr loc_0AAC0
 loc_0A84F:
     mov word ptr [v_0B26], 1
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov ax, word ptr [si]
     mov word ptr [v_507C], ax
     mov cx, word ptr [si + 2]
@@ -14456,7 +14610,7 @@ loc_0AA16:
     xor ax, ax
     rep stosw
     call far ptr fn_13AC6
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0B26], 0
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 72h
@@ -14508,7 +14662,7 @@ loc_0AAC0:
     pop dx
     pop cx
     pop bx
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     retf
 S0A83 ends
 S0AAC segment byte use16
@@ -15439,10 +15593,10 @@ fn_0B540:
     push di
     push es
     push cx
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     mov di, 0C8F0h
     mov cx, 23h
     mov ax, 404h
@@ -15453,7 +15607,7 @@ loc_0B55C:
     add di, 0F8h
     pop cx
     loop loc_0B55C
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov di, 0C8F0h
     mov cx, 23h
     mov ax, 404h
@@ -17170,7 +17324,7 @@ loc_0C977:
     mov ax, word ptr [v_0BC6]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Fh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov si, 0BC8h
     mov word ptr [v_50CC], 1
@@ -17184,7 +17338,7 @@ loc_0C977:
     div bx
     inc ax
     mov bx, ax
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_0CE6], ax
     call far ptr fn_18F17
     mov bx, 9093h
@@ -17192,7 +17346,7 @@ loc_0C977:
     mov cx, word ptr [si + 4]
 loc_0C9D5:
     mov word ptr [v_50CC], 0Fh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     inc word ptr [bx + 8]
     add word ptr [bx + 4], 3Ah
@@ -17208,7 +17362,7 @@ loc_0C9D5:
     div bx
     inc ax
     mov bx, ax
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_5090], ax
     call far ptr fn_18F17
     mov bx, 9093h
@@ -17216,7 +17370,7 @@ loc_0C9D5:
     mov cx, word ptr [si + 6]
 loc_0CA25:
     mov word ptr [v_50CC], 0Fh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     inc word ptr [bx + 8]
     add word ptr [bx + 4], 22h
@@ -17694,7 +17848,7 @@ sub_0CF91:
     mov ax, word ptr [di + 2]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BC7Ah
     mov cx, 8
@@ -17746,7 +17900,7 @@ sub_0D016:
     mov ax, word ptr [di + 2]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BC9Ch
     mov cx, 8
@@ -17792,7 +17946,7 @@ sub_0D08E:
     mov ax, word ptr [di + 2]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BCBEh
     mov cx, 8
@@ -17881,7 +18035,7 @@ loc_0D156:
     mov word ptr [v_50CC], 3
     and word ptr [v_40F6], 0DFFFh
     mov ax, 6
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     test word ptr [v_40F6], 2000h
     je loc_0D1D3
     mov word ptr [v_50CC], 6
@@ -17892,7 +18046,7 @@ loc_0D189:
     mov word ptr [v_50CC], 7
     and word ptr [v_40F6], 0FBFFh
     mov ax, 6
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     test word ptr [v_40F6], 400h
     je loc_0D1D3
     mov word ptr [v_50CC], 0Ah
@@ -17993,9 +18147,9 @@ fn_0D25E:
     push di
     push es
     mov word ptr [v_5AA6], ax
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 560Ch
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov bx, 50h
     mov ax, word ptr [v_5AA6]
     dec ax
@@ -18004,7 +18158,7 @@ fn_0D25E:
     mov es, word ptr [v_0C44]
     mov di, 5A56h
     mov cx, 28h
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     rep movsw
     mov ax, S1DEA
     mov ds, ax
@@ -18110,7 +18264,7 @@ S0D36 segment byte use16
 fn_0D36C:
     push word ptr [v_94D7]
     mov word ptr [v_94D7], 3
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     test word ptr [v_5060], 400h
     jne loc_0D390
     test word ptr [v_505E], 4000h
@@ -18133,13 +18287,13 @@ loc_0D3B0:
     call far ptr fn_1821A
     mov word ptr [bx + 8], 0
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0CCA], 2
     call far ptr fn_19E12
@@ -18148,7 +18302,7 @@ loc_0D3B0:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov word ptr [v_50DA], 4Bh
     or word ptr [v_50F6], 8000h
     and word ptr [v_50F6], 0EFFFh
@@ -18160,10 +18314,10 @@ loc_0D42C:
     cmp word ptr [v_50DA], 0
     jg loc_0D4AA
     mov word ptr [v_511A], 0
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_18A06
     mov ax, 14h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call far ptr fn_13AC6
     call far ptr fn_11B00
     cmp byte ptr [v_0B9A], 1Bh
@@ -18258,14 +18412,14 @@ loc_0D563:
     cmp ax, 1
     jne loc_0D575
 loc_0D568:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_13EC4
     jmp near ptr loc_0D390
 loc_0D575:
     cmp ax, 2
     jne loc_0D587
 loc_0D57A:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_1C354
     jmp near ptr loc_0D390
 loc_0D587:
@@ -18298,7 +18452,7 @@ loc_0D5BB:
 loc_0D5D3:
     mov word ptr [v_511A], 0
     call far ptr fn_18A06
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_0ABEC
     pop word ptr [v_94D7]
     retf
@@ -18306,7 +18460,7 @@ loc_0D5ED:
     cmp ax, 4
     jne loc_0D5FF
 loc_0D5F2:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_01488
     jmp near ptr loc_0D390
 loc_0D5FF:
@@ -18314,7 +18468,7 @@ loc_0D5FF:
     jne loc_0D61D
 loc_0D604:
     mov word ptr [v_511A], 0
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_050C4
     mov word ptr [v_511A], 1
     jmp near ptr loc_0D390
@@ -18374,8 +18528,8 @@ loc_0D6A8:
     mov word ptr [v_0B22], 0EFh
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 2
     call far ptr fn_19E12
@@ -18383,8 +18537,8 @@ loc_0D6A8:
     call far ptr fn_1C211
     mov word ptr [v_0B26], 5
     mov word ptr [v_0B24], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 10h
     mov ax, 0
     mov bx, word ptr [v_5074]
@@ -18609,15 +18763,15 @@ loc_0D9E7:
     mov word ptr [v_0CCA], ax
     mov cx, 0Ah
 loc_0DA19:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     or word ptr [v_5060], 1
     call far ptr fn_1A0A9
     and word ptr [v_5060], 0FFFEh
     call far ptr fn_1A6B5
     call far ptr fn_1C250
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     inc word ptr [v_0CCA]
     loop loc_0DA19
     mov si, 0F20h
@@ -18659,8 +18813,8 @@ loc_0DAA9:
     call far ptr fn_1C211
     mov word ptr [v_0B26], 5
     mov word ptr [v_0B24], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 10h
     mov ax, word ptr [v_5110]
     mov word ptr [v_0B22], 0
@@ -18741,7 +18895,7 @@ sub_0DBAA:
     je loc_0DBBC
     pop ax
     mov ax, 6
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     ret
 loc_0DBBC:
     pop ax
@@ -18937,10 +19091,10 @@ loc_0DDE2:
     jne loc_0DE06
     mov di, 9Dh
 loc_0DE06:
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55FAh
-    call far ptr fn_0235B
-    mov es, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     mov cx, 69h
     mov ax, 0FFFFh
 loc_0DE1C:
@@ -19311,7 +19465,7 @@ loc_0E1F7:
     call sub_0E6AE
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call sub_0E63E
     call far ptr fn_06EA4
     call far ptr fn_11754
@@ -19679,8 +19833,8 @@ sub_0E612:
     call far ptr fn_1897C
     mov word ptr [v_0B22], 102h
     mov word ptr [v_0B24], 43h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 6
     call far ptr fn_19E12
@@ -19688,8 +19842,8 @@ sub_0E612:
 sub_0E63E:
     mov word ptr [v_0B22], 102h
     mov word ptr [v_0B24], 43h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 5
     call far ptr fn_19E12
@@ -19798,8 +19952,8 @@ loc_0E7CA:
     je loc_0E816
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -19823,12 +19977,12 @@ loc_0E835:
     mov word ptr [v_0B22], 115h
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 8
     call far ptr fn_19E12
 loc_0E863:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_0FE63
     and word ptr [v_50F6], 1FFFh
     mov word ptr [v_50DC], 1
@@ -19871,8 +20025,8 @@ loc_0E8EE:
 loc_0E8FE:
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B1C], 4
     mov word ptr [v_50E6], 0F0h
@@ -19893,7 +20047,7 @@ loc_0E8FE:
     call far ptr fn_1A6B5
     call far ptr fn_13BE3
     call far ptr fn_0FF27
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
 loc_0E970:
     test word ptr [v_505E], 400h
     je loc_0E982
@@ -19963,8 +20117,8 @@ loc_0EA13:
     call far ptr fn_117AC
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B1C], 4
     mov word ptr [v_50E6], 0F0h
@@ -19984,7 +20138,7 @@ loc_0EA13:
     call far ptr fn_13BE3
     call far ptr fn_0FF27
     call far ptr fn_1591E
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     retf
 sub_0EAAB:
     call far ptr fn_16024
@@ -20117,7 +20271,7 @@ loc_0EC0A:
     mov word ptr [v_0B22], 128h
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0CCA], 0Ah
     call far ptr fn_19E12
@@ -20139,7 +20293,7 @@ loc_0EC38:
     mov bx, 3Fh
     mov cx, 0E0h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     or word ptr [v_505E], 2
 loc_0EC8F:
     call far ptr fn_13BE3
@@ -20277,8 +20431,8 @@ loc_0EDE3:
 loc_0EDF2:
     jmp near ptr loc_0EC94
 loc_0EDF5:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     and word ptr [v_505E], 0FF00h
     and word ptr [v_5064], 0FFFh
     retf
@@ -20302,7 +20456,7 @@ loc_0EE33:
     mov word ptr [v_0B1C], 4
     mov word ptr [v_0B26], 0
     mov ax, 0A000h
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     call sub_0F3AB
     mov al, byte ptr [bx]
     mov byte ptr [v_9091], al
@@ -20422,7 +20576,7 @@ loc_0EFAF:
     mov word ptr [v_50CC], 0Bh
     mov bx, 907Ch
     mov al, 2
-    call far ptr fn_08538
+    call far ptr fn_FileOpen
     call far ptr fn_18F17
     call far ptr fn_18A06
     mov ax, word ptr [v_94D5]
@@ -20432,7 +20586,7 @@ loc_0EFAF:
     mov bx, 907Ch
     call far ptr fn_18312
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     and word ptr [v_94D5], 0FFFAh
     pop ax
@@ -20451,7 +20605,7 @@ loc_0F01B:
     mov bx, 904Bh
     call far ptr fn_18312
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0BC78h
     mov bx, 904Bh
@@ -20465,11 +20619,11 @@ loc_0F01B:
 loc_0F05E:
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -20488,11 +20642,11 @@ loc_0F05E:
 loc_0F0BD:
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -20504,7 +20658,7 @@ loc_0F0BD:
     mov ax, word ptr [v_5152]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 0AFF8h
     mov bx, 904Bh
@@ -20512,7 +20666,7 @@ loc_0F0BD:
     mov ax, word ptr [v_5152]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov word ptr [v_5566], 0
     mov ax, 0AFF8h
@@ -20532,11 +20686,11 @@ loc_0F161:
 loc_0F16F:
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -20555,11 +20709,11 @@ loc_0F16F:
     mov word ptr [v_9051], ax
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0F20h
     mov bx, 907Ch
@@ -20569,11 +20723,11 @@ loc_0F16F:
     call far ptr fn_182F4
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_12FC6
     mov word ptr [v_51BA], 0
@@ -20621,7 +20775,7 @@ loc_0F29C:
     add si, 1F4h
     loop loc_0F241
     mov bx, 907Ch
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
     mov word ptr [v_0CCA], 0
     call far ptr fn_13B8A
     mov byte ptr [v_0B9A], 0FEh
@@ -20629,7 +20783,7 @@ loc_0F29C:
     jmp near ptr loc_0EDF5
 fn_0F2C0:
     push es
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov es, word ptr [v_0C44]
     mov cx, 30h
     mov si, 9585h
@@ -20645,7 +20799,7 @@ fn_0F2C0:
     call far ptr fn_11836
     call far ptr fn_117AC
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_0FF27
     and word ptr [v_50F6], 0F7FFh
     test word ptr [v_9469], 0FE00h
@@ -20723,7 +20877,7 @@ sub_0F3E7:
     mov word ptr [v_0B24], bx
     mov word ptr [v_0CCA], cx
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0CCC], 90h
     call far ptr fn_19E12
     ret
@@ -20870,7 +21024,7 @@ sub_0F58A:
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B26], 1
     mov bx, 0A000h
-    mov word ptr [v_50D2], bx
+    mov word ptr [v_DrawSeg], bx
     cmp ax, 1
     jne loc_0F5C1
     mov word ptr [v_50E6], 2Ch
@@ -20995,7 +21149,7 @@ sub_0F747:
     ret
 sub_0F762:
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov cx, 6
     mov si, 6CC4h
     mov di, 5CCCh
@@ -21064,27 +21218,27 @@ sub_0F823:
     or byte ptr [bx + 1], 80h
     mov word ptr [v_50CC], 0Bh
     mov bx, 907Ch
-    call far ptr fn_08516
+    call far ptr fn_FileCreate
     call far ptr fn_18F17
     jmp short loc_0F86B
 loc_0F856:
     mov word ptr [v_50CC], 0Bh
     mov bx, 907Ch
     mov al, 2
-    call far ptr fn_08538
+    call far ptr fn_FileOpen
     call far ptr fn_18F17
 loc_0F86B:
     mov ax, 944Fh
     mov bx, 904Bh
     call far ptr fn_18312
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 944Fh
     mov bx, 907Ch
     call far ptr fn_18312
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0BC78h
     mov bx, 904Bh
@@ -21098,11 +21252,11 @@ loc_0F86B:
 loc_0F8C5:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -21121,11 +21275,11 @@ loc_0F8C5:
 loc_0F924:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -21137,7 +21291,7 @@ loc_0F924:
     mov ax, word ptr [v_5152]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, 0AFF8h
     mov bx, 907Ch
@@ -21145,7 +21299,7 @@ loc_0F924:
     mov ax, word ptr [v_5152]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov word ptr [v_5566], 0
     mov ax, 0AFF8h
@@ -21165,11 +21319,11 @@ loc_0F9C8:
 loc_0F9D6:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     inc word ptr [v_9084]
@@ -21188,11 +21342,11 @@ loc_0F9D6:
     mov word ptr [v_9051], ax
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0F20h
     mov bx, 907Ch
@@ -21202,14 +21356,14 @@ loc_0F9D6:
     call far ptr fn_182F4
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov bx, 907Ch
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov bx, 907Ch
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
     mov word ptr [v_0CCA], 0
     call far ptr fn_13B8A
     call sub_0F7B1
@@ -21756,7 +21910,7 @@ loc_101EB:
     inc word ptr [v_506A]
     mov cx, 10h
     mov bl, 0D0h
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     mov word ptr [v_50EE], 5
     pop ax
     pop bx
@@ -21808,7 +21962,7 @@ loc_10269:
     mov bl, 0E0h
     mov cx, 20h
     mov si, 46C4h
-    call far ptr fn_15D51
+    call far ptr fn_WriteDAC
     call far ptr fn_17D5A
     mov word ptr [v_50EC], 5Bh
     pop bx
@@ -21835,12 +21989,12 @@ fn_10294:
     mov word ptr [v_0C30], 0
     mov word ptr [v_0C3C], 0
     mov word ptr [v_0CCC], 90h
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     and word ptr [v_505E], 0FBFFh
     or word ptr [v_505E], 1
     call far ptr fn_1217B
     call far ptr fn_13BE3
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_06342
     call sub_1061B
     call far ptr fn_13AC6
@@ -21888,7 +22042,7 @@ loc_10371:
 loc_1037B:
     cmp byte ptr [v_0B9A], 1Bh
     jne loc_103C4
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     and word ptr [v_505E], 0FFFEh
     call far ptr fn_10BF6
     call far ptr fn_126DE
@@ -21896,7 +22050,7 @@ loc_1037B:
     call far ptr fn_11836
     call far ptr fn_117AC
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     pop word ptr [v_40F4]
     pop word ptr [v_40F2]
     pop word ptr [v_0F12]
@@ -22094,7 +22248,7 @@ sub_105D0:
     mov ax, word ptr [v_0C30]
     mov word ptr [si], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, S1DEA
     mov es, ax
@@ -22267,7 +22421,7 @@ sub_107E4:
     mul word ptr [v_519A]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov si, word ptr [v_50DA]
     shl si, 1
@@ -22316,7 +22470,7 @@ sub_10876:
     mov ax, word ptr [v_0C30]
     mov word ptr [si], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov cx, 3
     mov ax, word ptr [v_0F08]
@@ -22383,7 +22537,7 @@ sub_10930:
     mov ax, word ptr [v_0C3C]
     mov word ptr [si + 2], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov cx, 3
     mov ax, word ptr [v_0F0C]
@@ -22405,7 +22559,7 @@ sub_1097F:
     ret
 loc_10988:
     mov word ptr [v_0B26], 1
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0CEC], 0
     xor dx, dx
@@ -22658,11 +22812,11 @@ loc_10C78:
     push cx
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov si, word ptr [v_0CF6]
     shl si, 1
@@ -22954,8 +23108,8 @@ loc_10F80:
     mov word ptr [v_0B24], 8
     mov word ptr [v_0CCC], 50h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov ax, word ptr [v_0C32]
     mov word ptr [v_0CCA], ax
     call far ptr fn_19E12
@@ -23648,8 +23802,8 @@ loc_11788:
     mov word ptr [v_50E6], 0F1h
     mov word ptr [v_50FE], 57h
     mov word ptr [v_0CC6], 0Fh
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B26], 1
     call far ptr fn_13E74
 loc_117AB:
@@ -23672,8 +23826,8 @@ loc_117C8:
     mov si, 0D00h
     mov word ptr [v_0B24], 8
     mov word ptr [v_0CCC], 90h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov cx, 7
 loc_117E6:
     push cx
@@ -23766,8 +23920,8 @@ sub_118C0:
     mov word ptr [v_0B24], 20h
     mov word ptr [v_0CCC], 90h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCA], 0
     test word ptr [v_94E5], 8000h
     jne loc_1190E
@@ -23999,14 +24153,14 @@ loc_11B62:
     ja loc_11B36
 loc_11B70:
     mov ax, 13h
-    int 10h
+    int 10h                 ; SEAM VIDEO: mode 13h (back from the intro)
     test word ptr [v_5068], 8000h
     jne loc_11B80
     jmp near ptr loc_11C09
 loc_11B80:
     mov ax, 8
     call sub_11CE3
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_11CA1
     cmp byte ptr [v_0B9A], 1Bh
     jne loc_11B96
@@ -24024,7 +24178,7 @@ loc_11BAA:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ah, 0
     int 1Ah
     mov ax, cx
@@ -24060,7 +24214,7 @@ loc_11BFB:
 loc_11C09:
     mov ax, 1
     call sub_11CE3
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_11CA1
     cmp byte ptr [v_0B9A], 1Bh
     jne loc_11C1F
@@ -24078,7 +24232,7 @@ loc_11C33:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     mov ah, 0
     int 1Ah
     mov ax, cx
@@ -24112,10 +24266,10 @@ loc_11C82:
     cmp bx, dx
     ja loc_11C58
 loc_11C90:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     and word ptr [v_5062], 0F7FFh
     mov ax, 13h
-    int 10h
+    int 10h                 ; SEAM VIDEO: mode 13h (restore)
     retf
 sub_11CA1:
     call far ptr fn_0D0FE
@@ -24130,8 +24284,8 @@ sub_11CBA:
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     call far ptr fn_19E12
     call far ptr fn_1A6B5
@@ -24144,7 +24298,7 @@ sub_11CE3:
     pop ax
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 3
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 S11B0 ends
@@ -24358,8 +24512,8 @@ loc_11F6D:
 fn_11F83:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0B1C], 4
@@ -24386,7 +24540,7 @@ fn_11FCC:
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     xor dx, dx
     mov ax, word ptr [v_50DA]
@@ -24400,7 +24554,7 @@ fn_11FCC:
     or byte ptr [si], al
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, word ptr [v_50DA]
     mov bx, word ptr [v_50DC]
@@ -24479,7 +24633,7 @@ fn_120EC:
     mov ax, 0B02Ah
     call far ptr fn_184D6
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov bx, 9093h
     mov ax, 0AFF8h
@@ -24488,7 +24642,7 @@ fn_120EC:
     mov al, byte ptr [v_B02E]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov byte ptr [v_B00C], 0
     mov bx, 0AFF8h
@@ -24525,12 +24679,12 @@ fn_1217B:
     call far ptr fn_13BE3
     retf
 loc_12194:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
 loc_12199:
     call far ptr fn_13AC6
     or word ptr [v_5064], 4
     mov ax, 0A000h
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     xor dx, dx
     mov bx, word ptr [v_51A2]
     mov ax, word ptr [v_94E7]
@@ -24566,11 +24720,11 @@ loc_12205:
     push cx
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     push cs
     call fn_1244A
@@ -24697,14 +24851,14 @@ loc_123BB:
     je loc_123C4
     retf
 loc_123C4:
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_06342
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_1A6B5
     call far ptr fn_13BE3
-    call far ptr fn_15B94
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    call far ptr fn_FadeIn
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     retf
 fn_123E9:
     test word ptr [v_946F], 100h
@@ -24713,21 +24867,21 @@ fn_123E9:
     call far ptr fn_13BE3
     retf
 loc_123FA:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0B26], 0
     mov ax, 0A000h
-    mov word ptr [v_50D2], ax
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B22], 0
     mov word ptr [v_0B24], 0
     mov word ptr [v_0CCA], 6
     call far ptr fn_19E12
     call sub_1255F
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_06342
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     call far ptr fn_13BE3
     retf
 fn_1244A:
@@ -24877,8 +25031,8 @@ sub_125C7:
     mov word ptr [v_0B26], 1
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov bx, 7D81h
     mov cx, 3
     call far ptr fn_13E8C
@@ -24915,17 +25069,17 @@ loc_12637:
     mov word ptr [v_0B24], 43h
     mov word ptr [v_0CCC], 80h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_19E12
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov di, 53C0h
     add di, 0EFh
     mov si, di
-    mov es, word ptr [v_0CAA]
-    mov ax, word ptr [v_50B8]
+    mov es, word ptr [v_EMSFrameSeg]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     mov cx, 10h
 loc_1267B:
@@ -24951,16 +25105,16 @@ fn_12691:
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     call far ptr fn_19E12
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     xor di, di
-    mov ds, word ptr [v_50B8]
+    mov ds, word ptr [v_WorkSeg]
     xor si, si
     mov cx, 7D00h
     rep movsw
@@ -24980,12 +25134,12 @@ fn_126DE:
     push di
     push es
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_50B8]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_WorkSeg]
     xor di, di
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     xor si, si
     mov cx, 7D00h
     rep movsw
@@ -25005,13 +25159,13 @@ fn_1270C:
     push di
     push es
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     mov ax, 0AF0h
     mov bx, ax
-    mov es, word ptr [v_50B8]
-    mov ds, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov cx, 3Ah
 loc_1272E:
     push cx
@@ -25038,10 +25192,10 @@ fn_1274F:
     push si
     push di
     push es
-    push word ptr [v_50D2]
+    push word ptr [v_DrawSeg]
     push ds
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     cmp word ptr [bx], 0
     jne loc_1276B
     jmp near ptr loc_128C0
@@ -25145,13 +25299,13 @@ loc_1288D:
     mov bx, 7AB1h
     call far ptr fn_13E74
 loc_128C0:
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_EMSFrameSeg]
     mov bx, 0B908h
     mov cx, 31h
-    mov ax, word ptr [v_50B8]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
 loc_128DB:
     push cx
@@ -25163,7 +25317,7 @@ loc_128DB:
     pop cx
     loop loc_128DB
     pop ds
-    pop word ptr [v_50D2]
+    pop word ptr [v_DrawSeg]
     pop es
     pop di
     pop si
@@ -25175,8 +25329,8 @@ sub_128FB:
     mov word ptr [v_0B22], 0F8h
     mov word ptr [v_0B24], 9
     mov word ptr [v_0CCC], 60h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B26], 1
     call far ptr fn_19E12
     ret
@@ -25252,7 +25406,7 @@ sub_12A06:
     mov word ptr [v_0B24], ax
     mov ax, word ptr [di + 46h]
     mov word ptr [v_0B22], ax
-    mov es, word ptr [v_50D2]
+    mov es, word ptr [v_DrawSeg]
     mov ax, 140h
     mul word ptr [v_0B24]
     add ax, word ptr [v_0B22]
@@ -25397,8 +25551,8 @@ loc_12B54:
     call far ptr fn_1C211
     mov word ptr [v_0B26], 5
     mov word ptr [v_0B24], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 10h
     mov cx, 4
     mov di, 0BC78h
@@ -25605,7 +25759,7 @@ loc_12D94:
     call far ptr fn_1852C
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, si
     add ax, 32h
@@ -25613,7 +25767,7 @@ loc_12D94:
     call far ptr fn_1850E
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, word ptr [v_50C8]
     shl ax, 1
@@ -25750,7 +25904,7 @@ fn_12EFF:
     mov bx, 904Bh
     call far ptr fn_1836E
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov cx, dx
     mov ah, 80h
@@ -25758,7 +25912,7 @@ fn_12EFF:
     not ah
     and byte ptr [v_AFF8], ah
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     pop dx
     pop cx
@@ -25778,14 +25932,14 @@ sub_12F48:
     mov bx, 904Bh
     call far ptr fn_1836E
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov cx, dx
     mov ah, 80h
     shr ah, cl
     or byte ptr [v_AFF8], ah
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     pop dx
     pop cx
@@ -25805,7 +25959,7 @@ fn_12F8F:
     mov bx, 904Bh
     call far ptr fn_1836E
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov cx, dx
     mov ah, 80h
@@ -26233,8 +26387,8 @@ fn_1345B:
 loc_1346E:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0B1C], 4
@@ -26329,8 +26483,8 @@ fn_135B2:
     push di
     push es
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     or word ptr [v_505E], 100h
     call far ptr fn_06EA4
     mov word ptr [v_50E6], 0F1h
@@ -26491,7 +26645,7 @@ sub_1374C:
     push dx
     push di
     push es
-    mov es, word ptr [v_50D2]
+    mov es, word ptr [v_DrawSeg]
     mov ax, 140h
     mul word ptr [v_0B24]
     add ax, word ptr [v_0B22]
@@ -26891,7 +27045,7 @@ fn_13B8A:
     mov word ptr [v_906D], ax
     mov bx, 9061h
     mov word ptr [v_50CC], 2
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     pop bx
     test word ptr [v_40F6], 2
@@ -27195,8 +27349,8 @@ fn_13E2F:
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B1C], 4
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     call far ptr fn_13AC6
@@ -27251,9 +27405,9 @@ loc_13EC2:
 S13D9 ends
 S13EC segment byte use16
 fn_13EC4:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_1585A
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     jmp short loc_13ED6
 loc_13ED3:
     call sub_1585A
@@ -27283,7 +27437,7 @@ loc_13EDE:
     cmp byte ptr [v_0B9A], 51h
     jne loc_13ED3
 loc_13F28:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     retf
 fn_13F2E:
     mov word ptr [v_5056], 74h
@@ -27335,14 +27489,14 @@ fn_13F2E:
     call far ptr fn_13D92
     call far ptr fn_13BE3
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     jmp short loc_140A3
 loc_1402D:
     call far ptr fn_13AC6
     call sub_146A1
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 19h
     mov word ptr [v_0CC6], 8Ah
@@ -27383,7 +27537,7 @@ loc_140C9:
     cmp ax, 11h
     jne loc_140A3
 loc_140D3:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     retf
 loc_140D9:
     mov cx, 0Eh
@@ -27427,8 +27581,8 @@ loc_14149:
     call far ptr fn_13AC6
     call sub_146A1
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 19h
     mov word ptr [v_0CC6], 8Ah
@@ -27504,7 +27658,7 @@ loc_14226:
     add si, 4
     loop loc_14226
     call sub_146D9
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     mov bx, 904Bh
     mov ax, 944Fh
     mov word ptr [bx + 4], ax
@@ -27513,7 +27667,7 @@ loc_14226:
     mov word ptr [bx + 8], 0
     mov word ptr [bx + 6], 1388h
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     retf
 sub_1426E:
@@ -27883,12 +28037,12 @@ sub_146A1:
     push si
     push es
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_50B8]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_WorkSeg]
     mov di, 1F40h
-    mov ds, word ptr [v_0CAA]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov si, di
     mov cx, 0AFh
 loc_146C2:
@@ -28326,7 +28480,7 @@ loc_14C36:
     mov word ptr [v_9057], ax
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov si, 0AFF8h
     cmp word ptr [si + 2], 0
@@ -28351,8 +28505,8 @@ loc_14C99:
     jmp near ptr loc_149EC
 sub_14CA1:
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call sub_146A1
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 19h
@@ -28362,7 +28516,7 @@ sub_14CA1:
     call far ptr fn_1A6B5
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B1C], 33h
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov word ptr [v_0B26], 0
     mov word ptr [v_50E6], 8
     mov word ptr [v_50FE], 33h
@@ -28392,8 +28546,8 @@ loc_14D37:
     add bx, 0
     call far ptr fn_13D7A
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 9Ch
     mov word ptr [v_50FE], 1Ah
@@ -28523,8 +28677,8 @@ loc_14ECA:
     mov word ptr [v_0B22], 74h
     mov word ptr [v_0B24], 13h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 70h
     call far ptr fn_19E12
     mov byte ptr [v_0B9A], 0
@@ -29003,8 +29157,8 @@ loc_155AB:
     call sub_146A1
     or word ptr [v_5064], 8000h
     call sub_14CA1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     and word ptr [v_5064], 7FFFh
     jmp near ptr sub_15419
 loc_155C6:
@@ -29017,7 +29171,7 @@ loc_155C6:
     mov word ptr [bx + 8], 0
     mov word ptr [bx + 6], 1388h
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov byte ptr [v_0B9A], 0
     ret
@@ -29303,7 +29457,7 @@ fn_1591E:
     mov ax, 0AFF8h
     call far ptr fn_18584
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, word ptr [v_AFF8]
     call far ptr fn_18800
@@ -29474,7 +29628,7 @@ loc_15A86:
     mov ax, word ptr [v_40E6]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BC7Ah
     mov cx, 8
@@ -29503,7 +29657,7 @@ sub_15AD5:
     mov ax, word ptr [di + 2]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BC9Ch
     mov cx, 8
@@ -29539,7 +29693,7 @@ sub_15B2E:
     mov ax, word ptr [di + 2]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov di, 0BCBEh
     mov cx, 8
@@ -29563,7 +29717,35 @@ loc_15B75:
     ret
 S15A5 ends
 S15B7 segment byte use16
-fn_15B78:
+; ===========================================================================
+; Palette service
+;
+; Four 768-byte palette buffers:
+;   4124h v_PalCurrent - palette on the DAC (fade source)
+;   4424h v_PalTarget  - palette read from the data files (fade target)
+;   4754h v_PalOutput  - fade-in staging buffer (written to the DAC)
+;   4D56h v_4D56     - general palette work buffer
+;
+; Fades run in passes: AX = mode, BX = passes, CX = entries, DX = first entry.
+; Each pass steps every component once and writes the live buffer to the DAC:
+;   0  show 4124h, then fade it down to black
+;   1  fade in to 4424h via 4D56h/4754h
+;   2  show 4124h, then fade up to 4424h
+;   3  fade down (no show)
+;   4  fade up (no show)
+;   5  fade 4D56h down to 4424h
+; fn_FadeOut/fn_FadeIn wrap modes 0 and 1 (63 passes x 256 entries).
+;
+; The DAC is written through ports 3C8h/3C9h (fn_WriteDAC) or the BIOS block
+; call int 10h AX=1017h (sub_SetDACBlock).
+; ===========================================================================
+; ---------------------------------------------------------------------------
+; fn_FadeOut (0x15B78) - fade the screen palette to black.
+; in:  -
+; out: -
+; Mode 0: 63 passes x 256 entries from entry 0; clears v_50F6 bit 1000h.
+; ---------------------------------------------------------------------------
+fn_FadeOut:
     push cx
     push dx
     and word ptr [v_50F6], 0EFFFh
@@ -29571,59 +29753,74 @@ fn_15B78:
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     pop dx
     pop cx
     retf
-fn_15B94:
+; ---------------------------------------------------------------------------
+; fn_FadeIn (0x15B94) - fade from black to the target palette (4424h).
+; in:  -
+; out: -
+; Mode 1: 63 passes x 256 entries; sets v_50F6 bit 1000h.
+; ---------------------------------------------------------------------------
+fn_FadeIn:
     push cx
     push dx
     mov ax, 1
     mov bx, 3Fh
     mov cx, 100h
     mov dx, 0
-    call far ptr fn_15BB0
+    call far ptr fn_PaletteFade
     or word ptr [v_50F6], 1000h
     pop dx
     pop cx
     retf
-fn_15BB0:
+; ---------------------------------------------------------------------------
+; fn_PaletteFade (0x15BB0) - palette fade/transition engine.
+; in:  AX = mode 0..5 (see the module banner), BX = passes, CX = entries,
+;      DX = first entry
+; out: -
+; Steps the source palette one component per pass and writes it to the DAC;
+; mode 1 first fills the 4D56h work buffer from the target (target - 63).
+; ---------------------------------------------------------------------------
+fn_PaletteFade:
     push si
     push di
     push es
-    mov word ptr [v_411E], bx
-    mov word ptr [v_411C], cx
-    mov word ptr [v_4110], cx
+    mov word ptr [v_411E], bx       ; passes
+    mov word ptr [v_411C], cx       ; entries
+    mov word ptr [v_4110], cx       ; bytes = entries * 3
     add word ptr [v_4110], cx
     add word ptr [v_4110], cx
-    mov word ptr [v_0CC8], dx
-    mov word ptr [v_4A54], dx
+    mov word ptr [v_0CC8], dx       ; first entry
+    mov word ptr [v_4A54], dx       ; byte offset = first entry * 3
     add word ptr [v_4A54], dx
     add word ptr [v_4A54], dx
-    mov es, word ptr [v_0C44]
+    mov es, word ptr [v_0C44]       ; ES = DGROUP (BIOS palette tables)
+    ; mode dispatch (AX)
     cmp ax, 0
     jne loc_15BE2
-    jmp short loc_15C0C
+    jmp short loc_15C0C        ; 0: show 4124h, fade down to black
 loc_15BE2:
     cmp ax, 1
     jne loc_15BE9
-    jmp short loc_15C4F
+    jmp short loc_15C4F        ; 1: fade in to 4424h via 4D56h/4754h
 loc_15BE9:
     cmp ax, 2
     jne loc_15BF1
-    jmp near ptr loc_15CC5
+    jmp near ptr loc_15CC5     ; 2: show 4124h, fade up to 4424h
 loc_15BF1:
     cmp ax, 3
     jne loc_15BF8
-    jmp short loc_15C12
+    jmp short loc_15C12        ; 3: fade down (no show)
 loc_15BF8:
     cmp ax, 4
     jne loc_15C00
-    jmp near ptr loc_15CCB
+    jmp near ptr loc_15CCB     ; 4: fade up (no show)
 loc_15C00:
     cmp ax, 5
     jne loc_15C08
-    jmp near ptr loc_15D13
+    jmp near ptr loc_15D13     ; 5: fade 4D56h down to 4424h
 loc_15C08:
     pop es
     pop di
@@ -29631,7 +29828,7 @@ loc_15C08:
     retf
 loc_15C0C:
     mov dx, 4124h
-    call sub_15D71
+    call sub_SetDACBlock
 loc_15C12:
     mov cx, word ptr [v_411E]
 loc_15C16:
@@ -29658,7 +29855,7 @@ loc_15C37:
     mov si, 4124h
     add si, word ptr [v_4A54]
     push cs
-    call fn_15D51
+    call fn_WriteDAC
     pop cx
     loop loc_15C16
     jmp short loc_15C08
@@ -29707,7 +29904,7 @@ loc_15C9D:
     mov si, 4754h
     add si, word ptr [v_4A54]
     push cs
-    call fn_15D51
+    call fn_WriteDAC
     pop cx
     loop loc_15C6F
     mov di, 4754h
@@ -29717,7 +29914,7 @@ loc_15C9D:
     jmp near ptr loc_15C08
 loc_15CC5:
     mov dx, 4124h
-    call sub_15D71
+    call sub_SetDACBlock
 loc_15CCB:
     mov cx, word ptr [v_411E]
 loc_15CCF:
@@ -29748,7 +29945,7 @@ loc_15CFA:
     mov si, 4124h
     add si, word ptr [v_4A54]
     push cs
-    call fn_15D51
+    call fn_WriteDAC
     pop cx
     loop loc_15CCF
     jmp near ptr loc_15C08
@@ -29776,37 +29973,48 @@ loc_15D34:
     mov si, 4D56h
     add si, word ptr [v_4A54]
     push cs
-    call fn_15D51
+    call fn_WriteDAC
     pop cx
     loop loc_15D17
     jmp near ptr loc_15C08
-fn_15D51:
-    test word ptr [v_5062], 800h
+; ---------------------------------------------------------------------------
+; fn_WriteDAC (0x15D51) - write palette entries through the VGA DAC.
+; in:  BL = first entry, CX = entry count, CS:SI -> RGB triples
+; out: -
+; Waits for vertical retrace first while v_5062 bit 800h is set.
+; ---------------------------------------------------------------------------
+fn_WriteDAC:
+    test word ptr [v_5062], 800h    ; bit 800h: retrace wait enabled
     je loc_15D61
     mov dx, 3DAh
 loc_15D5C:
-    in al, dx
+    in al, dx                       ; SEAM VIDEO: retrace status (3DAh)
     test al, 8
     je loc_15D5C
 loc_15D61:
     mov dx, 3C8h
     mov al, bl
-    out dx, al
+    out dx, al                      ; SEAM VIDEO: palette index (3C8h)
     inc dx
 loc_15D68:
     lodsb
-    out dx, al
+    out dx, al                      ; SEAM VIDEO: palette data (3C9h)
     lodsb
     out dx, al
     lodsb
     out dx, al
     loop loc_15D68
     retf
-sub_15D71:
+; ---------------------------------------------------------------------------
+; sub_SetDACBlock (0x15D71) - set all 256 DAC entries via the BIOS.
+; in:  ES:DX -> 768-byte RGB table
+; out: -
+; ---------------------------------------------------------------------------
+sub_SetDACBlock:
     xor bx, bx
     mov cx, 100h
     mov ax, 1017h
-    int 10h
+    int 10h                 ; SEAM VIDEO: set palette block (1017h)
     ret
 S15B7 ends
 S15D7 segment byte use16
@@ -29843,18 +30051,26 @@ loc_15DBF:
 S15D7 ends
 S15DC segment byte use16
     db 0h
+; ---------------------------------------------------------------------------
+; fn_15DC2 (0x15DC2) - intro logo effect (LOGO.PCX in VBE mode 101h).
+; in:  -
+; out: -
+; Switches to VBE 101h (640x480x256), decodes the logo into video memory as
+; RLE runs (banked via sub_15F1F), then loads the 768-byte palette from the
+; end of the file into v_4D56 (8-bit -> 6-bit) for sub_WriteDAC768.
+; ---------------------------------------------------------------------------
 fn_15DC2:
     mov word ptr [v_F792], 0
     mov ax, 4F02h
     mov bx, 101h
-    int 10h
+    int 10h                 ; SEAM VIDEO: VBE mode 101h (640x480x256)
     cmp ax, 4Fh
     jne loc_15DFC
     call sub_15F71
     cmp word ptr [v_F792], 0
     je loc_15DFC
     call sub_15DFD
-    call sub_15F5F
+    call sub_WriteDAC768
     mov dx, 0F7A2h
     mov ax, 4100h
     int 21h
@@ -29983,11 +30199,17 @@ loc_15F13:
     cmp byte ptr [v_F784], 0
     jne loc_15EE2
     ret
+; ---------------------------------------------------------------------------
+; sub_15F1F (0x15F1F) - select VBE window A page (bank switch).
+; in:  DI = 64 KB page number (the high word of the linear framebuffer offset)
+; out: -
+; The intro effect draws through A000h with DI:SI as a banked 32-bit offset.
+; ---------------------------------------------------------------------------
 sub_15F1F:
     mov ax, 4F05h
     mov bx, 0
     mov dx, di
-    int 10h
+    int 10h                 ; SEAM VIDEO: VBE window A page (4F05h)
     ret
 loc_15F2A:
     mov ah, 42h
@@ -30012,15 +30234,21 @@ loc_15F56:
     mov bx, word ptr [v_F478]
     int 21h
     ret
-sub_15F5F:
+; ---------------------------------------------------------------------------
+; sub_WriteDAC768 (0x15F5F) - write the 768-byte palette at v_4D56 to the DAC.
+; in:  -
+; out: -
+; Used by the intro player; plain port writes, no retrace wait.
+; ---------------------------------------------------------------------------
+sub_WriteDAC768:
     lea si, [v_4D56]
     mov dx, 3C8h
     mov al, 0
-    out dx, al
+    out dx, al              ; SEAM VIDEO: palette index 0 (3C8h)
     inc dx
     mov cx, 300h
     cld
-    rep outsb
+    rep outsb               ; SEAM VIDEO: 768 palette bytes (3C9h)
     ret
 sub_15F71:
     mov word ptr [v_F792], 0
@@ -30037,13 +30265,13 @@ loc_15F81:
     mov ax, 0
     call far ptr fn_181C4
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     mov bx, 0F794h
-    call far ptr fn_08516
+    call far ptr fn_FileCreate
     mov bx, 0F794h
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     mov bx, 0F794h
-    call far ptr fn_084EA
+    call far ptr fn_FileClose
     pop word ptr [v_9095]
     ret
 S15DC ends
@@ -30518,7 +30746,7 @@ fn_16532:
     mov ax, word ptr [v_95FF]
     mov word ptr [bx + 8], ax
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov ax, word ptr [v_95FF]
     mov bx, word ptr [v_AFF8]
@@ -30555,8 +30783,8 @@ fn_1658F:
     and word ptr [v_5060], 7FFFh
     mov word ptr [v_0CCC], 60h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov ax, word ptr [v_5056]
     mov word ptr [v_0B22], ax
     mov ax, word ptr [v_505A]
@@ -31062,7 +31290,7 @@ loc_16B70:
     sub ax, word ptr [v_5118]
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_16B94:
     mov ax, word ptr [v_5070]
@@ -31241,7 +31469,7 @@ sub_16D56:
     mov bx, 904Bh
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_16D74:
@@ -31300,7 +31528,7 @@ sub_16E04:
     add ax, 4
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_16E2E:
     mov word ptr [di], 0
@@ -31612,7 +31840,7 @@ loc_1711A:
 sub_1711E:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     ret
 sub_17132:
@@ -31717,7 +31945,7 @@ fn_17264:
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 66h
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, 0AFF8h
     mov ax, 0B22h
     mov cx, 5
@@ -31735,7 +31963,7 @@ loc_172B3:
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 6Ch
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, 0AFF8h
     mov ax, 0B24h
     mov cx, 5
@@ -31767,7 +31995,7 @@ fn_17321:
     mov word ptr [v_50E6], 0FAh
     mov word ptr [v_50FE], 6Ah
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, 0AFF8h
     mov ax, 0CCAh
     mov cx, 4
@@ -31795,7 +32023,7 @@ loc_1735D:
     mul word ptr [v_51AC]
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov es, word ptr [v_0CFC]
     mov ax, 4
@@ -31809,7 +32037,7 @@ loc_1735D:
     mov word ptr [si + 2], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_173DE:
     call far ptr fn_126DE
@@ -31824,7 +32052,7 @@ fn_173F8:
     mov word ptr [v_50E6], 0FAh
     mov word ptr [v_50FE], 6Ah
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, 0AFF8h
     mov ax, 0CCAh
     mov cx, 4
@@ -31853,7 +32081,7 @@ loc_17434:
     mov word ptr [bx + 6], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov es, word ptr [v_0CFC]
     mov ax, 4
@@ -31867,7 +32095,7 @@ loc_17434:
     mov word ptr [si + 2], ax
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_174B9:
     call far ptr fn_126DE
@@ -31882,7 +32110,7 @@ fn_174D3:
     mov word ptr [v_50E6], 0FAh
     mov word ptr [v_50FE], 6Ah
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, 0AFF8h
     mov ax, 50C8h
     mov cx, 4
@@ -31923,11 +32151,11 @@ fn_1755C:
     push ds
     and word ptr [v_946F], 9FFFh
     or word ptr [v_946F], 1000h
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_50B8]
-    mov ds, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_WorkSeg]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov bx, 0AF0h
     mov cx, 3Ah
 loc_17586:
@@ -31963,8 +32191,8 @@ loc_175C1:
     mov word ptr [v_0B22], 0F8h
     mov word ptr [v_0B24], 9
     mov word ptr [v_0CCC], 60h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B26], 1
     mov word ptr [v_0CCA], 14h
     call far ptr fn_19E12
@@ -32015,8 +32243,8 @@ fn_1765A:
     push si
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0B1C], 4
@@ -32570,14 +32798,14 @@ sub_17C7F:
     mov bx, 904Bh
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_17C9D:
     mov word ptr [v_9053], ax
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     cmp dx, 0
     je loc_17CF8
@@ -32609,7 +32837,7 @@ loc_17CF8:
 loc_17D07:
     mov bx, 904Bh
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_17D1A:
     ret
@@ -33575,8 +33803,8 @@ loc_185BF:
     or word ptr [v_505E], 100h
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 7Eh
     mov ax, word ptr [v_0CF6]
@@ -33677,8 +33905,8 @@ fn_18709:
     call sub_186B6
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
     mov ax, word ptr [v_50E4]
@@ -33724,11 +33952,11 @@ fn_187B0:
     push dx
     push cx
     push ds
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55D4h
-    call far ptr fn_0235B
-    mov es, word ptr [v_50B8]
-    mov ds, word ptr [v_0CAA]
+    call far ptr fn_EMSMapPages
+    mov es, word ptr [v_WorkSeg]
+    mov ds, word ptr [v_EMSFrameSeg]
     mov bx, 78F0h
     mov cx, 3Ch
 loc_187D0:
@@ -33784,7 +34012,7 @@ loc_1881D:
     call far ptr fn_180F9
     mov bx, 9093h
     mov word ptr [v_50CC], 7
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     pop word ptr [v_9095]
     mov es, word ptr [v_40F8]
@@ -33926,7 +34154,7 @@ loc_1898F:
     call far ptr fn_183BD
     mov word ptr [v_50CC], 7
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov es, word ptr [v_50CA]
     mov di, word ptr es:[14h]
@@ -34016,7 +34244,7 @@ loc_18AA3:
     add ax, 2
     mov bx, ax
     mov word ptr [v_50CC], 1
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_40F8], ax
     or word ptr [v_94D5], 3
     and word ptr [v_94D5], 0FFBFh
@@ -34026,12 +34254,12 @@ sub_18ACE:
     call far ptr fn_181A6
     mov bx, 9Ch
     mov word ptr [v_50CC], 1
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_9095], ax
     mov word ptr [v_F7B0], ax
     mov bx, 9093h
     mov word ptr [v_50CC], 8
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     db 0C7h,6h,95h,90h
     dw S1DEA
@@ -34072,7 +34300,7 @@ loc_18B57:
     add ax, 2
     mov bx, ax
     mov word ptr [v_50CC], 1
-    call far ptr fn_06324
+    call far ptr fn_DOSAlloc
     mov word ptr [v_50CA], ax
     or word ptr [v_94D5], 0Ch
     and word ptr [v_94D5], 0FF7Fh
@@ -34239,7 +34467,7 @@ loc_18F36:
     int 33h
 loc_18F53:
     mov ax, 3
-    int 10h
+    int 10h                 ; SEAM VIDEO: mode 3 (text, error exit)
     pop dx
     push ds
     push cs
@@ -34595,7 +34823,7 @@ sub_1924B:
     mov ax, 0AFF8h
     call far ptr fn_184D6
     mov word ptr [v_50CC], 9
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     xor ax, ax
     mov al, byte ptr [v_AFFD]
@@ -34676,8 +34904,8 @@ loc_192EE:
     mov word ptr [v_50DA], 0Ch
     mov word ptr [v_50DC], 8
 loc_1937D:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B24], 8
     mov word ptr [v_0B26], 0
     mov word ptr [v_0CCC], 90h
@@ -34980,7 +35208,7 @@ sub_1973D:
     push word ptr [v_0B9C]
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov si, word ptr [v_0B9C]
     shl si, 1
@@ -34988,7 +35216,7 @@ sub_1973D:
     add si, word ptr [v_9097]
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     xor dx, dx
     mov ax, word ptr [v_0B9C]
@@ -35108,11 +35336,11 @@ loc_1987A:
     add si, word ptr [v_9097]
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_50CC], 0Ah
     mov bx, 904Bh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     xor dx, dx
     mov ax, word ptr [v_0B9C]
@@ -35229,8 +35457,8 @@ fn_199FB:
     mov word ptr [v_50FE], 60h
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_13AC6
     pop cx
     pop bx
@@ -35342,7 +35570,7 @@ sub_19B18:
     add ax, 4
     call far ptr fn_183A4
     mov word ptr [v_50CC], 0Bh
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
 loc_19B40:
     ret
@@ -35589,7 +35817,7 @@ loc_19DC8:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov cx, 1
     mov bx, 7BB1h
@@ -35629,12 +35857,12 @@ fn_19E12:
     mov bx, word ptr [v_0B24]
     call sub_1AC1B
     mov di, ax
-    mov es, word ptr [v_50D2]
+    mov es, word ptr [v_DrawSeg]
     mov bx, 7834h
     add bx, word ptr [v_0CCC]
     mov cx, word ptr [bx + 0Ah]
     mov bx, word ptr [bx + 8]
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     cmp word ptr [v_0B26], 0
     je loc_19EB0
     cmp word ptr [v_0B26], 1
@@ -35897,7 +36125,7 @@ fn_1A03C:
     add si, word ptr [v_0CEC]
     mov si, word ptr [si]
     add si, ax
-    mov es, word ptr [v_50D2]
+    mov es, word ptr [v_DrawSeg]
     mov ax, word ptr [v_50E6]
     mov bx, word ptr [v_50FE]
     call sub_1AC1B
@@ -35936,7 +36164,7 @@ loc_1A088:
     pop ax
     retf
 fn_1A0A0:
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov ah, 49h
     int 21h
     retf
@@ -35955,9 +36183,9 @@ fn_1A0A9:
     jne loc_1A0D6
     mov word ptr [bp - 4], 0
     mov word ptr [v_50B4], 7
-    mov dx, word ptr [v_0C9C]
+    mov dx, word ptr [v_EMSWorkHandle]
     mov bx, 55FAh
-    call far ptr fn_0235B
+    call far ptr fn_EMSMapPages
     jmp short loc_1A0E3
 loc_1A0D6:
     mov bx, 7834h
@@ -35965,7 +36193,7 @@ loc_1A0D6:
     call sub_1AC27
     mov word ptr [bp - 4], si
 loc_1A0E3:
-    mov bx, word ptr [v_0CAA]
+    mov bx, word ptr [v_EMSFrameSeg]
     mov word ptr [bp - 2], bx
     mov bx, 7834h
     add bx, word ptr [v_0CCC]
@@ -35989,7 +36217,7 @@ loc_1A120:
     mov word ptr [bp - 2Ah], bx
     mov ax, word ptr [v_50B6]
     mov word ptr [bp - 0Eh], ax
-    mov bx, word ptr [v_50D2]
+    mov bx, word ptr [v_DrawSeg]
     mov word ptr [bp - 6], bx
     mov ax, ss
     mov es, ax
@@ -36469,7 +36697,7 @@ fn_1A590:
     push bp
     mov bp, sp
     sub sp, 22h
-    mov es, word ptr [v_50D2]
+    mov es, word ptr [v_DrawSeg]
     cmp word ptr [v_0CCC], 40h
     je loc_1A618
     push word ptr [v_5082]
@@ -36480,7 +36708,7 @@ fn_1A590:
     push word ptr [v_508C]
     mov ax, word ptr [v_508E]
     mov byte ptr [bp - 21h], al
-    mov ds, word ptr [v_50D2]
+    mov ds, word ptr [v_DrawSeg]
     mov word ptr [bp - 4], 0A08h
     mov word ptr [bp - 8], 0A08h
     mov cx, 0Ah
@@ -36519,7 +36747,7 @@ loc_1A618:
     push word ptr [v_5084]
     mov ax, word ptr [v_5082]
     mov byte ptr [bp - 21h], al
-    mov ds, word ptr [v_50D2]
+    mov ds, word ptr [v_DrawSeg]
     mov word ptr [bp - 4], 5788h
     mov word ptr [bp - 8], 5788h
     mov cx, 4
@@ -36603,7 +36831,7 @@ loc_1A6DD:
     mov si, ax
     mov di, 0E08h
     mov es, word ptr [v_0C44]
-    mov ds, word ptr [v_50B8]
+    mov ds, word ptr [v_WorkSeg]
     mov cx, 10h
 loc_1A705:
     push cx
@@ -36620,7 +36848,7 @@ loc_1A718:
     pop di
     push di
     mov si, 3FE0h
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov cx, 10h
 loc_1A729:
     push cx
@@ -36657,7 +36885,7 @@ loc_1A763:
     xor di, di
     mov ax, 0A000h
     mov es, ax
-    mov ds, word ptr [v_50B8]
+    mov ds, word ptr [v_WorkSeg]
     mov cx, 7D00h
     rep movsw
     mov ax, S1DEA
@@ -36666,7 +36894,7 @@ loc_1A763:
     je loc_1A7A5
     pop di
     mov si, 0E08h
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     mov cx, 10h
 loc_1A78D:
     push cx
@@ -37275,16 +37503,16 @@ loc_1AC4A:
     inc bx
     add si, 4
     inc ax
-    cmp ax, word ptr [v_0CA8]
+    cmp ax, word ptr [v_EMSCachePages]
     jg loc_1AC59
     loop loc_1AC4A
 loc_1AC59:
     mov si, 55B2h
     mov ax, 5000h
     mov cx, bx
-    mov dx, word ptr [v_0C9E]
+    mov dx, word ptr [v_EMSCacheHandle]
     int 67h
-    mov word ptr [v_0C9A], 0
+    mov word ptr [v_EMSLastMapTable], 0
     mov si, word ptr es:[di + 4]
     ret
 loc_1AC72:
@@ -37299,7 +37527,7 @@ loc_1AC88:
     mov ax, word ptr [v_0CCA]
     mov word ptr es:[di], ax
     mov word ptr [v_9069], ax
-    mov ax, word ptr [v_0CAA]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov word ptr [v_9063], ax
     mov ax, word ptr es:[di + 4]
     mov word ptr [v_9065], ax
@@ -37318,20 +37546,20 @@ loc_1ACBD:
     inc bx
     add si, 4
     inc ax
-    cmp ax, word ptr [v_0CA8]
+    cmp ax, word ptr [v_EMSCachePages]
     jg loc_1ACCC
     loop loc_1ACBD
 loc_1ACCC:
     mov si, 55B2h
     mov ax, 5000h
     mov cx, bx
-    mov dx, word ptr [v_0C9E]
+    mov dx, word ptr [v_EMSCacheHandle]
     int 67h
-    mov word ptr [v_0C9A], 0
+    mov word ptr [v_EMSLastMapTable], 0
     mov si, word ptr es:[di + 4]
     mov bx, 9061h
     mov word ptr [v_50CC], 2
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 fn_1ACF8:
@@ -37471,7 +37699,7 @@ loc_1AE42:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_1916C
     test word ptr [v_556A], 80h
@@ -37814,8 +38042,8 @@ loc_1B1E9:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B1C], 4
     mov word ptr [v_0CC6], 8Ah
     mov word ptr [v_50E6], 0F0h
@@ -38019,8 +38247,8 @@ loc_1B48D:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38035,8 +38263,8 @@ sub_1B4C8:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38071,8 +38299,8 @@ sub_1B552:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38096,8 +38324,8 @@ sub_1B5C3:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38119,8 +38347,8 @@ sub_1B634:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38179,8 +38407,8 @@ sub_1B719:
     call far ptr fn_06EA4
     or word ptr [v_505E], 100h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CC6], 0Fh
     mov word ptr [v_50E6], 0F0h
     mov word ptr [v_50FE], 60h
@@ -38373,7 +38601,7 @@ fn_1B9D0:
     call far ptr fn_181E2
     mov word ptr [v_50CC], 9
     mov bx, 9093h
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     mov word ptr [v_963B], 0
     mov word ptr [v_963D], 0
@@ -38405,7 +38633,7 @@ loc_1BA18:
     mov ax, 944Fh
     mov bx, 904Bh
     call far ptr fn_18312
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0AFF8h
     mov bx, 904Bh
@@ -38419,7 +38647,7 @@ loc_1BA18:
     mov cx, 90h
 loc_1BABA:
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [bx + 8]
     loop loc_1BABA
@@ -38436,7 +38664,7 @@ loc_1BABA:
     mov cx, 10h
 loc_1BAF7:
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [v_9053]
     loop loc_1BAF7
@@ -38451,7 +38679,7 @@ loc_1BAF7:
     call far ptr fn_1834F
     mov word ptr [bx + 6], 284h
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov es, word ptr [v_0C44]
     mov di, 0AFF8h
@@ -38470,7 +38698,7 @@ loc_1BB68:
     mov word ptr [bx + 6], cx
 loc_1BB71:
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     inc word ptr [bx + 8]
     sub cx, 0BB8h
@@ -38486,7 +38714,7 @@ loc_1BB71:
     xor ax, ax
     rep stosb
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     mov ax, 0F20h
     mov bx, 904Bh
@@ -38497,7 +38725,7 @@ loc_1BB71:
     xor ax, ax
     rep stosw
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     or word ptr [v_5060], 400h
     or word ptr [v_5060], 100h
@@ -38537,7 +38765,7 @@ loc_1BC40:
     mov word ptr [v_0B24], 17h
     mov word ptr [v_0B26], 1
     mov word ptr [v_0CCC], 10h
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     mov bx, word ptr [v_0CE2]
     test word ptr [bx + 2], 4000h
     je loc_1BC7B
@@ -38571,7 +38799,7 @@ sub_1BCB7:
     call far ptr fn_18059
     mov bx, 9093h
     mov word ptr [v_50CC], 0Dh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_1BCD3:
@@ -38579,7 +38807,7 @@ sub_1BCD3:
     call far ptr fn_18233
     mov bx, 9093h
     mov word ptr [v_50CC], 0Dh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_1BCEF:
@@ -38587,7 +38815,7 @@ sub_1BCEF:
     call far ptr fn_1828A
     mov bx, 9093h
     mov word ptr [v_50CC], 0Dh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_1BD0B:
@@ -38595,7 +38823,7 @@ sub_1BD0B:
     call far ptr fn_182BF
     mov bx, 9093h
     mov word ptr [v_50CC], 0Dh
-    call far ptr fn_08557
+    call far ptr fn_FileRead
     call far ptr fn_18F17
     ret
 sub_1BD27:
@@ -38826,10 +39054,10 @@ fn_1BFFC:
     or word ptr [v_5064], 9
     call far ptr fn_18A06
     call far ptr fn_13AC6
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_04F2A
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     and word ptr [v_505E], 0FBFFh
     and word ptr [v_50F6], 17FFh
     and word ptr [v_5066], 101Fh
@@ -38838,10 +39066,10 @@ fn_1BFFC:
     and word ptr [v_5066], 0FF9Fh
     call far ptr fn_0305C
     call far ptr fn_18A06
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_13AC6
     call far ptr fn_04C46
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
     cmp word ptr [v_50E2], 0
     je loc_1C086
     mov es, word ptr [v_50E2]
@@ -38888,8 +39116,8 @@ S1C09 ends
 S1C0D segment byte use16
     db 0h
 fn_1C0DA:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 10h
     mov word ptr [v_0B26], 1
     mov word ptr [v_50B4], 5
@@ -38898,7 +39126,7 @@ fn_1C0DA:
     push cs
     call fn_1C250
     mov ax, 2
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov word ptr [v_50CC], 0
     retf
 fn_1C10F:
@@ -38932,15 +39160,15 @@ fn_1C154:
     push dx
     push cx
     mov bx, 55FAh
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_1C16B
-    mov dx, word ptr [v_0C9C]
-    call far ptr fn_0235B
+    mov dx, word ptr [v_EMSWorkHandle]
+    call far ptr fn_EMSMapPages
 loc_1C16B:
     xor si, si
     xor di, di
-    mov es, word ptr [v_0CAA]
-    mov ax, word ptr [v_50B8]
+    mov es, word ptr [v_EMSFrameSeg]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     mov cx, 69h
 loc_1C17B:
@@ -38965,15 +39193,15 @@ fn_1C192:
     push dx
     push cx
     mov bx, 55FAh
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_1C1A9
-    mov dx, word ptr [v_0C9C]
-    call far ptr fn_0235B
+    mov dx, word ptr [v_EMSWorkHandle]
+    call far ptr fn_EMSMapPages
 loc_1C1A9:
     xor si, si
     xor di, di
-    mov es, word ptr [v_0CAA]
-    mov ax, word ptr [v_50B8]
+    mov es, word ptr [v_EMSFrameSeg]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     mov cx, 6Eh
 loc_1C1B9:
@@ -38998,15 +39226,15 @@ fn_1C1D1:
     push dx
     push cx
     mov bx, 55FAh
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_1C1E8
-    mov dx, word ptr [v_0C9C]
-    call far ptr fn_0235B
+    mov dx, word ptr [v_EMSWorkHandle]
+    call far ptr fn_EMSMapPages
 loc_1C1E8:
     mov si, 0A08h
     mov di, 5622h
-    mov es, word ptr [v_0CAA]
-    mov ax, word ptr [v_50B8]
+    mov es, word ptr [v_EMSFrameSeg]
+    mov ax, word ptr [v_WorkSeg]
     mov ds, ax
     mov cx, 88h
 loc_1C1FA:
@@ -39029,7 +39257,7 @@ fn_1C211:
     push di
     push cx
     mov cx, 69h
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
 loc_1C21D:
     push cx
@@ -39048,7 +39276,7 @@ fn_1C230:
     push di
     push cx
     mov cx, 6Eh
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
     xor di, di
 loc_1C23C:
     push cx
@@ -39069,15 +39297,15 @@ fn_1C250:
     push dx
     push cx
     mov bx, 55FAh
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_1C267
-    mov dx, word ptr [v_0C9C]
-    call far ptr fn_0235B
+    mov dx, word ptr [v_EMSWorkHandle]
+    call far ptr fn_EMSMapPages
 loc_1C267:
     mov si, 5622h
     mov di, 0A08h
-    mov es, word ptr [v_50B8]
-    mov ax, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov ds, ax
     mov cx, 88h
 loc_1C279:
@@ -39098,7 +39326,7 @@ loc_1C279:
 fn_1C290:
     mov cx, 88h
     mov si, 0A08h
-    mov es, word ptr [v_50B8]
+    mov es, word ptr [v_WorkSeg]
 loc_1C29A:
     push cx
     mov cx, 0E0h
@@ -39153,15 +39381,15 @@ loc_1C309:
     sub word ptr [bp - 0Ch], cx
 loc_1C314:
     mov bx, 55FAh
-    cmp bx, word ptr [v_0C9A]
+    cmp bx, word ptr [v_EMSLastMapTable]
     je loc_1C326
-    mov dx, word ptr [v_0C9C]
-    call far ptr fn_0235B
+    mov dx, word ptr [v_EMSWorkHandle]
+    call far ptr fn_EMSMapPages
 loc_1C326:
     mov si, word ptr [bp - 2]
     mov di, word ptr [bp - 6]
-    mov es, word ptr [v_50B8]
-    mov ax, word ptr [v_0CAA]
+    mov es, word ptr [v_WorkSeg]
+    mov ax, word ptr [v_EMSFrameSeg]
     mov ds, ax
     mov cx, word ptr [bp - 0Ch]
 loc_1C338:
@@ -39187,8 +39415,8 @@ fn_1C354:
     mov word ptr [v_0B22], 1
     mov word ptr [v_0B24], 1
     mov word ptr [v_0B26], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 0
     mov word ptr [v_0CCA], 4
     call far ptr fn_19E12
@@ -39222,7 +39450,7 @@ loc_1C3CD:
     add si, 1F4h
     loop loc_1C392
     call far ptr fn_1A6B5
-    call far ptr fn_15B94
+    call far ptr fn_FadeIn
 loc_1C3E4:
     call far ptr fn_1888A
     call far ptr fn_0D0FE
@@ -39275,7 +39503,7 @@ loc_1C45C:
     je loc_1C46E
     jmp near ptr loc_1C3E4
 loc_1C46E:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call sub_1C576
     retf
 loc_1C477:
@@ -39290,7 +39518,7 @@ loc_1C477:
     jne loc_1C493
     jmp near ptr loc_1C3E4
 loc_1C493:
-    call far ptr fn_15B78
+    call far ptr fn_FadeOut
     call far ptr fn_13F2E
     jmp near ptr fn_1C354
 loc_1C4A0:
@@ -39364,7 +39592,7 @@ loc_1C52D:
     mov word ptr [v_0B24], ax
     mov word ptr [v_0CCC], 90h
     mov word ptr [v_0B26], 0
-    mov word ptr [v_50D2], 0A000h
+    mov word ptr [v_DrawSeg], 0A000h
     call far ptr fn_19E12
     call far ptr fn_13BE3
     jmp near ptr loc_1C3E4
@@ -40045,7 +40273,7 @@ loc_1CCF7:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_10BF6
     call far ptr fn_10E42
@@ -40058,7 +40286,7 @@ loc_1CD3D:
     call far ptr fn_0E7B2
     and word ptr [v_505E], 0FFFDh
     mov ax, 14h
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     jmp near ptr loc_1C803
 loc_1CD57:
     call far ptr fn_11A11
@@ -40098,7 +40326,7 @@ loc_1CDB1:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_10BF6
     call far ptr fn_10E42
@@ -40156,7 +40384,7 @@ loc_1CE76:
     mov bx, 904Bh
     call far ptr fn_1834F
     mov word ptr [v_50CC], 0Ah
-    call far ptr fn_08582
+    call far ptr fn_FileWrite
     call far ptr fn_18F17
     call far ptr fn_10BF6
     call far ptr fn_10E42
@@ -40166,7 +40394,7 @@ loc_1CE76:
     jmp near ptr loc_1C803
 loc_1CEB9:
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     test word ptr [v_5AA2], 0C0h
     je loc_1CECC
     jmp near ptr loc_1D58B
@@ -40187,7 +40415,7 @@ loc_1CEE1:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     jmp near ptr loc_1C803
 loc_1CF06:
     mov di, 51BCh
@@ -40200,7 +40428,7 @@ loc_1CF0C:
     cmp word ptr [di + 10h], 0
     jle loc_1CF35
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call sub_1DAF0
     mov ax, word ptr [v_0C34]
     add ax, word ptr [v_0C36]
@@ -40223,7 +40451,7 @@ loc_1CF40:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     jmp short loc_1CF35
 loc_1CF64:
     call far ptr fn_12FC6
@@ -40233,8 +40461,8 @@ loc_1CF64:
     call far ptr fn_1C211
     mov word ptr [v_0B26], 5
     mov word ptr [v_0B24], 0
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0CCC], 10h
     or word ptr [v_5062], 8
     mov ax, 36h
@@ -40373,7 +40601,7 @@ loc_1D151:
     call far ptr fn_10E42
     call far ptr fn_1A6B5
     mov ax, 3
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop di
     pop word ptr [v_50C8]
     test word ptr [v_5A9E], 800h
@@ -40402,7 +40630,7 @@ loc_1D1A2:
     cmp word ptr [v_50C8], 19h
     jle loc_1D1F0
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     call far ptr fn_1C1D1
     cmp word ptr [v_50C8], 2Eh
     jne loc_1D1D2
@@ -40493,15 +40721,15 @@ loc_1D2B1:
     mov word ptr [v_0CCA], ax
     mov cx, word ptr [v_5A82]
 loc_1D2EE:
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     or word ptr [v_5060], 1
     call far ptr fn_1A0A9
     and word ptr [v_5060], 0FFFEh
     call far ptr fn_1A6B5
     call far ptr fn_1C250
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     inc word ptr [v_0CCA]
     loop loc_1D2EE
     call far ptr fn_10E42
@@ -40516,8 +40744,8 @@ loc_1D328:
     mov word ptr [v_0CCC], 30h
     mov word ptr [v_50B4], 0Ah
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     call far ptr fn_1C1D1
     mov ax, word ptr [v_5A7C]
     mov word ptr [v_0CCA], ax
@@ -40591,8 +40819,8 @@ loc_1D426:
     mov word ptr [v_0CCC], 30h
     mov word ptr [v_50B4], 0Ah
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov cx, 3
     mov ax, word ptr [v_5A7E]
     mov word ptr [v_0CCA], ax
@@ -40632,7 +40860,7 @@ loc_1D4AB:
     call far ptr fn_1C2AC
     call far ptr fn_1A6B5
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov cx, word ptr [v_5A7C]
     xor ax, ax
     xor bx, bx
@@ -40640,7 +40868,7 @@ loc_1D4AB:
     call far ptr fn_1C2AC
     call far ptr fn_1A6B5
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov cx, word ptr [v_5A7C]
     xor ax, ax
     xor bx, bx
@@ -40648,7 +40876,7 @@ loc_1D4AB:
     call far ptr fn_1C2AC
     call far ptr fn_1A6B5
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov cx, word ptr [v_5A7C]
     xor ax, ax
     xor bx, bx
@@ -40656,7 +40884,7 @@ loc_1D4AB:
     call far ptr fn_1C2AC
     call far ptr fn_1A6B5
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop cx
     loop loc_1D4AB
     jmp short loc_1D527
@@ -40704,7 +40932,7 @@ loc_1D582:
     jmp near ptr loc_1D1F0
 loc_1D58B:
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, word ptr [v_5A78]
     call sub_1DAD2
     mov di, word ptr [v_51BA]
@@ -40717,7 +40945,7 @@ loc_1D58B:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, word ptr [v_5A82]
     jmp short loc_1D5EC
 loc_1D5C7:
@@ -40729,7 +40957,7 @@ loc_1D5C7:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, word ptr [v_5A80]
 loc_1D5EC:
     call far ptr fn_08120
@@ -40795,8 +41023,8 @@ loc_1D687:
     call far ptr fn_1C1D1
     mov word ptr [v_0CCC], 60h
     mov word ptr [v_0B26], 1
-    mov ax, word ptr [v_50B8]
-    mov word ptr [v_50D2], ax
+    mov ax, word ptr [v_WorkSeg]
+    mov word ptr [v_DrawSeg], ax
     mov word ptr [v_0B22], 8
     mov word ptr [v_0B24], 8
     mov ax, word ptr [v_5A86]
@@ -40845,13 +41073,13 @@ loc_1D728:
     call far ptr fn_1A6B5
     call far ptr fn_1C250
     mov ax, 2
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop cx
     loop loc_1D728
     jmp near ptr loc_1D527
 loc_1D771:
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     mov ax, word ptr [v_5A76]
     call sub_1DAD2
     call far ptr fn_1C1D1
@@ -40861,7 +41089,7 @@ loc_1D787:
     call far ptr fn_1C290
     call far ptr fn_1A6B5
     mov ax, 1
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop cx
     loop loc_1D787
     call far ptr fn_1C250
@@ -41054,7 +41282,7 @@ loc_1D9DA:
     call far ptr fn_10E6A
     call far ptr fn_1A6B5
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     pop si
     cmp word ptr [si + 10h], 0
     jg loc_1DA05
@@ -41078,7 +41306,7 @@ sub_1DA16:
     call far ptr fn_1A6B5
     call far ptr fn_1C250
     mov ax, 5
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     ret
 sub_1DA38:
     or word ptr [v_5060], 1
@@ -41150,7 +41378,7 @@ sub_1DAD2:
     je loc_1DAE4
     pop ax
     mov ax, 6
-    call far ptr fn_084D4
+    call far ptr fn_DelayTicks
     ret
 loc_1DAE4:
     pop ax
@@ -41876,16 +42104,16 @@ v_0C46:
     db 0h,0h
 v_0C48:
     db 82 dup(0h)
-v_0C9A:
+v_EMSLastMapTable:                  ; 0C9Ah - page list currently mapped
     db 0h,0h
-v_0C9C:
+v_EMSWorkHandle:                    ; 0C9Ch - work handle (-1: not allocated)
     db 0FFh,0FFh
-v_0C9E:
+v_EMSCacheHandle:                   ; 0C9Eh - cache handle (-1: not allocated)
     db 0FFh,0FFh
-    db 'EMMXXXX0'
-v_0CA8:
+    db 'EMMXXXX0'                   ; EMS driver device name (init check)
+v_EMSCachePages:                    ; 0CA8h - pages available to the cache
     db 0h,0h
-v_0CAA:
+v_EMSFrameSeg:                      ; 0CAAh - EMS page frame segment
     db 0h,0h
 v_0CAC:
     db 0h,0h
@@ -42011,25 +42239,25 @@ v_40F6:
     db 0h,0h
 v_40F8:
     db 0h,0h
-v_40FA:
+v_CacheSlots0:                      ; 40FAh - cached slots per picture class
     db 1h,0h
-v_40FC:
+v_CacheSlots1:
     db 1h,0h
-v_40FE:
+v_CacheSlots2:
     db 1h,0h
-v_4100:
+v_CacheSlots3:
     db 1h,0h
-v_4102:
+v_CacheSlots4:
     db 1h,0h
-v_4104:
+v_CacheSlots5:
     db 1h,0h
-v_4106:
+v_CacheSlots6:
     db 1h,0h
-v_4108:
+v_CacheSlots7:
     db 1h,0h
-v_410A:
+v_CacheSlots8:
     db 1h,0h
-v_410C:
+v_CacheSlots9:                      ; 410Ch (ten words: 40FAh..410Ch)
     db 1h,0h
 v_410E:
     db 0h,0h
@@ -42044,10 +42272,17 @@ v_411A:
 v_411C:
     db 0h,0h
 v_411E:
-    db 2358 dup(0h)
+    db 6 dup(0h)
+v_PalCurrent:                         ; 4124h - palette on the DAC (fade source)
+    db 768 dup(0h)
+v_PalTarget:                          ; 4424h - target palette from data files
+    db 768 dup(0h)
+    db 30h dup(0h)                  ; 4724h..4753h (unnamed)
+v_PalOutput:                          ; 4754h - fade-in staging (DAC source)
+    db 768 dup(0h)
 v_4A54:
     db 770 dup(0h)
-v_4D56:
+v_4D56:                             ; palette work buffer (768 bytes)
     db 768 dup(0h)
 v_5056:
     db 0h,0h
@@ -42145,7 +42380,7 @@ v_50B4:
     db 0h,0h
 v_50B6:
     db 0h,0h
-v_50B8:
+v_WorkSeg:                          ; 50B8h - 64 KB work buffer segment (fn_CacheInit)
     db 0h,0h
 v_50BA:
     db 0h,0h
@@ -42171,7 +42406,7 @@ v_50CE:
     db 0h,0h
 v_50D0:
     db 0h,0h
-v_50D2:
+v_DrawSeg:                          ; 50D2h - current draw target (A000h = screen)
     db 0h,0h
 v_50D4:
     db 0h,0h
@@ -43978,7 +44213,9 @@ v_8EB6:
     db 'B xxx'
     db 0h
     db 'F xxx'
-    db 0h,0FFh,0FFh
+    db 0h
+v_FileCURGAME:                        ; 904Bh - CURGAME file struct
+    db 0FFh,0FFh
 v_904D:
     db 0h,0h
 v_904F:
@@ -43992,7 +44229,9 @@ v_9055:
 v_9057:
     db 0h,0h
     db 'CURGAME'
-    db 0h,0FFh,0FFh
+    db 0h
+v_FilePictures:                       ; 9061h - PICTURES.VGA file struct
+    db 0FFh,0FFh
 v_9063:
     db 0h,0h
 v_9065:
@@ -44006,7 +44245,9 @@ v_906B:
 v_906D:
     db 0h,0h
     db 'PICTURES.VGA'
-    db 0h,0FFh,0FFh
+    db 0h
+v_FileSaveGame:                       ; 907Ch - SAVEGAMEX file struct
+    db 0FFh,0FFh
 v_907E:
     db 0h,0h,0h,0h
 v_9082:
@@ -44015,7 +44256,9 @@ v_9084:
     db 0h,0h,0h,0h,0h,0h
     db 'SAVGAME'
 v_9091:
-    db 58h,0h,0FFh,0FFh
+    db 58h,0h                       ; 'SAVEGAME' + replaceable slot letter
+v_FileWorld:                          ; 9093h - WORLD.DAT file struct
+    db 0FFh,0FFh
 v_9095:
     db 0h,0h
 v_9097:

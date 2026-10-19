@@ -63,7 +63,8 @@ adds agent-specific operational rules.
 
 ## Current focus
 
-Check `docs/porting.md` §10 before acting. As of the last update: M0 is done — the oracle
-profile and headless baseline are in place; the annotation style guide (`docs/asm-style.md`)
-and the Conventional Commits policy are in place. Next is the M1 pilot: annotate the EMS
-manager / picture cache, the DOS file service, the palette and the video boundary.
+Check `docs/porting.md` §10 before acting. As of the last update: M1 is done — the EMS manager /
+picture cache, the DOS file service, the palette service and the video boundary (draw segment,
+mode sets, VBE bank switch) are annotated; `docs/asm-style.md` is in place and the byte gate is
+green after each batch. Next: the input wrappers (keyboard/mouse) or the optional M1b boundary
+spike (see §10).

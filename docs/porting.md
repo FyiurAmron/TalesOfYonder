@@ -275,4 +275,45 @@ emulator-hook demo, not this port).
   - quirk: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts on the game's VESA mode (libpng
     misuse) — snapshots come from the X window instead; Xvfb falls back to abstract sockets on
     this host (the `/tmp/.X11-unix` listener errors in `xvfb.log` are benign).
+- 2026-10-19 — M1 pilot (EMS manager annotated):
+  - `docs/asm-style.md`: annotation rules — prefixes + PascalCase names, original offsets kept on
+    routine headers and variable definitions, module/routine headers, `; SEAM <family>: ...` tags,
+    workflow and the verify gate;
+  - `asm/src/swreg.asm`: the EMS / picture-cache module (S0233) annotated — EMS init and close,
+    page-list mapping, cache sizing by available pages, class-table construction, the DOS
+    paragraph allocator; 22 symbols named (`fn_EMSInit`, `v_EMSFrameSeg`, `v_CacheSlots0`...);
+  - structure found: ten picture classes (318x198 down to 8x8) with `size = width*height` and a
+    32-bit PICTURES.VGA offset per class; the cache handle holds the images, one 6-byte
+    {0FFFFh, page, offset} descriptor per slot;
+  - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
+- 2026-10-19 — M1 file service and palette (annotated):
+  - DOS file service (S084E, plus the tick delay in S084D): close, open, create, read and write
+    wrappers over one block-seek helper; open mode comes in AL (0 = read, 2 = read/write), a
+    failed wrapper leaves the caller's error code in `v_50CC` for the common error reporter;
+  - four packed file structs in DGROUP — handle, buffer seg/off, block size, block index, 32-bit
+    base offset, ASCIIZ name — described by `FILE_*` EQUs at the top of the file; access is
+    `base + index * block size`, one block per call; bases: 904Bh `CURGAME`, 9061h
+    `PICTURES.VGA`, 907Ch `SAVEGAMEX`, 9093h `WORLD.DAT`;
+  - palette service (S15B7): a pass-based fade engine (modes 0–5) over four 768-byte buffers —
+    4124h live/DAC source, 4424h target (read from data files), 4754h fade-in staging, 4D56h
+    work buffer; `fn_FadeOut`/`fn_FadeIn` wrap modes 0/1 (63 passes x 256 entries); DAC seam
+    via ports 3C8h/3C9h, block set via int 10h AX=1017h, optional retrace wait when `v_5062`
+    bit 800h is set;
+  - dead code noted: `fn_FileSeekEnd` (0x08506) has no callers in this build;
+  - style guide extended: `v_` anchor labels for unlabeled DGROUP structures/buffers (anchors are
+    documentation only; numeric operands stay numeric) and a single top-of-file EQU block for
+    layouts shared across segments;
+  - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
+- 2026-10-19 — M1 video boundary (annotated):
+  - screen model: drawing goes through the segment variable `v_DrawSeg` (A000h = visible screen;
+    the 64 KB `v_WorkSeg` buffer is the offscreen target). The main game has *no* present/blit
+    wrapper — mode 13h writes go straight to video memory (only the palette writer waits for
+    retrace);
+  - mode seams tagged: int 10h AX=13h (cache init, return from the intro, restore) and AX=3
+    (text mode on exit and on the error path); the intro effect uses VBE mode 101h (4F02h) and
+    bank-switches window A with 4F05h (`sub_15F1F`) while decoding LOGO.PCX (`fn_15DC2`);
+  - consequence for M1b: a mode-13h "present" boundary has to be *introduced* for streaming
+    (frame_end after input/draw loop), unlike the palette which already has a funnel;
+  - names: `v_50B8` -> `v_WorkSeg`, `v_50D2` -> `v_DrawSeg`;
+  - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 
