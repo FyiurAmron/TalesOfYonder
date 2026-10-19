@@ -191,7 +191,7 @@ service seam as §3 — a client is just another service backend. Message detail
 |---|---|---|
 | M0 | Setup & baseline | git repo + ignores; UASM build verified on Linux (MD5); DOSBox-X profile runs the original; `verify_asm.py` works; style guide + stream format v0 drafted |
 | M1 | Annotated-asm pilot | 2–3 subsystems annotated (EMS manager, file manager, palette) with byte-verify green |
-| M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path |
+| M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md` |
 | M2 | C core + platform layer | memory model, service layer, SDL3 video/input/clock run a stub program; recording backend writes replayable streams |
 | M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
@@ -316,4 +316,25 @@ emulator-hook demo, not this port).
     (frame_end after input/draw loop), unlike the palette which already has a funnel;
   - names: `v_50B8` -> `v_WorkSeg`, `v_50D2` -> `v_DrawSeg`;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
+- 2026-10-19 — M1b video/palette boundary spike (STREAM build + replay client):
+  - all instrumentation is under `IFDEF STREAM` (`-DSTREAM`); the oracle build is untouched:
+    `fn_StreamInit` allocates one 65,024-byte DOS block (64,000-byte shadow + message buffer +
+    writer state) and creates `STREAM.BIN`; `fn_StreamPresent` is called from the two input-poll
+    routines (`fn_0D0FE`, `fn_06342`), rate-limited to one frame per 2 BIOS ticks, only in mode
+    13h, and emits one 1-line `rect` per changed row plus `frame_end`; palette updates are hooked
+    at `fn_WriteDAC` (`DS:SI`), `sub_SetDACBlock` (`ES:DX`) and `sub_WriteDAC768`;
+  - v0 VIDEO payload layouts pinned in `docs/protocol.md` (type byte + `set_mode`/`palette`/
+    `rect`/`frame_end`/`reset`); the recorder writes a bare message stream (no session header),
+    raw codec, 6-bit DAC values;
+  - tools: `asm/tools/build-stream.sh` (variant build + alignment guard), `harness/stream.sh`
+    (headless run + replay), `harness/stream_client.py` (PNG frames + final state), `docs/stream.md`;
+  - gotcha: the 5-byte far-call hooks moved S1DEA's paragraph prefix from 7 to 5, so the game's
+    hard-coded DS offsets (e.g. `EMMXXXX0` at `0CA0h`) no longer matched and the EMS init aborted
+    with "Minimum of 1MB Expanded RAM must be available."; a 2-byte pad at the end of S1DC9
+    restores prefix 7 and the build script now verifies prefix 7 + `EMMXXXX0` delta `0C99h`;
+  - validation: 40 s no-input run -> 846 records (1 `set_mode`, 447 `palette`, 396 `rect`, 2
+    `frame_end`), 479,755-byte recording; the client's SW Games logo frame matches the emulator
+    snapshot from the same run; oracle build re-verified (`SWREG.EXE: OK`, `IDENTICAL`);
+  - limits: VBE intro skipped, no input/audio/session header, palette messages not deduplicated,
+    the stream build is slower than the original.
 

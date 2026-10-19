@@ -73,6 +73,25 @@ Per-family, not one-size-fits-all:
   VBE banking stays engine-internal: the delta engine always sees the linear image.
 - Full-frame rects serve as keyframes; replay consumers use them for seeking (see Recordings).
 
+### Payload layouts (v0)
+
+The first payload byte is the message type (per family). Multi-byte fields are little-endian and
+unpadded. VIDEO is the only family implemented by the M1b spike:
+
+| type | message | payload after `u8 type` |
+|---|---|---|
+| 0 | `set_mode` | `u16 w`, `u16 h`, `u8 bpp` |
+| 1 | `palette` | `u16 start`, `u16 count`, `count*3` bytes of 6-bit DAC R,G,B |
+| 2 | `rect` | `u16 x`, `u16 y`, `u16 w`, `u16 h`, `w*h` bytes of 8-bit indices (row-major) |
+| 3 | `frame_end` | *(empty)* |
+| 4 | `reset` | *(empty)* |
+
+- Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
+- The M1b recorder writes a bare message stream (no session header yet), VIDEO family only,
+  codec `raw`, 320x200x8, with `h=1` rects (one message per changed row). It is a spike
+  recording, not yet the two-directional session described under Recordings.
+- Types are only unique within a family; later families define their own table.
+
 ### Files (specified now, implemented last)
 
 - DOS semantics live on the client: 8.3 names, case-insensitive matching, wildcard find, EOF,
