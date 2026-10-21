@@ -1,6 +1,6 @@
 #!/bin/sh
 # _ref/ is the read-only reference: nothing under it may change in a commit.
-# Copy what you need into the working project (asm/) instead.
+# Copy what you need into the working project (engine/asm/swreg/) instead.
 head_ref=$(git rev-parse --verify --quiet 'HEAD:_ref' || true)
 index_ref=$(git rev-parse --verify --quiet "$(git write-tree):_ref" 2>/dev/null || true)
 if [ "$head_ref" != "$index_ref" ]; then
