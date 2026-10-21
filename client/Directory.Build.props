@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Every build in this repo writes under build/: the client's bin/ and obj/
+    go to build/client/{bin,obj}, next to build/swreg/ and build/runs/, instead
+    of the source tree.  Directory.Build.props is imported before the SDK props,
+    so these have to be set here; MSBuildProjectExtensionsPath (NuGet restore)
+    follows BaseIntermediateOutputPath.
+  -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)../build/client/bin/</BaseOutputPath>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)../build/client/obj/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+</Project>
