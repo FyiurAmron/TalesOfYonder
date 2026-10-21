@@ -1,0 +1,5 @@
+# non-seam part of engine/asm/swreg/src/swreg.asm - see engine/asm/swreg/tools/seam_pin.py
+# update with: python3 engine/asm/swreg/tools/seam_pin.py --update
+sha256=7e890a07b9766b5d013724e1361630e50582b857cb243fff715e1db92519159b
+bytes=1050890
+lines=46151
