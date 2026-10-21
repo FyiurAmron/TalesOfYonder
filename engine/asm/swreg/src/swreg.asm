@@ -44,10 +44,15 @@ start:
     mov ax, S1DEA
     mov ds, ax
     mov word ptr [v_0C44], ax
-IFDEF STREAM
-    call far ptr fn_StreamInit
-ENDIF
+IFDEF SEAM
+    ; fn_SeamInit runs the seam and then the displaced call to fn_07010, so
+    ; this site keeps the original five-byte call and the game's code offsets
+    ; do not move (inserting the call here shifted every later offset and
+    ; stalled the intro).
+    call far ptr fn_SeamInit
+ELSE
     call far ptr fn_07010
+ENDIF
     test word ptr [v_5066], 1
     jne loc_00036
     mov word ptr [v_50CC], 12h
@@ -8111,10 +8116,14 @@ S0634 segment byte use16
 ; out: v_KeyCode = ASCII key; 0 for a left click, 1Bh for a right click
 ; ---------------------------------------------------------------------------
 fn_WaitKey:
-IFDEF STREAM
-    call far ptr fn_StreamPresent
-ENDIF
+IFDEF SEAM
+    ; size-preserving hook: replaces the five-byte MusicService call; the
+    ; tail presents the frame and then jumps into fn_MusicService, whose retf
+    ; returns to the instruction after this call as before
+    call far ptr fn_SeamPresentMusic
+ELSE
     call far ptr fn_MusicService    ; service sound while waiting
+ENDIF
     mov ah, 6
     mov dl, 0FFh
     int 21h                 ; SEAM INPUT: DOS 06h - poll console input (non-blocking)
@@ -11211,11 +11220,19 @@ S084D segment byte use16
 ; out: -
 ; ---------------------------------------------------------------------------
 fn_DelayTicks:
+IFDEF SEAM
+    ; size-preserving hook: far call + NOP over push bx/cx/dx + xchg + xor;
+    ; the tail presents the frame and then runs the displaced instructions
+    call far ptr fn_SeamDelayStub
+    db 90h
+ELSE
     push bx
     push cx
     push dx
     xchg bx, ax
     xor ah, ah
+ENDIF
+loc_084DA:
     int 1Ah                 ; SEAM TICK: 00h - get BIOS tick count
     add bx, dx
 loc_084DE:
@@ -18043,14 +18060,16 @@ S0D0F segment byte use16
 ;      v_KeyCode = ASCII key/scancode for codes 1/2, 0 otherwise
 ; ---------------------------------------------------------------------------
 fn_PollInput:
-IFDEF STREAM
-    call far ptr fn_StreamPresent
-ENDIF
     push ax
     push bx
     push cx
     push dx
+IFDEF SEAM
+    ; size-preserving hook (see fn_WaitKey): present, then MusicService
+    call far ptr fn_SeamPresentMusic
+ELSE
     call far ptr fn_MusicService    ; service sound
+ENDIF
     mov word ptr [v_50CC], 0         ; event code: none
     mov byte ptr [v_KeyCode], 0
     mov ah, 6
@@ -21563,6 +21582,15 @@ loc_0FD50:
     mov ss, ax
     mov sp, 19Eh                ; switch to the ISR stack (grows down into the filler)
     sti
+IFDEF SEAM
+    ; The game draws animated frames without polling input in between, so
+    ; the poll hook alone samples the video only a few times a second.  The
+    ; tick ISR is the one 18.2 Hz clock every frame goes through: present
+    ; here and the stream follows the game's real animation.  The nops keep
+    ; this block 16 bytes: the seam layout check requires it.
+    call far ptr fn_SeamPresentIsr
+    db 11 dup (90h)
+ENDIF
     test word ptr [v_50F6], 8000h
     je loc_0FD8E
     dec word ptr [v_50E8]       ; countdown A
@@ -30190,10 +30218,16 @@ loc_15D34:
 ; Waits for vertical retrace first while v_5062 bit 800h is set.
 ; ---------------------------------------------------------------------------
 fn_WriteDAC:
-IFDEF STREAM
-    call far ptr fn_StreamPalette
-ENDIF
+IFDEF SEAM
+    ; size-preserving hook: the far call plus one NOP takes exactly the six
+    ; bytes of the displaced test; the tail runs that test and rejoins at the
+    ; 'je' below (the far jump preserves the flags the test produced)
+    call far ptr fn_SeamWriteDACStub
+    db 90h
+ELSE
     test word ptr [v_5062], 800h    ; bit 800h: retrace wait enabled
+ENDIF
+loc_15D57:
     je loc_15D61
     mov dx, 3DAh
 loc_15D5C:
@@ -30220,11 +30254,15 @@ loc_15D68:
 ; out: -
 ; ---------------------------------------------------------------------------
 sub_SetDACBlock:
-IFDEF STREAM
-    call far ptr fn_StreamPaletteBlock
-ENDIF
+IFDEF SEAM
+    ; size-preserving hook: the far call takes exactly the five bytes of
+    ; xor bx,bx + mov cx,100h; the tail runs them and rejoins below
+    call far ptr fn_SeamSetDACBlockStub
+ELSE
     xor bx, bx
     mov cx, 100h
+ENDIF
+loc_15D76:
     mov ax, 1017h
     int 10h                 ; SEAM VIDEO: set palette block (1017h)
     ret
@@ -30454,11 +30492,16 @@ loc_15F56:
 ; ---------------------------------------------------------------------------
 sub_WriteDAC768:
     lea si, [v_4D56]
-IFDEF STREAM
-    call far ptr fn_StreamPalette768
-ENDIF
+IFDEF SEAM
+    ; size-preserving hook: the far call takes mov dx,3C8h + mov al,0; the
+    ; tail runs them and rejoins at the 'out' below (lea si stays in place,
+    ; so the palette hook still sees DS:SI)
+    call far ptr fn_SeamWriteDAC768Stub
+ELSE
     mov dx, 3C8h
     mov al, 0
+ENDIF
+loc_15F68:
     out dx, al              ; SEAM VIDEO: palette index 0 (3C8h)
     inc dx
     mov cx, 300h
@@ -42100,12 +42143,6 @@ loc_1DE9B:
     call far ptr fn_16024
     mov ax, word ptr [v_5072]
     ret
-IFDEF STREAM
-    db 0h,0h                        ; 2 bytes: the hooks above grow the code by 30
-                                    ; bytes, so pad S1DEA back to its original
-                                    ; paragraph prefix (7) - hard-coded DS offsets
-                                    ; (e.g. the 'EMMXXXX0' at 0CA0h) rely on it
-ENDIF
 S1DC9 ends
 S1DEA segment byte use16
     db 0h,0CEh,6Eh,0AEh,0h,0D6h,6Eh,0C4h,0h,0B6h,6Eh,82h,0h,0BEh,6Eh,98h
@@ -46177,427 +46214,10 @@ v_SoundEntry:                       ; F7AEh - far entry, pre-init path (no
     db 0h,0h                        ; writer in the game image - see S187E)
 v_SoundDataSeg:                     ; F7B0h - 9Ch-paragraph WORLD.DAT block
     db 0h,0h
-IFDEF STREAM
-v_StreamSeg:                        ; STREAM build state block segment (0 = off)
-    db 0h,0h
-v_StreamName:
-    db 'STREAM.BIN',0
-ENDIF
 S1DEA ends
-IFDEF STREAM
-; ===========================================================================
-; STREAM build instrumentation (M1b boundary spike)
-;
-; Recording backend for the VIDEO service family. The default build is
-; unaffected: everything here is compiled only with -DSTREAM.
-;
-; At start-up fn_StreamInit allocates one DOS block:
-;   0000h..F9FFh  shadow framebuffer (320x200)
-;   FA00h..FD1Fh  message buffer (14-byte header + payload)
-;   FD20h..       writer state (handle, sequence, tick, row, dirty flag)
-;
-; fn_StreamPresent is called from the input-poll routines, at most once per
-; two BIOS ticks, and only in mode 13h (the VBE intro is skipped). It compares
-; A000h with the shadow, emits one 1-line rect message per changed row and a
-; frame_end, then updates the shadow.
-;
-; Palette updates are emitted from the three DAC writers. Messages use the
-; v0 framing and raw codec (docs/protocol.md); the recording starts directly
-; with the first message (no session header yet).
-; ===========================================================================
-SSTREAM segment byte use16
-STREAM_BUF      equ 0FA00h          ; message buffer (header + payload)
-STREAM_HANDLE   equ 0FD20h          ; u16 recording handle (0FFFFh = off)
-STREAM_SEQ      equ 0FD22h          ; u32 message sequence
-STREAM_LASTTICK equ 0FD26h          ; u16 last emit tick
-STREAM_ROW      equ 0FD28h          ; u16 current row in fn_StreamPresent
-STREAM_DIRTY    equ 0FD2Ah          ; u16 set when a row was emitted
-
-; ---------------------------------------------------------------------------
-; fn_StreamInit - allocate the stream block and create STREAM.BIN.
-; in:  -
-; out: -
-; Streaming stays off if the DOS allocation or the file create fails.
-; ---------------------------------------------------------------------------
-fn_StreamInit:
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push es
-    cld
-    mov word ptr [v_StreamSeg], 0
-    mov ah, 48h
-    mov bx, 0FE0h                   ; 65 024 bytes
-    int 21h
-    jc sinit_done
-    mov word ptr [v_StreamSeg], ax
-    mov es, ax
-    xor di, di
-    xor ax, ax
-    mov cx, 7D00h
-    rep stosw                       ; clear the shadow framebuffer
-    mov word ptr es:[STREAM_HANDLE], 0FFFFh
-    mov word ptr es:[STREAM_SEQ], 0
-    mov word ptr es:[STREAM_SEQ+2], 0
-    mov word ptr es:[STREAM_LASTTICK], 0
-    mov ah, 3Ch
-    xor cx, cx
-    mov dx, offset v_StreamName
-    int 21h
-    jc sinit_disable
-    mov bx, word ptr [v_StreamSeg]
-    mov es, bx
-    mov word ptr es:[STREAM_HANDLE], ax
-    ; set_mode(320, 200, 8)
-    push ds
-    mov ds, bx
-    mov byte ptr [STREAM_BUF+14], 0
-    mov word ptr [STREAM_BUF+15], 320
-    mov word ptr [STREAM_BUF+17], 200
-    mov byte ptr [STREAM_BUF+19], 8
-    mov cx, 6
-    call sub_StreamWrite
-    pop ds
-    jmp sinit_done
-sinit_disable:
-    mov bx, word ptr [v_StreamSeg]
-    mov es, bx
-    mov ah, 49h
-    int 21h
-    mov word ptr [v_StreamSeg], 0
-sinit_done:
-    pop es
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    retf
-
-; ---------------------------------------------------------------------------
-; sub_StreamWrite - append one framed message.
-; in:  DS = stream block, CX = payload length; payload at STREAM_BUF+14
-; out: -
-; Preserves all registers; turns the recording off after a DOS write error.
-; ---------------------------------------------------------------------------
-sub_StreamWrite:
-    push ax
-    push bx
-    push cx
-    push dx
-    cmp word ptr [STREAM_HANDLE], 0FFFFh
-    je sw_done
-    mov word ptr [STREAM_BUF], 5954h    ; 'YT'
-    mov byte ptr [STREAM_BUF+2], 0      ; version
-    mov byte ptr [STREAM_BUF+3], 1      ; family VIDEO
-    mov byte ptr [STREAM_BUF+4], 0      ; flags
-    mov byte ptr [STREAM_BUF+5], 0      ; codec raw
-    mov ax, word ptr [STREAM_SEQ]
-    mov dx, word ptr [STREAM_SEQ+2]
-    mov word ptr [STREAM_BUF+6], ax
-    mov word ptr [STREAM_BUF+8], dx
-    add word ptr [STREAM_SEQ], 1
-    adc word ptr [STREAM_SEQ+2], 0
-    mov word ptr [STREAM_BUF+10], cx
-    mov word ptr [STREAM_BUF+12], 0
-    add cx, 14
-    mov ah, 40h
-    mov bx, word ptr [STREAM_HANDLE]
-    mov dx, STREAM_BUF
-    int 21h
-    jc sw_disable
-    jmp sw_done
-sw_disable:
-    mov word ptr [STREAM_HANDLE], 0FFFFh
-sw_done:
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    ret
-
-; ---------------------------------------------------------------------------
-; fn_StreamPresent - emit changed screen rows, then frame_end.
-; in:  -
-; out: -
-; One frame per two BIOS ticks; only mode 13h is captured. Changed rows are
-; sent as 1-line rects (raw payload) so the client can apply them in order.
-; ---------------------------------------------------------------------------
-fn_StreamPresent:
-    pushf
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push bp
-    push ds
-    push es
-    cld
-    cmp word ptr [v_StreamSeg], 0
-    je sp_done
-    mov ah, 0
-    int 1Ah                 ; SEAM TICK: 00h - BIOS tick count (stream pacing)
-    mov ax, word ptr [v_StreamSeg]
-    mov es, ax
-    mov ax, dx
-    sub ax, word ptr es:[STREAM_LASTTICK]
-    cmp ax, 2
-    jb sp_done
-    mov word ptr es:[STREAM_LASTTICK], dx
-    mov ah, 0Fh
-    int 10h                 ; SEAM VIDEO: 0Fh - get the current video mode
-    cmp al, 13h
-    jne sp_done
-    mov ax, word ptr [v_StreamSeg]
-    push ds
-    mov ds, ax
-    mov ax, 0A000h
-    mov es, ax
-    mov word ptr [STREAM_ROW], 0
-    mov word ptr [STREAM_DIRTY], 0
-    xor bp, bp                      ; row base offset
-sp_row:
-    mov si, bp
-    mov di, bp
-    mov cx, 160
-    repe cmpsw                      ; DS:SI shadow vs ES:DI screen
-    je sp_next
-    mov si, bp
-    mov di, bp
-    mov cx, 320
-    mov bx, 0FFFFh                  ; first changed offset
-    xor dx, dx                      ; last changed offset
-sp_scan:
-    mov al, byte ptr [si]
-    cmp al, byte ptr es:[di]
-    je sp_scan_next
-    cmp bx, 0FFFFh
-    jne sp_scan_last
-    mov bx, si
-sp_scan_last:
-    mov dx, si
-sp_scan_next:
-    inc si
-    inc di
-    loop sp_scan
-    cmp bx, 0FFFFh
-    je sp_next
-    mov si, bx
-    mov di, bx
-    mov cx, dx
-    sub cx, bx
-    inc cx
-sp_copy_shadow:
-    mov al, byte ptr es:[si]        ; screen -> shadow
-    mov byte ptr [di], al
-    inc si
-    inc di
-    loop sp_copy_shadow
-    mov di, STREAM_BUF+14
-    mov byte ptr [di], 2            ; rect
-    mov ax, bx
-    sub ax, bp
-    mov word ptr [di+1], ax         ; x
-    mov ax, word ptr [STREAM_ROW]
-    mov word ptr [di+3], ax         ; y
-    mov ax, dx
-    sub ax, bx
-    inc ax
-    mov word ptr [di+5], ax         ; width
-    mov word ptr [di+7], 1          ; height
-    mov si, bx
-    mov di, STREAM_BUF+23
-    mov cx, dx
-    sub cx, bx
-    inc cx
-sp_copy_buf:
-    mov al, byte ptr es:[si]        ; screen -> payload
-    mov byte ptr [di], al
-    inc si
-    inc di
-    loop sp_copy_buf
-    mov cx, dx
-    sub cx, bx
-    add cx, 10                      ; 9-byte rect header + width
-    call sub_StreamWrite
-    mov word ptr [STREAM_DIRTY], 1
-sp_next:
-    add bp, 320
-    inc word ptr [STREAM_ROW]
-    cmp bp, 64000
-    jb sp_row
-    cmp word ptr [STREAM_DIRTY], 0
-    je sp_end
-    mov byte ptr [STREAM_BUF+14], 3  ; frame_end
-    mov cx, 1
-    call sub_StreamWrite
-sp_end:
-    pop ds
-sp_done:
-    pop es
-    pop ds
-    pop bp
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    popf
-    retf
-
-; ---------------------------------------------------------------------------
-; fn_StreamPalette - emit one palette update.
-; in:  BL = first entry, CX = entry count, DS:SI -> RGB triples
-; out: -
-; The DAC writer reads the triples with DS:SI (lodsb); the callers push CS
-; only so that its trailing retf returns to them.
-; ---------------------------------------------------------------------------
-fn_StreamPalette:
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push ds
-    push es
-    cmp word ptr [v_StreamSeg], 0
-    je spal_done
-    cmp cx, 0
-    je spal_done
-    mov ax, word ptr [v_StreamSeg]
-    mov es, ax
-    mov al, bl
-    xor ah, ah
-    mov byte ptr es:[STREAM_BUF+14], 1
-    mov word ptr es:[STREAM_BUF+15], ax
-    mov word ptr es:[STREAM_BUF+17], cx
-    mov ax, cx
-    add ax, cx
-    add ax, cx
-    mov dx, ax                      ; 3 bytes per entry
-    mov cx, ax
-    mov di, STREAM_BUF+19
-spal_copy:
-    mov al, byte ptr [si]
-    mov byte ptr es:[di], al
-    inc si
-    inc di
-    loop spal_copy
-    mov cx, dx
-    add cx, 5
-    push ds
-    mov ds, word ptr [v_StreamSeg]
-    call sub_StreamWrite
-    pop ds
-spal_done:
-    pop es
-    pop ds
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    retf
-
-; ---------------------------------------------------------------------------
-; fn_StreamPaletteBlock - emit all 256 entries from a full palette table.
-; in:  ES:DX -> 768-byte RGB table
-; out: -
-; ---------------------------------------------------------------------------
-fn_StreamPaletteBlock:
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push ds
-    push es
-    cmp word ptr [v_StreamSeg], 0
-    je spb_done
-    mov si, dx
-    mov bx, word ptr [v_StreamSeg]
-    push ds
-    mov ds, bx
-    mov byte ptr [STREAM_BUF+14], 1
-    mov word ptr [STREAM_BUF+15], 0
-    mov word ptr [STREAM_BUF+17], 100h
-    mov di, STREAM_BUF+19
-    mov cx, 300h
-spb_copy:
-    mov al, byte ptr es:[si]
-    mov byte ptr [di], al
-    inc si
-    inc di
-    loop spb_copy
-    mov cx, 305h
-    call sub_StreamWrite
-    pop ds
-spb_done:
-    pop es
-    pop ds
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    retf
-
-; ---------------------------------------------------------------------------
-; fn_StreamPalette768 - emit 256 entries from DS:SI (already 6-bit).
-; in:  DS:SI -> 768-byte palette
-; out: -
-; ---------------------------------------------------------------------------
-fn_StreamPalette768:
-    push ax
-    push bx
-    push cx
-    push dx
-    push si
-    push di
-    push ds
-    push es
-    cmp word ptr [v_StreamSeg], 0
-    je sp7_done
-    mov bx, word ptr [v_StreamSeg]
-    mov es, bx
-    mov byte ptr es:[STREAM_BUF+14], 1
-    mov word ptr es:[STREAM_BUF+15], 0
-    mov word ptr es:[STREAM_BUF+17], 100h
-    mov di, STREAM_BUF+19
-    mov cx, 300h
-sp7_copy:
-    mov al, byte ptr [si]
-    mov byte ptr es:[di], al
-    inc si
-    inc di
-    loop sp7_copy
-    mov cx, 305h
-    push ds
-    mov ds, bx
-    call sub_StreamWrite
-    pop ds
-sp7_done:
-    pop es
-    pop ds
-    pop di
-    pop si
-    pop dx
-    pop cx
-    pop bx
-    pop ax
-    retf
-SSTREAM ends
+IFDEF SEAM
+include seam.asm                    ; client integration surface
+                                     ; (see docs/client.md)
 ENDIF
 STK segment para stack use16
     db 512 dup(?)
