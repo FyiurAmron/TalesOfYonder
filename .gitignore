@@ -7,7 +7,7 @@
 __pycache__/
 
 # stray asm outputs (real builds go to build/)
-/asm/src/SWREG.EXE
+/engine/asm/swreg/src/SWREG.EXE
 
 build/
 bin/
@@ -16,3 +16,4 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 .idea
+save/
