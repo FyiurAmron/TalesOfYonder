@@ -8,7 +8,7 @@ Without --window the whole screen is captured; with it, the largest direct child
 of the root window (the DOSBox-X window under Xvfb, where there is no window
 manager to resize it).
 
-Used by harness/baseline.sh: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts
+Used by tools/dosbox/baseline.sh: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts
 the process on the game's VESA mode, so the harness grabs the X screen instead.
 """
 import ctypes
@@ -113,6 +113,17 @@ def capture(dpy, x, y, w, h):
         g = Image.frombytes("L", (im.width, im.height), buf[1::4])
         b = Image.frombytes("L", (im.width, im.height), buf[0::4])
         out = Image.merge("RGB", (r, g, b))
+    elif im.bits_per_pixel == 16 and im.depth in (15, 16):
+        # RGB565, little-endian; DOSBox-X picks this when the SDL surface is
+        # 16 bpp (the window, not the X server, decides).
+        n = im.width * im.height
+        rgb = bytearray(n * 3)
+        for i in range(n):
+            v = buf[2 * i] | (buf[2 * i + 1] << 8)
+            rgb[3 * i] = ((v >> 11) & 0x1F) * 255 // 31
+            rgb[3 * i + 1] = ((v >> 5) & 0x3F) * 255 // 63
+            rgb[3 * i + 2] = (v & 0x1F) * 255 // 31
+        out = Image.frombytes("RGB", (im.width, im.height), bytes(rgb))
     else:
         raise SystemExit("snap: unsupported depth/bpp: %d/%d" % (im.depth, im.bits_per_pixel))
     X11.XDestroyImage(img)
