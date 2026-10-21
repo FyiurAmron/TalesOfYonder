@@ -1,20 +1,20 @@
 #!/bin/sh
 # Headless no-input baseline of the ORIGINAL game under DOSBox-X.
 #
-#   sh harness/baseline.sh [duration_seconds]     (default 75)
+#   sh tools/dosbox/baseline.sh [duration_seconds]     (default 75)
 #
 # Runs _ref/orig-bin on a private Xvfb display with the oracle profile
-# (harness/dosbox-x.conf): X window snapshots (snap.py) at fixed checkpoints,
+# (tools/dosbox/dosbox-x.conf): X window snapshots (snap.py) at fixed checkpoints,
 # save states from the built-in autosave (slots 1..4), everything collected
-# under build/oracle/<timestamp>/.
+# under build/runs/oracle/<timestamp>/.
 #
 # Requirements: Xvfb, dosbox-x, python3 (Pillow; libX11 at runtime).
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
 DURATION="${1:-75}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-RUN="$ROOT/build/oracle/$STAMP"
+RUN="$ROOT/build/runs/oracle/$STAMP"
 REFBIN="$ROOT/_ref/orig-bin"
 DISP=":97"
 GAME_FILES="CH2.BAT SBFMDRV.COM SWREG.EXE WORLD.DAT PICTURES.VGA CURGAME"
@@ -25,7 +25,7 @@ if [ -e /tmp/.X11-unix/X97 ]; then
 fi
 
 mkdir -p "$RUN/capture" "$RUN/saves" "$RUN/game"
-( cd "$REFBIN" && md5sum -c "$ROOT/asm/tools/SWREG.EXE.md5" ) >"$RUN/oracle-md5.txt"
+( cd "$REFBIN" && md5sum -c "$ROOT/engine/asm/swreg/tools/SWREG.EXE.md5" ) >"$RUN/oracle-md5.txt"
 for f in $GAME_FILES; do
     cp "$REFBIN/$f" "$RUN/game/$f"
 done

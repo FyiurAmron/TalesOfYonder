@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Replay a YT2 VIDEO recording produced by the STREAM build (M1b spike).
 
-    python3 harness/stream_client.py STREAM.BIN --out frames/
+    python3 tools/stream/replay.py STREAM.BIN --out frames/
 
 The recording is a bare sequence of protocol-v0 frames (docs/protocol.md):
 a 14-byte header followed by the payload (the first payload byte is the
@@ -18,6 +18,7 @@ from PIL import Image
 MAGIC = 0x5954
 HDR = struct.Struct("<HBBBBII")
 FAMILY_VIDEO = 1
+FAMILY_CONTROL = 5
 
 SET_MODE, PALETTE, RECT, FRAME_END, RESET = range(5)
 
@@ -36,7 +37,7 @@ def read_records(path):
             raise SystemExit(f"unsupported protocol version {version}")
         end = off + HDR.size + length
         if end > len(data):
-            print(f"stream_client: truncated record at {off}", file=sys.stderr)
+            print(f"replay: truncated record at {off}", file=sys.stderr)
             break
         records.append((family, codec, seq, data[off + HDR.size:end]))
         off = end
@@ -47,29 +48,32 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("recording")
     ap.add_argument("--out", default="frames", help="directory for PNG frames")
+    ap.add_argument("--ppm", help="write the final state as a binary PPM (P6)")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
     records, consumed, total = read_records(args.recording)
     os.makedirs(args.out, exist_ok=True)
 
-    fb = bytearray(W * H)
+    width, height = W, H
+    fb = bytearray(width * height)
     pal = bytearray(768)
     last = None
     frames_saved = 0
     frames = 0
     rects = 0
     pal_updates = 0
+    control = 0
 
     def save_frame(tag=None):
-        nonlocal last, frames_saved
+        nonlocal last, frames_saved, fb, width, height
         key = (bytes(fb), bytes(pal))
         if key == last:
             return None
         last = key
         # DAC values are 6-bit; expand them to the 8-bit range PIL expects.
         pal8 = bytes((((v & 0x3f) << 2) | ((v & 0x3f) >> 4)) for v in pal)
-        img = Image.frombytes("P", (W, H), bytes(fb))
+        img = Image.frombytes("P", (width, height), bytes(fb))
         img.putpalette(pal8)
         name = f"frame_{frames_saved:04d}.png" if tag is None else tag
         img.save(os.path.join(args.out, name))
@@ -77,6 +81,9 @@ def main():
         return name
 
     for family, codec, seq, payload in records:
+        if family == FAMILY_CONTROL:
+            control += 1
+            continue
         if family != FAMILY_VIDEO:
             continue
         if codec != 0:
@@ -86,8 +93,13 @@ def main():
         kind = payload[0]
         if kind == SET_MODE:
             w, h, bpp = struct.unpack_from("<HHB", payload, 1)
-            if (w, h, bpp) != (W, H, 8):
+            if bpp != 8 or w == 0 or h == 0:
                 raise SystemExit(f"unsupported mode {w}x{h}x{bpp} at seq {seq}")
+            if (w, h) != (width, height):
+                # The intro runs at 640x480, the game at 320x200; a mode
+                # message starts from a blank screen.
+                width, height = w, h
+                fb = bytearray(width * height)
         elif kind == PALETTE:
             start, count = struct.unpack_from("<HH", payload, 1)
             data = payload[5:5 + 3 * count]
@@ -96,26 +108,40 @@ def main():
         elif kind == RECT:
             x, y, w, h = struct.unpack_from("<HHHH", payload, 1)
             data = payload[9:9 + w * h]
-            if x + w > W or y + h > H or len(data) != w * h:
-                print(f"stream_client: bad rect at seq {seq}", file=sys.stderr)
+            if x + w > width or y + h > height or len(data) != w * h:
+                print(f"replay: bad rect at seq {seq}", file=sys.stderr)
                 continue
             for row in range(h):
-                dst = (y + row) * W + x
+                dst = (y + row) * width + x
                 fb[dst:dst + w] = data[row * w:(row + 1) * w]
             rects += 1
         elif kind == FRAME_END:
             frames += 1
             save_frame()
         elif kind == RESET:
-            fb[:] = b"\x00" * (W * H)
+            fb[:] = b"\x00" * (width * height)
         else:
-            print(f"stream_client: unknown message {kind} at seq {seq}", file=sys.stderr)
+            print(f"replay: unknown message {kind} at seq {seq}", file=sys.stderr)
 
     last_name = save_frame("final.png")
 
+    if args.ppm:
+        # Same bytes the C# client writes: P6 header plus 8-bit RGB, one byte
+        # per channel, rows top to bottom.  tests/replay/run.sh compares the
+        # two files with cmp.
+        pal8 = bytes((((v & 0x3f) << 2) | ((v & 0x3f) >> 4)) for v in pal)
+        rgb = bytearray(width * height * 3)
+        for i in range(width * height):
+            c = fb[i] * 3
+            rgb[i * 3:i * 3 + 3] = pal8[c:c + 3]
+        with open(args.ppm, "wb") as f:
+            f.write(b"P6\n%d %d\n255\n" % (width, height))
+            f.write(rgb)
+
     if not args.quiet:
         print(f"records: {len(records)} ({consumed}/{total} bytes consumed)")
-        print(f"palette updates: {pal_updates}, rects: {rects}, frames: {frames}")
+        print(f"palette updates: {pal_updates}, rects: {rects}, frames: {frames}, "
+              f"control: {control}")
         print(f"distinct frames saved: {frames_saved} in {args.out}")
         if last_name:
             print(f"final frame: {os.path.join(args.out, last_name)}")

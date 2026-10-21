@@ -1,17 +1,17 @@
 #!/bin/sh
 # Build and run the STREAM build headless, then replay the recording.
 #
-#   sh harness/stream.sh [duration_seconds]     (default 25)
+#   sh tools/dosbox/stream.sh [duration_seconds]     (default 25)
 #
-# Unlike baseline.sh this runs the instrumented build from build/stream/,
+# Unlike baseline.sh this runs the instrumented build from build/swreg/file/,
 # records VIDEO messages to STREAM.BIN and renders them to PNG frames under
-# build/stream/run/<timestamp>/frames/.
+# build/runs/stream/<timestamp>/frames/.
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ROOT="$(cd "$HERE/.." && pwd)"
+ROOT="$(cd "$HERE/../.." && pwd)"
 DURATION="${1:-25}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-RUN="$ROOT/build/stream/run/$STAMP"
+RUN="$ROOT/build/runs/stream/$STAMP"
 DISP=":97"
 
 if [ -e /tmp/.X11-unix/X97 ]; then
@@ -19,11 +19,11 @@ if [ -e /tmp/.X11-unix/X97 ]; then
     exit 1
 fi
 
-sh "$ROOT/asm/tools/build-stream.sh"
+sh "$ROOT/engine/asm/swreg/tools/build.sh" --variant file
 
 mkdir -p "$RUN/game" "$RUN/capture"
 for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
-    cp "$ROOT/build/stream/$f" "$RUN/game/"
+    cp "$ROOT/build/swreg/file/$f" "$RUN/game/"
 done
 
 Xvfb "$DISP" -screen 0 1024x768x24 -nolisten tcp >"$RUN/xvfb.log" 2>&1 &
@@ -60,7 +60,7 @@ if [ ! -f "$RUN/STREAM.BIN" ]; then
     exit 1
 fi
 
-python3 "$HERE/stream_client.py" "$RUN/STREAM.BIN" --out "$RUN/frames"
+python3 "$ROOT/tools/stream/replay.py" "$RUN/STREAM.BIN" --out "$RUN/frames"
 
 echo "run dir:  $RUN"
 echo "recording: $(wc -c <"$RUN/STREAM.BIN") bytes"
