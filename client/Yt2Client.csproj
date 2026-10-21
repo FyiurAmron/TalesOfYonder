@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Yt2Client</AssemblyName>
+    <RootNamespace>Yt2.Client</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- The same 32x32 Yendor2 icon the window gets at runtime, embedded in the
+       Windows executable so Explorer and the taskbar show it too. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <ApplicationIcon>Assets/yendor2.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- SDL decodes BMP itself, so the game's original YENDOR2.BMP is used
+         as-is (a lossless copy lives in client/Assets). -->
+    <EmbeddedResource Include="Assets/yendor2.bmp" LogicalName="yendor2.bmp" />
+  </ItemGroup>
+
+</Project>
