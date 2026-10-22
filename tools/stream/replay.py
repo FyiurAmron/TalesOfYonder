@@ -20,7 +20,7 @@ HDR = struct.Struct("<HBBBBII")
 FAMILY_VIDEO = 1
 FAMILY_CONTROL = 5
 
-SET_MODE, PALETTE, RECT, FRAME_END, RESET = range(5)
+SET_MODE, PALETTE, RECT, FRAME_END, RESET, SCROLL = range(6)
 
 W, H = 320, 200
 
@@ -44,6 +44,63 @@ def read_records(path):
     return records, off, len(data)
 
 
+def decode_runs(data, width, height):
+    """Decode run-length coded rows.
+
+    The runs are: 00 nn repeats the previous pixel, 01 nn vv repeats vv,
+    02 nn takes nn literal pixels and 03 ends the row.  Returns the rows or
+    None when the data does not decode.
+    """
+    rows = []
+    at = 0
+    for _ in range(height):
+        row = bytearray()
+        previous = 0
+        have = False
+        while len(row) < width:
+            if at >= len(data):
+                return None
+            op = data[at]
+            at += 1
+            if op == 3:
+                break
+            if op == 0:
+                if not have or at >= len(data):
+                    return None
+                count = data[at]
+                at += 1
+                value = previous
+            elif op == 1:
+                if at + 1 >= len(data):
+                    return None
+                count = data[at]
+                value = data[at + 1]
+                at += 2
+            elif op == 2:
+                if at >= len(data):
+                    return None
+                count = data[at]
+                at += 1
+                if at + count > len(data) or len(row) + count > width:
+                    return None
+                row += data[at:at + count]
+                at += count
+                previous = row[-1] if count else previous
+                have = True
+                continue
+            else:
+                return None
+            if count == 0 or len(row) + count > width:
+                return None
+            row += bytes([value]) * count
+            previous = value
+            have = True
+        if len(row) != width:
+            return None
+        rows.append(bytes(row))
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("recording")
@@ -64,6 +121,7 @@ def main():
     rects = 0
     pal_updates = 0
     control = 0
+    scrolls = 0
 
     def save_frame(tag=None):
         nonlocal last, frames_saved, fb, width, height
@@ -86,7 +144,7 @@ def main():
             continue
         if family != FAMILY_VIDEO:
             continue
-        if codec != 0:
+        if codec not in (0, 1):
             raise SystemExit(f"unsupported codec {codec} at seq {seq}")
         if not payload:
             continue
@@ -107,14 +165,41 @@ def main():
             pal_updates += 1
         elif kind == RECT:
             x, y, w, h = struct.unpack_from("<HHHH", payload, 1)
-            data = payload[9:9 + w * h]
-            if x + w > width or y + h > height or len(data) != w * h:
+            if x + w > width or y + h > height:
                 print(f"replay: bad rect at seq {seq}", file=sys.stderr)
                 continue
+            if codec == 0:
+                data = payload[9:9 + w * h]
+                if len(data) != w * h:
+                    print(f"replay: bad rect at seq {seq}", file=sys.stderr)
+                    continue
+                rows = [data[row * w:(row + 1) * w] for row in range(h)]
+            else:
+                rows = decode_runs(payload[9:], w, h)
+                if rows is None:
+                    print(f"replay: bad rect at seq {seq}", file=sys.stderr)
+                    continue
             for row in range(h):
                 dst = (y + row) * width + x
-                fb[dst:dst + w] = data[row * w:(row + 1) * w]
+                fb[dst:dst + w] = rows[row]
             rects += 1
+        elif kind == SCROLL:
+            # The whole picture moved by dy rows (positive: down); the rows
+            # that scroll in, and the rows that did not move with it, follow
+            # as rects in the same frame.
+            if len(payload) < 2:
+                raise SystemExit(f"short scroll at seq {seq}")
+            dy = struct.unpack_from("<b", payload, 1)[0]
+            if dy <= -height or dy >= height:
+                raise SystemExit(f"scroll {dy} does not fit {height} rows at seq {seq}")
+            if dy > 0:
+                fb[dy * width:] = fb[:(height - dy) * width]
+                fb[:dy * width] = b"\x00" * (dy * width)
+            elif dy < 0:
+                up = -dy
+                fb[:(height - up) * width] = fb[up * width:]
+                fb[(height - up) * width:] = b"\x00" * (up * width)
+            scrolls += 1
         elif kind == FRAME_END:
             frames += 1
             save_frame()

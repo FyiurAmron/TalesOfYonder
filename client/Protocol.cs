@@ -30,6 +30,7 @@ public enum VideoMessage : byte
     Rect = 2,
     FrameEnd = 3,
     Reset = 4,
+    Scroll = 5,
 }
 
 public enum ControlMessage : byte

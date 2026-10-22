@@ -16,18 +16,30 @@
 ;                           machine boundary just as well, so the serial
 ;                           path is kept only for fun
 ;   -DSEAM -DSEAM_FILE      file: the M1b spike, writes STREAM.BIN
+;   + -DSEAM_FAST           file, with the presentation gate open: a pass
+;                           runs on every hook call instead of once per
+;                           BIOS tick.  Diagnostic only: it shows what the
+;                           tick gate costs, and it can starve the game
+;                           because a tight poll loop then scans the screen
+;                           on every call
 ;
 ; fn_SeamInit allocates one DOS block (SEAM_BLK_PARAS paragraphs):
 ;   0000h..02FFh  DAC palette       (768 bytes, read back from the hardware)
 ;   0300h..05FFh  sent palette      (768 bytes, what the client has)
 ;   0600h..093Fh  message buffer    (14-byte header + 786-byte payload)
-;   0940h..19BFh  4-byte row checksums (up to 480 VBE rows) + VBE row staging
+;   0940h..10BFh  4-byte row checksums, what the client has (up to 480 rows)
+;   1140h..13BFh  VBE row staging (one 640-pixel row)
+;   1540h..1CC0h  this pass's row checksums (mode 13h scroll detection)
 ;   2000h..5FFFh  batched TX bytes  (file backend, flushed once per frame)
 ;
 ; Message policy (identical for both backends, so a recording replays the
 ; live link):
-;   - present hooks emit changed screen rows as 1-line rects, at most one
-;     pass per two BIOS ticks and only in mode 13h;
+;   - present hooks emit changed screen rows as 1-line rects, at most
+;     three passes per BIOS tick and only in mode 13h;
+;   - a mode-13h picture that moved as a whole (the game's camera pan) goes
+;     out as one scroll(dy) message plus the rows that slide in; the pass
+;     scores steps of +-8 rows against the row checksums and only takes one
+;     that explains more rows than no shift (see docs/protocol.md);
 ;   - the palette is read back from the DAC (3C7h/3C9h) at the end of every
 ;     present pass and the changed span is sent; the DAC hooks only mark it
 ;     dirty, so every writer is covered no matter which table it used;
@@ -63,9 +75,12 @@ SEAM_PENDING_PAL equ 0000h              ; palette buffer (DAC readback overwrite
 SEAM_SENT_PAL    equ 0300h              ; palette the client has
 SEAM_BUF         equ 0600h              ; message buffer (header + payload)
 SEAM_DAC_PAL     equ SEAM_PENDING_PAL  ; palette read back from the DAC
-SEAM_SHADOW      equ 0940h              ; shadow framebuffer
+SEAM_SHADOW      equ 0940h              ; shadow framebuffer; mode 13h: the row
+                                        ; checksums of what the client has
+SEAM_CURTAB      equ SEAM_SHADOW+0C00h  ; this pass's row checksums (scroll test)
 SEAM_TX          equ 2000h              ; batched message bytes (file backend)
 SEAM_TX_SIZE     equ 4000h              ; 16 KiB: one write per frame, usually
+SEAM_RLE_LIT     equ 6000h              ; the encoder's literal buffer
 SEAM_BLK_PARAS   equ 1040h              ; 66 560 bytes, see the banner
 
 SSTREAM segment byte use16
@@ -74,7 +89,10 @@ seam_blk        dw 0                    ; DOS block segment (0 = seam off)
 seam_backend    dw 0                    ; 0 off, 1 serial, 2 file
 seam_handle     dw 0                    ; file handle (file backend)
 seam_seq        dd 0                    ; message sequence number
-seam_lasttick   dw 0                    ; last tick of a video pass
+seam_lasttick   dw 0                    ; last tick of a video pass (log only)
+seam_forcepass  dw 0                    ; run the next video pass whatever the budget
+seam_tick       dw 0                    ; BIOS tick of the current budget
+seam_tickpass   dw 0                    ; passes taken in that tick
 seam_dirty      dw 0                    ; something sent since the last frame_end
 seam_txlen      dw 0                    ; bytes waiting in the TX buffer
 seam_txrem      dw 0                    ; bytes of the batch still to be written
@@ -82,6 +100,13 @@ seam_txptr      dw 0                    ; offset of those bytes in the snapshot
 seam_inpresent  dw 0                    ; inside a present pass
 seam_flushing   dw 0                    ; a flush is writing the batch: no sending
 seam_stall      dw 0                    ; the link stalled: the budget left
+seam_codec      db 0                    ; the payload codec of the next message
+seam_rle_value  db 0                    ; the encoder: the value of the run
+seam_rle_count  dw 0                    ; the encoder: the length of the run
+seam_rle_litcnt dw 0                    ; the encoder: the pending literal count
+seam_rle_litptr dw 0                    ; the encoder: where the literals are
+seam_rle_last   db 0                    ; the encoder: the last value emitted
+seam_rle_have   db 0                    ; the encoder: a value was emitted
 seam_isrpass    dw 0                    ; present called from the tick ISR
 seam_palhold    dw 0                    ; passes to skip after a mode set
 seam_forcepal   dw 0                    ; send the whole palette, ignore pacing
@@ -101,6 +126,10 @@ seam_resync     dw 0                    ; client asked for a keyframe
 seam_mirror        dw 0                    ; SEAM_TEE: mirror every message to COM1
 seam_row        dw 0                    ; current row in the row scan
 seam_rowsent    dw 0                    ; rows emitted in the current pass
+seam_changed    dw 0                    ; rows whose checksum differs this pass
+seam_scrbest    dw 0                    ; scroll search: rows the best step explains
+seam_scrbestdy  dw 0                    ; scroll search: the best step
+seam_scrstep    dw 0                    ; scroll search: candidate step under test
 seam_holdleft   dw 0                    ; extra present passes allowed before frame close
 seam_txfam      dw 1                    ; family of the next outgoing message
 seam_rxlen      dw 0                    ; bytes staged in seam_rx
@@ -258,6 +287,184 @@ sinit_done:
     retf
 
 ; ---------------------------------------------------------------------------
+; sub_SeamEncodeRow - encode one screen row as runs (codec 1).
+; in:  DS:SI = the row (one byte per pixel), CX = the pixel count,
+;      DS = the block, DI = the destination (SEAM_BUF+23)
+; out: AX = the number of bytes written
+;
+; The runs:
+;   00 nn          repeat the previous pixel nn times
+;   01 nn vv       vv repeated nn times
+;   02 nn          nn literal pixels follow
+;   03             the end of the row
+;
+; Runs of one or two pixels become literals; the literals are merged and
+; shipped a chunk of at most 255 at a time, so the payload never outgrows
+; the message buffer whatever the picture does.
+; ---------------------------------------------------------------------------
+sub_SeamEncodeRow:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+    mov word ptr cs:[seam_rle_litcnt], 0
+    mov word ptr cs:[seam_rle_litptr], SEAM_RLE_LIT
+    mov byte ptr cs:[seam_rle_have], 0
+    test cx, cx
+    jz sre_end
+    mov al, [si]                    ; the first run
+    inc si
+    dec cx
+    mov byte ptr cs:[seam_rle_value], al
+    mov word ptr cs:[seam_rle_count], 1
+sre_next:
+    test cx, cx
+    jz sre_flush
+    mov bl, [si]
+    inc si
+    dec cx
+    cmp bl, cs:[seam_rle_value]
+    je sre_same
+    call sub_SeamRleRun             ; the run ended
+    mov byte ptr cs:[seam_rle_value], bl
+    mov word ptr cs:[seam_rle_count], 1
+    jmp sre_next
+sre_same:
+    inc word ptr cs:[seam_rle_count]
+    jmp sre_next
+sre_flush:
+    call sub_SeamRleRun
+    call sub_SeamRleLiterals        ; the tail literals
+sre_end:
+    mov byte ptr [di], 3            ; the end of the row
+    inc di
+    mov ax, di                      ; the length: it must survive the pops
+    sub ax, SEAM_BUF+23
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    add sp, 2                       ; drop the saved AX, keep the length
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamRleRun - write the pending run of the encoder.
+; in:  DS = block, DI = the destination
+; out: DI = the new destination
+; ---------------------------------------------------------------------------
+sub_SeamRleRun:
+    push ax
+    push bx
+    push cx
+    push dx
+    mov cx, cs:[seam_rle_count]
+    cmp cx, 3
+    jae srr_repeat_path             ; two pixels are cheaper as literals
+srr_short:
+    mov bx, cs:[seam_rle_litptr]    ; one more literal
+    mov al, cs:[seam_rle_value]
+    mov byte ptr [bx], al
+    inc bx
+    mov cs:[seam_rle_litptr], bx
+    inc word ptr cs:[seam_rle_litcnt]
+    cmp word ptr cs:[seam_rle_litcnt], 255
+    jb srr_short_next
+    call sub_SeamRleLiterals        ; a full chunk
+srr_short_next:
+    loop srr_short
+    jmp srr_exit
+srr_repeat_path:
+    call sub_SeamRleLiterals        ; the literals before it go first
+    mov ax, cs:[seam_rle_count]
+srr_repeat:
+    test ax, ax
+    jz srr_done
+    mov cx, ax
+    cmp cx, 255
+    jbe srr_emit
+    mov cx, 255                     ; a long run is split
+srr_emit:
+    mov bl, cs:[seam_rle_value]
+    cmp byte ptr cs:[seam_rle_have], 0
+    je srr_new
+    cmp bl, cs:[seam_rle_last]
+    jne srr_new
+    mov byte ptr [di], 0            ; the previous pixel again
+    inc di
+    mov byte ptr [di], cl           ; the count
+    inc di
+    jmp srr_mark
+srr_new:
+    mov byte ptr [di], 1            ; a new value: opcode, count, pixel
+    inc di
+    mov byte ptr [di], cl
+    inc di
+    mov byte ptr [di], bl
+    inc di
+srr_mark:
+    mov byte ptr cs:[seam_rle_last], bl
+    mov byte ptr cs:[seam_rle_have], 1
+    sub ax, cx
+    jmp srr_repeat
+srr_done:
+srr_exit:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamRleLiterals - write the pending literals of the encoder.
+; in:  DS = block, DI = the destination
+; out: DI = the new destination
+; A literal run ends with "the previous pixel is this one" as far as the
+; client is concerned, so the encoder remembers it for a following repeat.
+; ---------------------------------------------------------------------------
+sub_SeamRleLiterals:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push ds
+    push es
+    mov cx, cs:[seam_rle_litcnt]
+    test cx, cx
+    jz srl_done
+    mov byte ptr [di], 2            ; the literal pixels follow
+    inc di
+    mov ax, cs:[seam_rle_litcnt]
+    mov byte ptr [di], al
+    inc di
+    mov si, cs:[seam_rle_litptr]
+    sub si, cx                      ; the first literal of the chunk
+    mov ax, ds
+    mov es, ax                      ; the destination is in the block too
+    cld
+    rep movsb
+    mov al, [si-1]                  ; the last literal, for a repeat next
+    mov byte ptr cs:[seam_rle_last], al
+    mov byte ptr cs:[seam_rle_have], 1
+    mov word ptr cs:[seam_rle_litcnt], 0
+    mov word ptr cs:[seam_rle_litptr], SEAM_RLE_LIT
+srl_done:
+    pop es
+    pop ds
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+
+; ---------------------------------------------------------------------------
 ; sub_SeamSend - frame and transmit one message.
 ; in:  DS = block, CX = payload length; payload at SEAM_BUF+14
 ; out: -
@@ -286,7 +493,9 @@ sub_SeamSend:
     mov word ptr cs:[seam_dirty], 1 ; only VIDEO opens a frame
 ssend_nodirty:
     mov byte ptr [SEAM_BUF+4], 0    ; flags
-    mov byte ptr [SEAM_BUF+5], 0    ; codec raw
+    mov al, cs:[seam_codec]         ; the payload codec of this message
+    mov byte ptr [SEAM_BUF+5], al
+    mov byte ptr cs:[seam_codec], 0  ; and back to raw for the next one
     mov ax, word ptr cs:[seam_seq]
     mov dx, word ptr cs:[seam_seq+2]
     mov word ptr [SEAM_BUF+6], ax
@@ -398,7 +607,7 @@ sub_SeamWrapVideo:
     mov word ptr cs:[seam_holdframe], 0
     mov word ptr cs:[seam_biglast], 0
     mov word ptr cs:[seam_vmode], 3
-    mov word ptr cs:[seam_lasttick], 0
+    mov word ptr cs:[seam_forcepass], 1
     jmp swv_done
 swv_fail:
     mov word ptr cs:[seam_backend], 0
@@ -1861,12 +2070,60 @@ sps_done:
     ret
 
 ; ---------------------------------------------------------------------------
+; A pass costs a few milliseconds, and the game calls the present hook at its
+; own frame rate: once per picture it draws, which is about 2.2 calls per
+; 55 ms BIOS tick in the opening scene and up to 1,800 calls per tick in the
+; tight poll loop of an intro.  One pass per tick therefore held the client to
+; 18.2 pictures a second - the pan and the intro's fades both arrived at
+; 16-17/s - while a pass per call floods a poll loop.
+;
+; So allow SEAM_PASSES_PER_TICK passes per tick: the game's frames go out as
+; they are drawn, and a poll loop can still do no more than 55 passes a
+; second.  Pacing *inside* the tick was tried and does not work here: the BIOS
+; tick is too coarse to divide, and SBFMDRV reprograms PIT channel 0 to about
+; 64 Hz (a 15.6 ms reload, see docs/sbfmdrv.md), so its 16-bit counter cannot
+; measure a pass interval any more.  The tick itself is free to read: it sits
+; in the BIOS data area, and a memory read is cheap enough for the hot path
+; (an int 1Ah costs 0.27 us under DOSBox-X, a PIT port read 3 us, and the
+; hook is called far too often to pay either).
+; ---------------------------------------------------------------------------
+SEAM_PASSES_PER_TICK equ 3             ; 3 per 55 ms tick = 55 passes a second
+
+; in:  DS = CS
+; out: CF = 1 when a pass may run now; the slot is taken when it does
+; A forced pass (mode set, resync, wrap) ignores the budget.
+sub_SeamTickGate:
+    cmp word ptr cs:[seam_forcepass], 0
+    jne stg_take
+    push es
+    mov ax, 40h
+    mov es, ax
+    mov ax, word ptr es:[6Ch]       ; BIOS tick count, straight from the BDA
+    pop es
+    cmp ax, word ptr cs:[seam_tick]
+    je stg_budget
+    mov word ptr cs:[seam_tick], ax
+    mov word ptr cs:[seam_tickpass], 0
+stg_budget:
+    cmp word ptr cs:[seam_tickpass], SEAM_PASSES_PER_TICK
+    jae stg_wait
+stg_take:
+    mov word ptr cs:[seam_forcepass], 0
+    inc word ptr cs:[seam_tickpass]
+    stc
+    ret
+stg_wait:
+    clc
+    ret
+
+; ---------------------------------------------------------------------------
 ; fn_SeamPresent - emit changed screen rows and close the frame.
 ; in:  -
 ; out: -
-; Called from the input-poll routines, at most once per two BIOS ticks and
-; only in mode 13h (the VBE intro is skipped).  Changed rows become 1-line
-; rect messages; a pending palette is flushed in the same pass.
+; Called from the input-poll routines and the game's tick handler, at most
+; three passes per BIOS tick and only in mode 13h (the VBE intro is skipped).
+; Changed rows become 1-line rect messages; a pending palette is flushed in
+; the same pass.
 ; ---------------------------------------------------------------------------
 ; fn_SeamPresentIsr - present entry used by the game's INT 1Ch handler.
 ; Marks the pass so DAC readback is withheld while a palette hook is active or
@@ -1906,29 +2163,31 @@ fn_SeamPresent:
     mov word ptr [seam_resync], 0
     mov word ptr [seam_fullframe], 1
     mov word ptr [seam_forcepal], 1
-    mov word ptr [seam_lasttick], 0     ; let the video pass run now
+    mov word ptr [seam_forcepass], 1    ; let the video pass run now
     mov word ptr [seam_vmode], 3        ; re-send set_mode and clear the shadow
 sp_check:
-    mov ah, 0
-    int 1Ah                         ; SEAM TICK: BIOS tick count
 IFDEF SEAM_LOG
+    mov ah, 0
+    int 1Ah                         ; SEAM TICK: BIOS tick count (log only)
     push ax
     push bx
     push cx
     mov bx, dx
-    mov cx, word ptr [seam_lasttick]
+    mov cx, word ptr cs:[seam_tickpass]
     mov al, 7
     call sub_SeamLog
     pop cx
     pop bx
     pop ax
 ENDIF
-    mov ax, dx
-    sub ax, word ptr [seam_lasttick]
-    cmp ax, 1
-    jb sp_done                      ; called again within the same tick: no work
-    mov word ptr [seam_lasttick], dx
+IFNDEF SEAM_FAST
+    call sub_SeamTickGate
+    jnc sp_done                     ; this tick's passes are used up
+ENDIF
 IFDEF SEAM_LOG
+    mov ah, 0
+    int 1Ah
+    mov word ptr cs:[seam_lasttick], dx
     push ax
     push bx
     push cx
@@ -2031,9 +2290,11 @@ sp_v_send:
     mov word ptr [di+7], 1
     mov si, SEAM_SHADOW+2048
     mov di, SEAM_BUF+23
-    mov cx, 320
-    rep movsw
-    mov cx, 649
+    mov cx, 640                     ; 640 pixels, one byte each
+    call sub_SeamEncodeRow
+    mov byte ptr cs:[seam_codec], 1  ; the row is run-length coded
+    add ax, 9
+    mov cx, ax
     call sub_SeamSend
     inc word ptr cs:[seam_rowsent]
 sp_v_next:
@@ -2096,8 +2357,14 @@ sp_mode13_ready:
     mov ds, ax                      ; DS = block (checksum table + buffer)
     mov ax, 0A000h
     mov es, ax                      ; ES = screen
+    ; The pass runs in two phases: first checksum every row, then decide and
+    ; send.  A whole-screen vertical pan is only recognisable once all the
+    ; checksums are known, and it has to be settled before any row goes out:
+    ; the client applies the scroll to its whole picture, and the rows that
+    ; scroll in follow as ordinary rects.  One pass costs the same either way.
+    mov word ptr cs:[seam_changed], 0
     xor bp, bp                      ; row 0..199
-sp_row:
+sp_scan:
     ; 32-bit rolling checksum of the screen row, same shape as the VBE pass
     mov ax, bp
     mov cx, 320
@@ -2112,10 +2379,45 @@ sp_sum:
     xor dx, ax
     add si, 2
     loop sp_sum
-    ; 4 bytes per row at SEAM_SHADOW (the VBE pass uses the same table)
+    ; 4 bytes per row: SEAM_CURTAB for this pass, SEAM_SHADOW for the client
     mov di, bp
     add di, di
     add di, di
+    mov word ptr [di+SEAM_CURTAB], ax
+    mov word ptr [di+SEAM_CURTAB+2], dx
+    cmp ax, word ptr [di+SEAM_SHADOW]
+    jne sp_scan_diff
+    cmp dx, word ptr [di+SEAM_SHADOW+2]
+    je sp_scan_same
+sp_scan_diff:
+    inc word ptr cs:[seam_changed]
+sp_scan_same:
+    inc bp
+    mov ax, bp
+    test al, 3Fh                    ; keep the link alive during a full pass
+    jnz sp_scan_nopoll
+    push ds
+    mov ax, cs
+    mov ds, ax
+    call sub_SeamPollRx
+    pop ds
+sp_scan_nopoll:
+    cmp bp, 200
+    jb sp_scan
+    ; A camera pan shows up as the row table moved by a few rows.  Done
+    ; before the send loop, so the pan costs one scroll message and the rows
+    ; that scroll in instead of a row message per row of the screen.
+    cmp word ptr cs:[seam_fullframe], 0
+    jne sp_rows
+    call sub_SeamScrollCheck
+sp_rows:
+    xor bp, bp
+sp_row:
+    mov di, bp
+    add di, di
+    add di, di
+    mov ax, word ptr [di+SEAM_CURTAB]
+    mov dx, word ptr [di+SEAM_CURTAB+2]
     add di, SEAM_SHADOW
     cmp word ptr cs:[seam_fullframe], 0
     jne sp_send
@@ -2137,21 +2439,30 @@ sp_send:
     mov cx, 320
     mul cx
     mov si, ax                      ; screen row
-    mov di, SEAM_BUF+23
+    push ds                         ; the encoder reads the row from the block
+    push es
+    mov ax, es                      ; the screen is in ES
+    mov ds, ax
+    mov ax, cs:[seam_blk]
+    mov es, ax
+    mov di, SEAM_SHADOW+2048
     mov cx, 160
-sp_copy_row:
-    mov ax, word ptr es:[si]
-    mov word ptr [di], ax
-    add si, 2
-    add di, 2
-    loop sp_copy_row
-    mov cx, 329
+    rep movsw
+    pop es
+    pop ds
+    mov si, SEAM_SHADOW+2048
+    mov di, SEAM_BUF+23
+    mov cx, 320                     ; the pixels of the row
+    call sub_SeamEncodeRow
+    mov byte ptr cs:[seam_codec], 1  ; the row is run-length coded
+    add ax, 9
+    mov cx, ax
     call sub_SeamSend
     inc word ptr cs:[seam_rowsent]
 sp_next:
     inc bp
     mov ax, bp
-    test al, 3Fh                    ; keep the link alive during a full pass
+    test al, 3Fh                    ; keep the link alive while rows go out
     jnz sp_nopoll
     push ds
     mov ax, cs
@@ -2216,6 +2527,202 @@ sp_done:
     pop ax
     popf
     retf
+
+; ---------------------------------------------------------------------------
+; sub_SeamScrollCheck - recognise a whole-screen vertical pan in mode 13h.
+; in:  DS = block, seam_fullframe = 0, SEAM_CURTAB (this pass's row checksums)
+;      and SEAM_SHADOW (the rows the client has) filled by the scan phase
+; out: DS = block.  When the picture moved as a whole, one scroll message is
+;      queued before any row of the pass and the client's table is shifted by
+;      the same amount; the rows that scroll in are poisoned so the row pass
+;      sends them, and rows that did not move with the picture (an animated
+;      flag over a panning background) differ by themselves and are sent too.
+;
+; A pan makes this pass's row y equal the checksum of the row the client had
+; at y-dy, so every candidate step is scored by how many rows of the overlap
+; it explains.  The step with the best score wins, but only if it beats "no
+; shift at all": a still or partly redrawn screen stays on the row path, and
+; a shift that explains nothing costs a redraw of everything.  The range is
+; +-8 rows per presented picture, more than a screen a second at the rates
+; the seam presents; a faster pan falls back to rows, which is correct if not
+; cheap.
+; ---------------------------------------------------------------------------
+SSC_MAX_STEP    equ 8                   ; candidate steps, rows per picture
+SSC_MIN_CHANGED equ 32                  ; fewer changed rows never need a scroll
+SSC_MIN_MATCH   equ 100                 ; the shift has to explain this many rows
+sub_SeamScrollCheck:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push bp
+    cmp word ptr cs:[seam_changed], SSC_MIN_CHANGED
+    jb ssck_ret
+    ; score "no shift" first: it sets the bar every candidate has to beat
+    xor bx, bx
+    call sub_SeamScrollCount
+    mov word ptr cs:[seam_scrbest], cx
+    mov word ptr cs:[seam_scrbestdy], 0
+    mov word ptr cs:[seam_scrstep], 1
+ssck_step:
+    mov bx, word ptr cs:[seam_scrstep]
+    call sub_SeamScrollCount
+    cmp cx, word ptr cs:[seam_scrbest]
+    jbe ssck_neg
+    mov word ptr cs:[seam_scrbest], cx
+    mov word ptr cs:[seam_scrbestdy], bx
+ssck_neg:
+    mov bx, word ptr cs:[seam_scrstep]
+    neg bx
+    call sub_SeamScrollCount
+    cmp cx, word ptr cs:[seam_scrbest]
+    jbe ssck_next
+    mov word ptr cs:[seam_scrbest], cx
+    mov word ptr cs:[seam_scrbestdy], bx
+ssck_next:
+    inc word ptr cs:[seam_scrstep]
+    cmp word ptr cs:[seam_scrstep], SSC_MAX_STEP
+    jbe ssck_step
+    mov bx, word ptr cs:[seam_scrbestdy]
+    test bx, bx
+    jz ssck_ret                     ; no shift explains more than no shift
+    cmp word ptr cs:[seam_scrbest], SSC_MIN_MATCH
+    jb ssck_ret                     ; too little of the screen moved together
+    mov di, SEAM_BUF+14
+    mov byte ptr [di], 5            ; scroll(dy): no pixel payload
+    mov al, bl
+    mov byte ptr [di+1], al
+    mov cx, 2
+    call sub_SeamSend
+    ; The client's picture moves with the screen; its row table has to follow,
+    ; or the rows that really changed would look unchanged.  Rows are copied
+    ; inside the table, so the direction decides the copy order.
+    test bx, bx
+    js ssck_up
+    ; content moved down: the client's row y was its row y-dy
+    mov cx, 200
+    sub cx, bx
+    mov di, 199*4
+    add di, SEAM_SHADOW             ; the last row
+    mov si, di
+    mov ax, bx
+    sal ax, 1
+    sal ax, 1
+    sub si, ax                      ; the row dy above it
+ssck_down_loop:
+    mov ax, word ptr [si]
+    mov word ptr [di], ax
+    mov ax, word ptr [si+2]
+    mov word ptr [di+2], ax
+    sub si, 4
+    sub di, 4
+    dec cx
+    jnz ssck_down_loop
+    ; rows 0..dy-1 did not exist in the old picture
+    mov cx, bx
+    mov si, SEAM_CURTAB
+    mov di, SEAM_SHADOW
+    call sub_SeamScrollPoison
+    jmp ssck_ret
+ssck_up:
+    ; content moved up: the client's row y was its row y+|dy|
+    mov ax, bx
+    neg ax                          ; |dy|
+    mov cx, 200
+    sub cx, ax
+    mov si, ax
+    sal si, 1
+    sal si, 1
+    add si, SEAM_SHADOW
+    mov di, SEAM_SHADOW
+ssck_up_loop:
+    mov dx, word ptr [si]
+    mov word ptr [di], dx
+    mov dx, word ptr [si+2]
+    mov word ptr [di+2], dx
+    add si, 4
+    add di, 4
+    dec cx
+    jnz ssck_up_loop
+    ; DI now points at the first row that scrolled in
+    mov cx, bx
+    neg cx                          ; |dy| rows
+    mov ax, 200
+    add ax, bx                      ; 200-|dy|
+    mov si, ax
+    sal si, 1
+    sal si, 1
+    add si, SEAM_CURTAB
+    call sub_SeamScrollPoison
+ssck_ret:
+    pop bp
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamScrollCount - score a shift: how many rows of the overlap does it
+;                       explain?
+; in:  DS = block, BX = signed shift (positive: the content moved down)
+; out: CX = matching rows; BX and BP are preserved, AX, DX, SI, DI are used
+; ---------------------------------------------------------------------------
+sub_SeamScrollCount:
+    xor cx, cx
+    test bx, bx
+    js sscnt_up
+    mov dx, 200
+    sub dx, bx
+    mov si, bx
+    sal si, 1
+    sal si, 1
+    add si, SEAM_CURTAB             ; this pass's row y ...
+    mov di, SEAM_SHADOW             ; ... against the client's row y-BX
+    jmp sscnt_loop
+sscnt_up:
+    mov dx, 200
+    add dx, bx
+    mov si, SEAM_CURTAB             ; this pass's row y ...
+    mov di, bx                      ; ... against the client's row y+|BX|
+    neg di
+    sal di, 1
+    sal di, 1
+    add di, SEAM_SHADOW
+sscnt_loop:
+    mov ax, word ptr [si]
+    cmp ax, word ptr [di]
+    jne sscnt_miss
+    mov ax, word ptr [si+2]
+    cmp ax, word ptr [di+2]
+    jne sscnt_miss
+    inc cx
+sscnt_miss:
+    add si, 4
+    add di, 4
+    dec dx
+    jnz sscnt_loop
+    ret
+
+; Mark rows as unknown with the complement of their checksum: a value can
+; never equal its own complement, so the row pass has to send them.
+; in: SI = this pass's table, DI = the client's table, CX = rows (> 0)
+sub_SeamScrollPoison:
+    mov ax, word ptr [si]
+    not ax
+    mov word ptr [di], ax
+    mov ax, word ptr [si+2]
+    not ax
+    mov word ptr [di+2], ax
+    add si, 4
+    add di, 4
+    dec cx
+    jnz sub_SeamScrollPoison
+    ret
 
 ; ---------------------------------------------------------------------------
 ; sub_SeamEnterVbe - allocate and clear the VBE shadow, send set_mode.

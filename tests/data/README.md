@@ -29,3 +29,30 @@ engine mode (reallocating replica and texture, 640-wide rows, palette swaps) and
 
 Decode stats: `frames=11 rects=184 palette=2 control=1 records=200 bytes=123257`, final mode
 `640x480x8`.
+
+## `sample-video-rle.bin`
+
+A file-backend recording with the seam's run-length row codec (codec 1), 399,860 bytes, cut at a
+record boundary: the 640x480 intro, the mode switch to 320x200 and the start of the game, so both
+engine modes and the RLE decoder are covered. Every rect row here is run-length coded; the clip
+carries 28,632 rects in 400 KB, which the same rows would not fit in raw (they were 64 bytes per
+320-pixel row of flat art and up to 647 per noisy row).
+
+Decode stats: `frames=182 rects=2681 palette=141 control=3 records=3011 bytes=399860` (the client
+merges rows, the Python decoder counts records), final mode `320x200x8`. `tests/replay/run.sh`
+decodes it with both implementations and compares the rendered PPMs, so the asm encoder, the C#
+decoder and the Python reference cannot drift apart unnoticed.
+
+## `sample-pan-rows.bin` / `sample-pan-scroll.bin`
+
+The same twelve pictures — a 320x200 scene sliding up six rows and back down
+six — recorded twice: first as changed rows, then as one `scroll(dy)` message
+per frame plus the row that slides in. 18,887 bytes against 202,587 for the
+row form, which is the point of the message: a panning camera used to cost a
+row message per screen row. `tests/seam-scroll/run.sh` generates and checks
+them (the committed files must be what `mkstream.py` builds, and both must
+decode to identical frames), and `tests/replay/run.sh` renders both with the
+C# client and the Python decoder and compares the PPMs.
+
+Decode stats (the scroll recording): `frames=12 rects=211 scrolls=11 palette=1
+records=236 bytes=18887`.

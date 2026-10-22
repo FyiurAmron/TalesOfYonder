@@ -1134,3 +1134,120 @@ emulator-hook demo, not this port).
   - the file, tee and log builds are byte-identical to before (`SWREG.EXE` md5
     `7e86bad4…`, `411906d5…`, `6c22cfce…`), the serial build now assembles with 0 warnings
     (md5 `2590a1a4…`), and the oracle stays `SWREG.EXE: OK` + `IDENTICAL` with the pin OK.
+- 2026-10-22 — VIDEO codec 1 (row runs) in the seam and the client:
+  - the seam encodes every changed row as runs: `00 nn` repeats the previous pixel, `01 nn vv` a
+    new one, `02 nn` plus `nn` literals, `03` ends the row.  Runs of one or two pixels stay
+    literals (three bytes for two pixels is not a saving) and literals are merged and flushed in
+    chunks of 255, so an encoded row can never outgrow the raw one and the payload never
+    overgrows the message buffer.  Both engine modes use it (mode 13h 320-pixel rows, VBE
+    640-pixel rows); the codec byte in the message header carries it per message;
+  - the client decodes both codecs and only rejects codecs above 1; `tools/stream/replay.py` grew
+    the same decoder so the offline gate compares two independent implementations of the format;
+  - sizing: a frame of the 320x200 game was ~64 KB of raw rows and is now 1 to 4 KB in flat art
+    and up to ~65 KB only for full-screen noise; the live link writes ~20 KiB/s where the raw
+    rows cost ~1 MB/s over the wrap (`STREAM.BIN` used to wrap 8 MiB in 15 s);
+  - the encoder's return value and destination pointer had three bugs that only showed up as a
+    frozen game (a wrong length made `sub_SeamSend` copy a huge payload into the TX buffer, and
+    the literal flusher restored the output pointer); they were found with a standalone COM
+    round-trip harness (six 640-pixel rows: a flat run, all-distinct, a checkerboard, noise, two
+    long runs, mixed) that decodes the output in Python and compares it with the source;
+  - measured on the same machine, the seam's pass rate is what the client shows, not the filter
+    or the link: the DOSBox-X window redraws the low-res scene at 19 to 32 distinct pictures a
+    second while the client receives 9 to 10, with or without a client attached (so it is the
+    seam's own pace, not the transport).  Removing the tick gate lifts the client to 18 to 50
+    pictures a second and leaves the game's window at the same 19 to 20 - the gate, not the
+    cost of a pass, is the limit.  The DAC readback (768 port reads a pass), the file commit,
+    the encoder (raw rows instead of runs) and a bounded number of rows per pass were each
+    probed and left the rate unchanged; a BIOS tick is 55 ms, so a tick gate cannot present
+    faster than 18.2 a second, and its passes land back to back inside one tick where they all
+    see the same screen even when two are allowed.
+  - pacing is therefore its own job: two passes per tick showed the client no more pictures
+    (the passes bunch), and pacing off the PIT channel 0 counter - the only finer clock the
+    machine has - stopped the passes in the first attempt and needs to be debugged in isolation
+    the way the encoder was.  The seam is back at the tick gate, which is safe, if coarse.
+- 2026-10-22 — a `fast` build, to measure the presentation gate:
+  - `-DSEAM -DSEAM_FILE -DSEAM_FAST` (`build.sh --variant fast`) opens the tick gate in
+    `fn_SeamPresent`, so a pass runs on every hook call.  It is a diagnostic, not a product
+    build: the gate is there because a poll or wait-key loop calls the hook in a tight loop and
+    a pass scans the whole screen.  Every other build assembles the same code (`IFNDEF`);
+  - same machine, same scene, folder link, one run each: the client received 8.0 pictures a
+    second with the gate and 23.9 with it open (frames 106 -> 470 at 10 s and 282 -> 996 at
+    32 s); DOSBox-X's own window changed at 19 to 21 pictures a second in the gated run and at
+    9 to 31 in the open one, and the oracle build measured 19, 10 and 32 at the same
+    checkpoints - so the gate, not the work in a pass, is what the client shows, and opening it
+    does not visibly slow the game in this scene;
+  - that is the trade to design around: the client needs the rate, the game must keep it.
+    Pacing off the PIT (the only clock finer than the 55 ms BIOS tick) is the next step and
+    `fast` is how its result gets measured.
+- 2026-10-22 — whole-screen pans go out as VIDEO `scroll` (type 5), and the choppiness at the gate
+  is gone at its cause:
+  - **the symptom, measured**: the client was choppy exactly when the game pans the camera past the
+    gate in the opening scene — the one place where the whole screen changes from picture to
+    picture.  A live tap of `STREAM.BIN` during that pan: 168 changed rows and 22 KB per presented
+    picture, 11 pictures a second, against 50+ a second when the screen stands still.  Opening the
+    tick gate (`-DSEAM_FAST`) did not help, and this is why: the cost was the row work, not the
+    gate.  The server was sending a whole screen of row messages for what is a pure shift;
+  - **the fix**: a mode-13h pass now scans the rows first and sends second, and scores whole-screen
+    shifts of +-8 rows against the row checksums it already keeps (a pan makes this pass's row `y`
+    equal the row the client had at `y-dy`).  A step that explains more rows than no shift at all,
+    and at least 100, wins: one 2-byte `scroll(dy)`, the client's checksum table shifted with it,
+    and then the ordinary row pass sends the rows that slid in and everything that did not move
+    with the picture (the two waving flags).  No match means no message, and the pass behaves
+    exactly as before, so the heuristic can only cost bytes, never correctness;
+  - **numbers**, same scene, folder link, client with xBRZ: 168 rows -> 1 row and 22 KB -> 0.4 KB
+    per picture; before the change the pan's pictures arrived at 11/s, now the client renders 39-44
+    pictures/s in the fast build and 16-17/s in the gated one, so what is left is the 18.2/s
+    BIOS-tick gate, not the seam's work.  The client scales every picture with xBRZ in 3.3 ms, so
+    the filter is not the limit either.  The remaining tick-gate limit is gone in the next entry
+    (a presentation budget per tick); the pan's own rate turns out to be the game's, not the
+    gate's, and that is measured there too;
+  - **verification**: the detector is tested as assembly (`tests/seam-scroll/run.sh`, extracted
+    verbatim, ten cases against a Python model: pans of +-1..8 with and without a row that moves on
+    its own, a pan past the range, a repaint, still pictures with 1 and 40 changed rows); the new
+    fixtures `tests/data/sample-pan-rows.bin` and `sample-pan-scroll.bin` are the same twelve
+    pictures encoded both ways and must decode identically (the scroll form is 18,887 bytes against
+    202,587); `tests/replay/run.sh` renders all five recordings with the client and the Python
+    decoder; and a real run's client-rendered frames show the -1 row shift the game's content
+    makes, which is what pins the sign of the message end to end.  The harness builds a plain
+    binary (`uasm -bin`): with `-mz` and `org 100h` every label sits 0x100 above where the image
+    loads, which made the first harness read its case table out of its own code;
+  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds are not
+    byte-identical on purpose (`docs/client.md`).
+- 2026-10-22 — presentation is paced by a per-tick budget, and the pan's real limit is measured:
+  - **why the tick gate had to go**: a pass per 55 ms tick capped the client at 18.2 pictures a
+    second.  A pan advances one row per presented picture, so the game's own pan (one row per BIOS
+    tick, 18.2/s) was arriving at 16-17/s with visible jitter, and scenes the game draws faster
+    than one picture per tick (the intro's fades) were held at 18.2/s as well - the tap showed
+    36-53/s once that cap was lifted, with the intro's mode switches at the same times as before
+    (640x480 at 0.37 s, 320x200 at 3.84 s), so the game keeps its speed;
+  - **a finer clock does not exist here, and the attempt is worth recording**: the PIT channel-0
+    counter looks like a 0.84 us clock, but SBFMDRV reprograms the channel to divisor 48D3h
+    (~64 Hz, `sub_0A67` writes 36h to port 43h, then the divisor to port 40h; its ISR keeps the
+    visible BIOS tick at 18.2 Hz, `docs/sbfmdrv.md`).  The counter therefore reloads every 15.6 ms
+    and 16-bit subtraction cannot measure a 25 ms pass interval at all: the first build presented
+    *nothing* in a tight poll loop (the diagnostic log showed 0 passes over 300 ticks while calls
+    continued).  The per-call read is also far too expensive for the hot path: measured under
+    DOSBox-X, `int 1Ah` costs 0.27 us and a PIT latch-and-read 3.0 us, and the game calls the
+    present hook about 1,800 times per tick in a tight poll loop (a pass per call read the clock
+    on every one of them and stretched the intro threefold, 4.4 s -> 13 s);
+  - **the fix**: `fn_SeamPresent` takes at most `SEAM_PASSES_PER_TICK` = 3 passes per BIOS tick
+    (55/s at most), with a forced pass (mode set, resync, keyframe) bypassing the budget.  The
+    tick comes straight from the BIOS data area (0040:006Ch) - a memory read, cheap enough to do
+    on every hook call - and the gate is a handful of instructions.  A tight poll loop can still
+    not flood the screen; a game-driven frame goes out as it is drawn;
+  - **the pan's own limit, measured**: with the budget in place the pan still presents ~17
+    pictures a second, and the diagnostic `fast` build (a pass on every call, no budget) presents
+    the same 196-197 scroll pictures in the same window and the same ~17/s in the busiest two
+    seconds.  The pan is therefore tick-driven in the original: one row per BIOS tick is all the
+    game draws.  What the seam does now is deliver every one of those pictures (the tick gate
+    dropped some), and what it adds beyond the pan is the faster scenes (fades up to 53/s).  A
+    smoother pan than the original would need client-side interpolation, which is not planned;
+  - **verification**: `tests/seam-pace/run.sh` extracts `sub_SeamTickGate` verbatim and drives it
+    against the real BIOS tick under DOSBox-X: five calls in one tick give exactly
+    `[1, 1, 1, 0, 0]`, a forced pass on an exhausted budget still runs and clears its flag, and
+    the first call of the next tick starts the budget over (the harness retries if a tick boundary
+    falls inside a group, which would legitimately reset it); `tests/seam-pace/check.py` pins
+    those rules, so a wrong clock read or a broken cap fails the gate.  The call and pass counts
+    above came from the log build's existing per-call (tag 7) and per-pass (tag 12) records;
+  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds are not
+    byte-identical on purpose (`docs/client.md`).

@@ -1,14 +1,17 @@
 # Tests
 
-Four checks pin the client end of the serial seam link. All are ordinary shell
-scripts; artifacts land under `build/runs/<kind>/<stamp>/`.
+Seven checks pin the seam link and the client. All are ordinary shell scripts;
+artifacts land under `build/runs/<kind>/<stamp>/`.
 
 ## `tests/replay/run.sh`
 
-Offline and hermetic (no DOSBox-X, no game): replays `tests/data/sample-video.bin`
-through the C# client and through the Python reference decoder
+Offline and hermetic (no DOSBox-X, no game): replays the recordings in
+`tests/data/` through the C# client and through the Python reference decoder
 (`tools/stream/replay.py`, `--ppm` in both) and compares the final frames with
-`cmp`. Same framing, same palette expansion, same state, byte for byte.
+`cmp`. Same framing, same palette expansion, same state, byte for byte. The
+recordings cover mode 13h raw, the VBE intro raw, both modes with the
+run-length row codec (codec 1), and the same twelve-picture camera pan encoded
+once as rows and once as `scroll` messages.
 
     sh tests/replay/run.sh [RECORDING]
 
@@ -25,6 +28,56 @@ only a console, so this check is not redundant.
     sh tests/window/run.sh
 
 Needs `Xvfb` and `xwininfo`; skips (exit 0) when either is missing.
+
+## `tests/seam-rle/run.sh`
+
+The row encoder of VIDEO codec 1 is assembly inside the seam, so it is tested
+as assembly: the routines are extracted verbatim from `seam.asm`, built into a
+.COM with a harness and run under DOSBox-X, and the encoded output is decoded
+here in Python and compared with the source rows. Six 640-pixel rows cover one
+long run (counts above 255), all-distinct and checkerboard rows (literal
+chunks), noise, two long runs, and runs mixed with singles. This is the check
+that catches an encoder regression, because `tests/replay` only replays
+recordings.
+
+    sh tests/seam-rle/run.sh
+
+Needs `uasm`, `dosbox-x` and `Xvfb`; skips (exit 0) when one is missing.
+
+## `tests/seam-scroll/run.sh`
+
+The whole-screen pan detector (VIDEO `scroll`) is assembly inside the seam, so
+it gets the same treatment: extracted verbatim, built into a .COM, run under
+DOSBox-X, and compared against a Python model of the protocol rules. Ten
+cases: pans of -1, -3, -2, +2, -5 and +8 rows (one with a row that changes on
+its own), a pan past the +-8 range, a repaint, and two still pictures whose
+changed rows must not be read as a shift. The same script also builds the pan
+fixtures (`sample-pan-rows.bin`, `sample-pan-scroll.bin`), requires the
+committed copies to match the generator, and checks that the two recordings
+decode to identical pictures — the format half needs only `python3` and runs
+even where DOSBox-X is missing.
+
+    sh tests/seam-scroll/run.sh
+
+Needs `uasm`, `dosbox-x` and `Xvfb` for the assembly half; skips that part
+(exit 0) when one is missing.
+
+## `tests/seam-pace/run.sh`
+
+The presentation budget decides how often the game's screen goes to the
+client (`SEAM_PASSES_PER_TICK` passes per BIOS tick, with forced passes
+ignoring it). It is assembly inside the seam and it has broken before - an
+earlier attempt paced passes off the PIT counter, which SBFMDRV has already
+reprogrammed to ~64 Hz, and presented nothing at all in a tight poll loop - so
+it is tested against the real BIOS tick under DOSBox-X, not against a model of
+it: five calls inside one tick must give exactly `[1, 1, 1, 0, 0]`, a forced
+pass on an exhausted budget must still run and clear its flag, and the first
+call of the next tick must start the budget over. The harness retries a group
+if a tick boundary falls inside it.
+
+    sh tests/seam-pace/run.sh
+
+Needs `uasm`, `dosbox-x` and `Xvfb`; skips (exit 0) when one is missing.
 
 ## `tests/xbrz/run.sh`
 

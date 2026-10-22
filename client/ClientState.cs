@@ -12,6 +12,7 @@ public sealed class ClientStats
     public long Frames;
     public long Records;
     public long Rects;
+    public long Scrolls;
     public long PaletteUpdates;
     public long ControlMessages;
     public long EngineErrors;
@@ -35,7 +36,9 @@ public sealed class ClientStats
     public int Height;
 
     public override string ToString() =>
-        $"frames={Frames} rects={Rects} palette={PaletteUpdates} control={ControlMessages} " +
+        $"frames={Frames} rects={Rects} " +
+        (Scrolls > 0 ? $"scrolls={Scrolls} " : string.Empty) +
+        $"palette={PaletteUpdates} control={ControlMessages} " +
         $"records={Records} bytes={Bytes} shown={Presented} " +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
         (Filtered > 0 ? $"filter={FilterMs / Filtered:F1}ms " : string.Empty) +
@@ -136,7 +139,7 @@ public sealed class ClientState(int width, int height)
                 Stats.UnknownFamilies++;
                 return false;
             }
-            if (header.Codec != 0)
+            if (header.Codec > 1)
             {
                 error = $"unsupported codec {header.Codec} at sequence {header.Sequence}";
                 return false;
@@ -216,7 +219,7 @@ public sealed class ClientState(int width, int height)
                     int y = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(3));
                     int rw = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(5));
                     int rh = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(7));
-                    if (rw == 0 || rh == 0 || length < 9 + rw * rh)
+                    if (rw == 0 || rh == 0)
                     {
                         error = $"bad rect {x},{y} {rw}x{rh} (payload {length})";
                         return false;
@@ -231,11 +234,35 @@ public sealed class ClientState(int width, int height)
                         _needsKeyframe = true;
                         return false;
                     }
-                    var src = payload.AsSpan(9, rw * rh);
-                    for (int row = 0; row < rh; row++)
+                    if (header.Codec == 0)
                     {
-                        src.Slice(row * rw, rw).CopyTo(Indices.AsSpan((y + row) * Width + x));
-                        _dirtyRows.Add(y + row);
+                        if (length < 9 + rw * rh)
+                        {
+                            error = $"bad rect {x},{y} {rw}x{rh} (payload {length})";
+                            return false;
+                        }
+                        var src = payload.AsSpan(9, rw * rh);
+                        for (int row = 0; row < rh; row++)
+                        {
+                            src.Slice(row * rw, rw).CopyTo(Indices.AsSpan((y + row) * Width + x));
+                            _dirtyRows.Add(y + row);
+                        }
+                    }
+                    else if (header.Codec == 1)
+                    {
+                        // run-length coded rows: 00 nn repeats the previous
+                        // pixel, 01 nn vv repeats vv, 02 nn takes nn literal
+                        // pixels and 03 ends the row
+                        if (!DecodeRuns(payload, length, x, y, rw, rh, out string? runError))
+                        {
+                            error = runError;
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        Stats.UnknownMessages++;
+                        return false;
                     }
                     IndicesDirty = true;
                     Stats.Rects++;
@@ -246,6 +273,48 @@ public sealed class ClientState(int width, int height)
                     Stats.Frames++;
                     _presentPending = true;
                     return false;
+
+                case VideoMessage.Scroll:
+                {
+                    // The whole picture moved by dy rows (positive: down).  The
+                    // rows that scroll in, and every row that did not move with
+                    // it, follow as rects in this frame.  A scroll applies to
+                    // what has arrived so far, presented or not.
+                    if (length < 2)
+                    {
+                        error = "short scroll";
+                        return false;
+                    }
+                    int dy = (sbyte)payload[1];
+                    if (dy == 0)
+                    {
+                        Stats.Scrolls++;
+                        return true;
+                    }
+                    if (dy <= -Height || dy >= Height)
+                    {
+                        error = $"scroll {dy} does not fit {Height} rows";
+                        return false;
+                    }
+                    if (dy > 0)
+                    {
+                        // content moves down: row y takes the old row y-dy
+                        Array.Copy(Indices, 0, Indices, dy * Width, (Height - dy) * Width);
+                        Array.Clear(Indices, 0, dy * Width);
+                    }
+                    else
+                    {
+                        // content moves up: row y takes the old row y+|dy|
+                        int up = -dy;
+                        Array.Copy(Indices, up * Width, Indices, 0, (Height - up) * Width);
+                        Array.Clear(Indices, (Height - up) * Width, up * Width);
+                    }
+                    // every row moved, so the filter has to rebuild the frame
+                    IndicesDirty = true;
+                    _dirtyAll = true;
+                    Stats.Scrolls++;
+                    return true;
+                }
 
                 case VideoMessage.Reset:
                     Array.Clear(Indices);
@@ -326,6 +395,109 @@ public sealed class ClientState(int width, int height)
         {
             return _presentPending;
         }
+    }
+
+    /// <summary>
+    /// Decodes run-length coded rows into the framebuffer.  The runs are:
+    /// 00 nn repeats the previous pixel, 01 nn vv repeats vv, 02 nn takes nn
+    /// literal pixels and 03 ends the row.
+    /// </summary>
+    private bool DecodeRuns(byte[] payload, int length, int x, int y, int rw, int rh,
+        out string? error)
+    {
+        error = null;
+        int at = 9;
+        for (int row = 0; row < rh; row++)
+        {
+            int written = 0;
+            byte previous = 0;
+            bool have = false;
+            while (written < rw)
+            {
+                if (at >= length)
+                {
+                    error = $"truncated row {y + row} ({written} of {rw} pixels)";
+                    return false;
+                }
+                byte op = payload[at++];
+                if (op == 3)
+                {
+                    break;                      // the end of the row
+                }
+                int count;
+                byte value;
+                if (op == 0)
+                {
+                    if (!have)
+                    {
+                        error = $"row {y + row} repeats a pixel that was never sent";
+                        return false;
+                    }
+                    if (at >= length)
+                    {
+                        error = $"truncated row {y + row}";
+                        return false;
+                    }
+                    count = payload[at++];
+                    value = previous;
+                }
+                else if (op == 1)
+                {
+                    if (at + 1 >= length)
+                    {
+                        error = $"truncated row {y + row}";
+                        return false;
+                    }
+                    count = payload[at++];
+                    value = payload[at++];
+                }
+                else if (op == 2)
+                {
+                    if (at >= length)
+                    {
+                        error = $"truncated row {y + row}";
+                        return false;
+                    }
+                    count = payload[at++];
+                    if (at + count > length || written + count > rw)
+                    {
+                        error = $"row {y + row} runs past the row";
+                        return false;
+                    }
+                    for (int i = 0; i < count; i++)
+                    {
+                        byte literal = payload[at++];
+                        Indices[(y + row) * Width + x + written + i] = literal;
+                    }
+                    written += count;
+                    previous = payload[at - 1];
+                    have = true;
+                    continue;
+                }
+                else
+                {
+                    error = $"unknown run {op} in row {y + row}";
+                    return false;
+                }
+
+                if (count == 0 || written + count > rw)
+                {
+                    error = $"row {y + row} runs past the row";
+                    return false;
+                }
+                Indices.AsSpan((y + row) * Width + x + written, count).Fill(value);
+                written += count;
+                previous = value;
+                have = true;
+            }
+            if (written != rw)
+            {
+                error = $"row {y + row} is {written} pixels short";
+                return false;
+            }
+            _dirtyRows.Add(y + row);
+        }
+        return true;
     }
 
     /// <summary>6-bit DAC value to 8-bit, the usual v &lt;&lt; 2 | v &gt;&gt; 4 expansion.</summary>
