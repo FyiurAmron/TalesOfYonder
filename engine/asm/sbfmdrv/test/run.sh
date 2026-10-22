@@ -3,6 +3,9 @@
 # DOSBox-X (SB16 profile).
 #   api        - TEST.COM INT API regression + crafted stream trace
 #   uninstall  - install, SBFMDRV.COM /U, verify with TEST.COM
+#   uninstall-late - install, load LATE.COM (a TSR), then SBFMDRV.COM /U: the
+#                driver must refuse with error 0005h and leave its hooks, its
+#                API vector and the TSR intact (TEST.COM L checks all four)
 #   music      - play a real CTMF block from WORLD.DAT (MUSIC.BLK) with
 #                MUSIC.COM and cross-check the sequencer positions
 #                (MUSIC_TRACK selects the id, MUSIC_SONG=1 slices the song
@@ -57,8 +60,9 @@ fi
 case "$MODE" in
     api)       CONF="$HERE/dosbox-x.conf" ;;
     uninstall) CONF="$HERE/dosbox-x-uninstall.conf" ;;
+    uninstall-late) CONF="$HERE/dosbox-x-uninstall.conf" ;;
     music)     CONF="$HERE/dosbox-x-music.conf" ;;
-    *)         echo "usage: $0 [api|uninstall|music]" >&2; exit 2 ;;
+    *)         echo "usage: $0 [api|uninstall|uninstall-late|music]" >&2; exit 2 ;;
 esac
 STAMP="$(date +%Y%m%d-%H%M%S)-$MODE"
 RUN="$ROOT/build/runs/sbfmdrv/$STAMP"
@@ -79,7 +83,15 @@ if [ "$MODE" = music ]; then
     CONF="$RUN/dosbox-x.conf"
 else
     cp -f "$ROOT/build/sbfmdrv/test/TEST.COM" "$RUN/TEST.COM"
-    if [ -n "$APIFLAG" ]; then
+    if [ "$MODE" = uninstall-late ]; then
+        cp -f "$ROOT/build/sbfmdrv/test/LATE.COM" "$RUN/LATE.COM"
+        # the TSR goes in after the driver, and the driver's output is
+        # redirected so the refusal message can be checked
+        sed -e "s|^SBFMDRV.COM /U$|LATE.COM\\nSBFMDRV.COM /U > U.TXT|" \
+            -e "s|^TEST.COM$|TEST.COM L|" \
+            "$CONF" > "$RUN/dosbox-x.conf"
+        CONF="$RUN/dosbox-x.conf"
+    elif [ -n "$APIFLAG" ]; then
         sed "s|^TEST\\.COM\$|DX-CAPTURE $APIFLAG TEST.COM|" "$CONF" > "$RUN/dosbox-x.conf"
         CONF="$RUN/dosbox-x.conf"
     fi
@@ -116,6 +128,30 @@ if [ "$MODE" = music ]; then
         tail -30 "$RUN/stdout.log" || true
         exit 1
     fi
+elif [ "$MODE" = uninstall-late ]; then
+    echo "--- RESULT.TXT ---"
+    cat "$RUN/RESULT.TXT" 2>/dev/null || true
+    echo "--- SBFMDRV.COM /U output ---"
+    cat "$RUN/U.TXT" 2>/dev/null || true
+    RC=0
+    for want in "VEC8 OK" "VEC9 OK" "APIV OK" "LATE OK"; do
+        grep -qF "$want" "$RUN/RESULT.TXT" 2>/dev/null || {
+            echo "uninstall-late: FAIL - RESULT.TXT does not report '$want'" >&2
+            RC=1
+        }
+    done
+    if grep -qE "BAD|NONE" "$RUN/RESULT.TXT" 2>/dev/null; then
+        echo "uninstall-late: FAIL - a late check failed (see RESULT.TXT)" >&2
+        RC=1
+    fi
+    if ! grep -qF "Error 0005" "$RUN/U.TXT" 2>/dev/null; then
+        echo "uninstall-late: FAIL - the driver did not refuse (no error 0005)" >&2
+        RC=1
+    fi
+    if [ "$RC" -eq 0 ]; then
+        echo "uninstall-late: OK (refused with error 0005; hooks, API vector and the later TSR intact)"
+    fi
+    exit "$RC"
 elif [ -f "$RUN/RESULT.TXT" ]; then
     echo "--- RESULT.TXT ---"
     cat "$RUN/RESULT.TXT"

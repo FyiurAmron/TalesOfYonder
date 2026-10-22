@@ -66,7 +66,7 @@ The reference path can be overridden with `SBFMDRV_EXE=...` for
   `DX-CAPTURE /O` OPL register log against the walk (key-on count and tick
   timeline).
 - `test/build.sh` - assemble both tests into `build/sbfmdrv/test/`.
-- `test/run.sh [api|uninstall|music]` - build, run DOSBox-X headless (Xvfb,
+- `test/run.sh [api|uninstall|uninstall-late|music]` - build, run DOSBox-X headless (Xvfb,
   SB16 profile, `A220 I7 D1 H5 T6`), and print `RESULT.TXT` / `MUSIC.LOG`
   plus the cross-check (`music` mode; `MUSIC_TRACK`/`MUSIC_SONG` select the
   record, `MUSIC_PLAY=1` runs the driver's timer ISR instead of stepping,
@@ -87,7 +87,9 @@ pause/resume, stop -> 0).  A second crafted stream then traces percussion mode
 `[02F7h]`, the voice count and the rhythm flag per step, plus the drum note
 slots and their frequency word.  The exact traces and their interpretation are
 in `docs/sbfmdrv.md` section 6.  The uninstall run installs, runs `/U`, and the
-test then reports `NO DRIVER`.
+test then reports `NO DRIVER`; `uninstall-late` loads `LATE.COM` (a TSR on `INT 60h`)
+after the driver first, so `/U` must refuse with error `0005h` and leave the driver's
+hooks, its API vector and that TSR in place.
 
 The music run extracts a real record (default track 1) and checks every
 sequencer position/status against the static walk of the same block; tracks 1,

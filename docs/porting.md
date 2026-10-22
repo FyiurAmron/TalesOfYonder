@@ -1251,3 +1251,21 @@ emulator-hook demo, not this port).
     above came from the log build's existing per-call (tag 7) and per-pass (tag 12) records;
   - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds are not
     byte-identical on purpose (`docs/client.md`).
+- 2026-10-22 — SBFMDRV: the uninstall refusal is tested (the last open driver behaviour):
+  - `sub_1A58` walks the MCB chain from the driver's own block and stops with error `0005h`
+    when another program sits above it: restoring the saved `INT 08h`/`09h` vectors would cut
+    that program out of the chain, and the driver cannot know whether it hooked them, so
+    refusing is the safe answer.  Until now only the clean `/U` run was tested (`NO DRIVER`);
+  - `test/late.asm` (`LATE.COM`) is a 9-paragraph TSR that hooks `INT 60h` (below the driver's
+    `80h..BFh` API-vector search window) and answers `0A55Ah`.  It moves `SS:SP` into its kept
+    block: DOS points the stack at the top of the 64 KB block, which a small TSR gives back;
+  - `test/run.sh uninstall-late` installs the driver, loads `LATE.COM`, runs
+    `SBFMDRV.COM /U > U.TXT`, then `TEST.COM L`.  `U.TXT` carries `Error 0005: Other program
+    exist after SBFMDRV.`, and the test proves the refusal left everything alone: `INT 08h` at
+    `driver:1226h`, `INT 09h` at `driver:12B2h`, the API vector at `driver:12E6h`, and `INT 60h`
+    still answering - `uninstall-late: OK`.  The plain `uninstall` (`NO DRIVER`) and `api`
+    modes still pass; `docs/sbfmdrv.md` 2.6/6.4 document the scenario and section 8 no longer
+    lists it;
+  - with that, the driver's open items are document-only (the installer's error strings) or
+    unobservable in the shipped content (jumps/`FC`/percussion have crafted coverage, and the
+    digitized-SFX far calls are no-ops), so M2 is the next milestone.

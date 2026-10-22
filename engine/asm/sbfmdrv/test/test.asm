@@ -568,6 +568,103 @@ f0_loop:
     out 21h, al
     sti
 
+    ; ---- optional: the uninstall-refusal scenario (TEST.COM L) --------------
+    ; For this mode the autoexec loads LATE.COM after the driver and then runs
+    ; `SBFMDRV.COM /U`: the driver must refuse (a later program sits above it,
+    ; error 0005h) and leave everything in place - its INT 08h/09h hooks, its
+    ; API vector, and that later program.  A refusal that broke the hooks or
+    ; killed the TSR would be worse than no refusal at all.
+    mov cl, byte ptr [80h]          ; the command tail at PSP:80h
+    xor ch, ch
+    mov si, 81h
+late_scan:
+    cmp cx, 0
+    jne late_have
+    jmp late_done
+late_have:
+    cmp byte ptr [si], 'L'
+    je late_checks
+    cmp byte ptr [si], 'l'
+    je late_checks
+    inc si
+    dec cx
+    jmp late_scan
+
+late_checks:
+    mov ah, 35h                     ; INT 08h -> driver:1226h
+    mov al, 8
+    int 21h
+    mov ax, bx
+    cmp ax, 1226h
+    jne late_v8_bad
+    mov ax, es
+    cmp ax, [drvseg]
+    jne late_v8_bad
+    mov si, offset s_v8ok
+    jmp late_v8_print
+late_v8_bad:
+    mov si, offset s_v8bad
+late_v8_print:
+    call begin
+    call puts
+    call endl
+
+    mov ah, 35h                     ; INT 09h -> driver:12B2h
+    mov al, 9
+    int 21h
+    mov ax, bx
+    cmp ax, 12B2h
+    jne late_v9_bad
+    mov ax, es
+    cmp ax, [drvseg]
+    jne late_v9_bad
+    mov si, offset s_v9ok
+    jmp late_v9_print
+late_v9_bad:
+    mov si, offset s_v9bad
+late_v9_print:
+    call begin
+    call puts
+    call endl
+
+    mov ah, 35h                     ; the API vector -> driver:12E6h
+    mov al, [vec]
+    int 21h
+    mov ax, bx
+    cmp ax, 12E6h
+    jne late_api_bad
+    mov ax, es
+    cmp ax, [drvseg]
+    jne late_api_bad
+    mov si, offset s_apiok
+    jmp late_api_print
+late_api_bad:
+    mov si, offset s_apibad
+late_api_print:
+    call begin
+    call puts
+    call endl
+
+    mov ah, 35h                     ; the later TSR still answers
+    mov al, 60h
+    int 21h
+    mov ax, es
+    or ax, bx
+    jz late_no_tsr
+    int 60h
+    cmp ax, 0A55Ah
+    mov si, offset s_late_bad
+    jne late_late_print
+    mov si, offset s_late_ok
+    jmp late_late_print
+late_no_tsr:
+    mov si, offset s_late_none
+late_late_print:
+    call begin
+    call puts
+    call endl
+late_done:
+
 finish:
     mov bx, [handle]
     mov ah, 3Eh
@@ -1148,6 +1245,16 @@ s_lp        db 'LOOP P', 0
 s_fst       db 'F0ST', 0
 s_f0        db 'F0CB N', 0
 s_reset     db 'DONE', 0
+
+s_v8ok      db 'VEC8 OK', 0
+s_v8bad     db 'VEC8 BAD', 0
+s_v9ok      db 'VEC9 OK', 0
+s_v9bad     db 'VEC9 BAD', 0
+s_apiok     db 'APIV OK', 0
+s_apibad    db 'APIV BAD', 0
+s_late_ok   db 'LATE OK', 0
+s_late_bad  db 'LATE BAD', 0
+s_late_none db 'LATE NONE', 0
 
 vec         db 0
 vnum        db 80h
