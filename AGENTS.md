@@ -93,7 +93,10 @@ machine, checksum self-patch, and a DOSBox-X black-box harness (`engine/asm/sbfm
 The repository layout is settled (`docs/layout.md`): engine sources under `engine/`, host tooling
 under `tools/`, committed gates under `tests/`, and `build/` mirrors the tree
 (`build/swreg/<variant>`, `build/sbfmdrv/`, `build/client/`, `build/runs/<kind>/<stamp>`, `build/dist/`).
-Next: start M2 (C core + platform layer); the remaining driver work is a real `WORLD.DAT`
-music-block capture with an OPL register log, and an audio-captured game run.  The game-side `v_SoundEntry` question is resolved: the
+Next: start M2 (C core + platform layer).  The driver work is closed: real `WORLD.DAT`
+blocks play against the static walk (`test/run.sh music`, with `MUSIC_CAP=wav|dro|both`
+recordings), the game-level audio run is `tools/dosbox/audio.sh`, and `/U` refusing to
+remove the driver from under a later TSR is gated by `test/run.sh uninstall-late`.  The
+game-side `v_SoundEntry` question is resolved: the
 driver has no far dispatcher, the pointer is zero, and the far calls are vestigial (treat them
 as no-ops; the resident INT API is the real interface).

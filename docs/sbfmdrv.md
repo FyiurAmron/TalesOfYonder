@@ -176,6 +176,18 @@ disables music start.
 A black-box run that installs and immediately runs `/U` reports `NO DRIVER`
 from the test program, confirming the vector and memory are released.
 
+The refusal is tested too (`test/run.sh uninstall-late`): `LATE.COM` is a
+9-paragraph TSR that hooks `INT 60h` and answers with `0A55Ah`, loaded after
+the driver so the MCB chain has another block in between.  `/U` then prints
+
+    SBFMDRV: Error 0005: Other program exist after SBFMDRV.
+
+and the test proves the refusal left everything alone: `INT 08h` still points
+at `driver:1226h`, `INT 09h` at `driver:12B2h`, the API vector at
+`driver:12E6h`, and `INT 60h` still answers.  Refusing is the safe behaviour:
+restoring the saved `INT 08h`/`09h` vectors would cut a later program out of
+the chain, and the driver cannot know whether that program hooked them.
+
 ## 3. Resident INT API
 
 ### 3.1 Calling convention
@@ -755,6 +767,25 @@ backward offset arithmetic (a fall-through would reach the trap); `FC` stops
 without consuming a delay byte; and the F0 callback counter shows the command
 `0Bh` hook firing exactly once.
 
+### 6.4 Uninstall with a later program
+
+`test/run.sh uninstall-late` runs the scenario of 2.6:
+
+    SBFMDRV.COM                 install (API vector 80h)
+    LATE.COM                    a 9-paragraph TSR, INT 60h -> 0A55Ah
+    SBFMDRV.COM /U > U.TXT      must refuse, error 0005h
+    TEST.COM L                  check the survivors
+
+    U.TXT: SBFMDRV: Error 0005: Other program exist after SBFMDRV.
+    VEC8 OK                     INT 08h = driver:1226h
+    VEC9 OK                     INT 09h = driver:12B2h
+    APIV OK                     the API vector = driver:12E6h
+    LATE OK                     INT 60h still answers 0A55Ah
+
+The same run without `LATE.COM` (`test/run.sh uninstall`) removes the driver:
+`TEST.COM` then reports `NO DRIVER`.  Both runs use the reference
+`SBFMDRV.COM`, so the MCB walk is the shipped one.
+
 
 ## 7. The game's far entry (`v_SoundEntry`)
 
@@ -796,7 +827,6 @@ pre-init block read; an audio-captured game run is the remaining check.
 
 ## 8. Open items
 
-- Uninstall in the presence of later TSRs/transients (the MCB check).
 - The game-level run is covered at the audio level (`tools/dosbox/audio.sh`: audible
   output, `267` note-ons all on the tick grid, melodic mode only).  Its
   digitized-SFX path stays untested: the vestigial far calls are no-ops, so no
