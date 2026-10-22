@@ -72,11 +72,11 @@ and the `include`, both inside `IFDEF SEAM`. `verify.sh` first checks
 pinned in `engine/asm/swreg/src/swreg.pin`. **An edit to game code that dodges the byte gate but changes the
 stripped text fails here** (re-pin only after a deliberate change): `seam_pin.py --update`.
 
-Seam builds (not byte-identical, on purpose): `engine/asm/swreg/tools/build.sh --variant serial`
-(the live link), `--variant file` (recording), `--variant tee` (both), `--variant log` (file +
-`SEAMLOG.TXT`). Each runs `fixhdr.py` and `check_mz_layout.py` (S1DEA paragraph prefix 7,
-`EMMXXXX0` delta `0C99h`) and stages the minimum game files. See `docs/stream.md` and
-`docs/client.md`.
+Seam builds (not byte-identical, on purpose): `engine/asm/swreg/tools/build.sh --variant file`
+(the product link), `--variant serial` (the obsolete COM1 link), `--variant tee` (both),
+`--variant log` (file + `SEAMLOG.TXT`). Each runs `fixhdr.py` and `check_mz_layout.py` (S1DEA
+paragraph prefix 7, `EMMXXXX0` delta `0C99h`) and stages the minimum game files. See
+`docs/stream.md` and `docs/client.md`.
 - Keep batches verifiable — if a batch takes much longer than a minute to check, split it.
 
 ## Working on the tooling (Python)
@@ -110,7 +110,7 @@ The M8/M9 rules above still govern the product client.
 | `engine/asm/swreg/` | `verify.sh` ends `OK` + `IDENTICAL` (includes the `swreg.pin` check); no commit ever changes `_ref/` |
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
-| `client/` | `dotnet build client -c Release` clean; `sh tests/replay/run.sh` renders byte-identically to `tools/stream/replay.py`; `sh tests/link/run.sh` reports every received message byte-exact |
+| `client/` | `dotnet build client -c Release` clean; `sh tests/replay/run.sh` renders byte-identically to `tools/stream/replay.py`; `sh tests/link/run.sh` (obsolete serial link, optional) reports every received message byte-exact |
 | Windows bundle | `publish-win.sh` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |

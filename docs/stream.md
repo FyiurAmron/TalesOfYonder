@@ -32,7 +32,7 @@ code fails the gate:
 | script | defines | backend | output |
 |---|---|---|---|
 | `engine/asm/swreg/tools/build.sh` | — | none | `build/swreg/oracle/` (the oracle build; byte-identical) |
-| `engine/asm/swreg/tools/build.sh --variant serial` | `-DSEAM` | COM1, 115200 8N1 | `build/swreg/serial/` |
+| `engine/asm/swreg/tools/build.sh --variant serial` | `-DSEAM` | COM1, 115200 8N1 (obsolete, kept for fun) | `build/swreg/serial/` |
 | `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | `STREAM.BIN` in the game directory | `build/swreg/file/` |
 | `engine/asm/swreg/tools/build.sh --variant tee` | `+ -DSEAM_TEE` | both at once (file is the ground truth) | `build/swreg/tee/` |
 | `engine/asm/swreg/tools/build.sh --variant log` | `+ -DSEAM_LOG` | file + `SEAMLOG.TXT` records | `build/swreg/log/` |
@@ -45,9 +45,9 @@ and stage the minimum game files, so the output directory runs as-is.
     sh tools/dosbox/stream.sh 45                      # run + replay, artifacts in build/runs/stream/…
     python3 tools/stream/replay.py STREAM.BIN --out frames/
 
-The live link (`engine/asm/swreg/tools/build.sh --variant serial`, `tools/dosbox/dosbox-x-client.conf`,
-the C# client) is documented in
-`docs/client.md`.
+The product link is the file backend's folder transport (`STREAM.BIN`/`INPUT.BIN`, the C# client
+with `--follow`); it is documented in `docs/client.md`, together with the obsolete COM1/nullmodem
+link.
 
 `fast` is a diagnostic: it drops the presentation budget in `fn_SeamPresent`, so a pass runs on
 every hook call instead of at most three times per BIOS tick.  The budget exists because a poll or
@@ -149,5 +149,5 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
 
 Limitations: timing-dependent (the run length bounds what is captured), two modes only (13h and
 the 640x480 and 640x400 VBE screens; any other VBE mode is ignored), no audio
-yet, and the seam build is slower than the original.  The file backend does not read input (no
-serial link); keys arrive only on the live link.
+yet, and the seam build is slower than the original.  The file backend reads input from
+`INPUT.BIN` (the folder link); the obsolete serial backend has no input channel.

@@ -58,7 +58,7 @@ adds agent-specific operational rules.
 
 ## Where things are
 
-- Plan: `docs/porting.md` (§3 design, §4 verification, §6 risks, §10 progress log).
+- Plan: `docs/porting.md` (§3 design, §4 verification, §7 risks, §9 progress log).
 - Protocol: `docs/protocol.md` (service families, encoding policy, display state, recordings).
 - Disassembly notes: `docs/disassembly.md` (build/verify, source conventions).
 - Layout: `docs/layout.md` (the tree; `build/` mirrors it).
@@ -69,15 +69,16 @@ adds agent-specific operational rules.
 - Oracle harness: `tools/dosbox/` (DOSBox-X profile + `baseline.sh`; helpers `keys.py`, `snap.py`);
   outputs in `build/runs/oracle/`.
 - Driver: `engine/asm/sbfmdrv/` (`src/`, `tools/`, `test/`); notes in `docs/sbfmdrv.md`.
-- Client: `client/` (C#) — `sh client/server.sh` for the live link,
-  `sh client/publish-win.sh` for the Windows bundle. Tests: `tests/replay/run.sh` (offline),
-  `tests/link/run.sh` (live); stream tooling in `tools/stream/`.
+- Client: `client/` (C#) — `sh client/publish-linux.sh` then
+  `build/dist/yt2-linux-x64/play.sh` for the live folder link, `sh client/publish-win.sh` for the
+  Windows bundle. Tests: `tests/replay/run.sh` (offline), `tests/link/run.sh` (the obsolete serial
+  link); stream tooling in `tools/stream/`.
 - Guard hook: `.githooks/pre-commit` blocks any commit touching `_ref/`.
 - Reference hashes: `SWREG.EXE` MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 
 ## Current focus
 
-Check `docs/porting.md` §10 before acting. As of the last update: M1 is done — the EMS manager /
+Check `docs/porting.md` §9 before acting. As of the last update: M1 is done — the EMS manager /
 picture cache, the DOS file service, the palette service and the video boundary (draw segment,
 mode sets, VBE bank switch) are annotated; `docs/asm-style.md` is in place and the byte gate is
 green after each batch. The optional M1b boundary spike is done as well: a `-DSTREAM` build
