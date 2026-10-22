@@ -190,6 +190,9 @@ public sealed class Options
               --tcp [host:]port   connect to the DOSBox-X nullmodem socket
                                   (default 127.0.0.1:2324)
               --file PATH         replay a recording instead of connecting
+              --follow PATH       follow the server's STREAM.BIN in place
+                                  (the folder link; the product transport)
+              --input PATH        send input to the server's INPUT.BIN
               --headless          no window; decode and report only
               --scale N           window scale (default 3)
               --filter NAME       nearest (default) or xbrz: the pixel art is

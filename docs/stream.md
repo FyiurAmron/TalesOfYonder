@@ -36,6 +36,7 @@ code fails the gate:
 | `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | `STREAM.BIN` in the game directory | `build/swreg/file/` |
 | `engine/asm/swreg/tools/build.sh --variant tee` | `+ -DSEAM_TEE` | both at once (file is the ground truth) | `build/swreg/tee/` |
 | `engine/asm/swreg/tools/build.sh --variant log` | `+ -DSEAM_LOG` | file + `SEAMLOG.TXT` records | `build/swreg/log/` |
+| `engine/asm/swreg/tools/build.sh --variant fast` | `+ -DSEAM_FAST` | file, no presentation gate | `build/swreg/fast/` |
 
 All of them run `fixhdr.py` and `check_mz_layout.py` (S1DEA prefix 7, `EMMXXXX0` delta `0C99h`)
 and stage the minimum game files, so the output directory runs as-is.
@@ -48,13 +49,23 @@ The live link (`engine/asm/swreg/tools/build.sh --variant serial`, `tools/dosbox
 the C# client) is documented in
 `docs/client.md`.
 
+`fast` is a diagnostic: it drops the presentation budget in `fn_SeamPresent`, so a pass runs on
+every hook call instead of at most three times per BIOS tick.  The budget exists because a poll or
+wait-key loop calls the hook in a tight loop and a pass scans the whole screen, so the game can be
+starved; `fast` is how the budget's cost is measured (the client gets two to five times the
+pictures and the game's own window keeps its rate in the scenes measured so far), not a build to
+hand out.  The budget is what lets every picture through: the pan is one screen row per picture
+and the game advances it once per BIOS tick, so the client now gets all 18.2 of those a second
+instead of 16-17, and scenes drawn faster than one picture per tick (the intro's fades, 36-53 a
+second) are no longer held at the tick rate.
+
 ## What leaves the engine
 
 Protocol v0, VIDEO family, codec `raw`, 320x200x8 for the game and 640x480x8 / 640x400x8 for the
 VBE screens (publisher logo, title)
 (`docs/protocol.md` has the layouts).
 
-- **Present.** At most once per two BIOS ticks, in one of two modes:
+- **Present.** At most three passes per BIOS tick (55/s at most), in one of two modes:
   - mode 13h: walk the 200 rows, compare each against the 64,000-byte shadow and emit one 1-line
     `rect` per changed row; rows that did not change cost nothing.
   - VBE (640x480x8 detected with `4F03h` = 101h, and 640x400x8 = 100h for the title): the screen

@@ -8,6 +8,7 @@
 #     file     + -DSEAM_FILE      write the messages to STREAM.BIN instead of COM1
 #     tee      + -DSEAM_TEE       both at once; the file is the link's ground truth
 #     log      + -DSEAM_LOG       file backend plus SEAMLOG.TXT debug records
+#     fast     + -DSEAM_FAST      file backend, presentation gate open (diagnostic)
 #
 # Output: <repo>/build/swreg/<variant>/ -- the exe plus the minimum game files
 # from _ref/orig-bin, so the directory runs as staged.  The oracle build is
@@ -23,7 +24,7 @@ VARIANT=oracle
 while [ $# -gt 0 ]; do
     case "$1" in
         --variant) VARIANT=$2; shift 2 ;;
-        -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
         *) echo "build: unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -34,7 +35,8 @@ case "$VARIANT" in
     file)   DEFS="-DSEAM -DSEAM_FILE" ;;
     tee)    DEFS="-DSEAM -DSEAM_FILE -DSEAM_TEE" ;;
     log)    DEFS="-DSEAM -DSEAM_FILE -DSEAM_LOG" ;;
-    *) echo "build: unknown variant '$VARIANT' (oracle, serial, file, tee, log)" >&2
+    fast)   DEFS="-DSEAM -DSEAM_FILE -DSEAM_FAST" ;;
+    *) echo "build: unknown variant '$VARIANT' (oracle, serial, file, tee, log, fast)" >&2
        exit 2 ;;
 esac
 

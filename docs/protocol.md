@@ -31,7 +31,7 @@ u16  magic 0x5954 ('YT')
 u8   version
 u8   family          family id (below)
 u8   flags           bit0 compressed, bit1 ack_requested, bit2 eof, bits3-7 reserved
-u8   codec           payload codec id (0=raw, 1=RLE-skip, later 2=LZSS)
+u8   codec           payload codec id (0=raw, 1=row runs, later 2=LZSS)
 u32  seq             per-direction sequence number (replay integrity)
 u32  len             payload length before decoding
 <len bytes payload>
@@ -48,7 +48,7 @@ u32  len             payload length before decoding
 
 | id | name | direction | messages |
 |---|---|---|---|
-| 1 | VIDEO | engine to client | `set_mode(w,h,palette?)`, `palette(start,data)`, `rect(x,y,w,h,payload)`, `frame_end`, `reset` |
+| 1 | VIDEO | engine to client | `set_mode(w,h,palette?)`, `palette(start,data)`, `rect(x,y,w,h,payload)`, `frame_end`, `reset`, `scroll(dy)` |
 | 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `audio_ctrl(rate,fmt,on)` (the PC-speaker beep fallback is not modelled in v0) |
 | 3 | INPUT | client to engine | `key(scancode,down)`, `mouse_move(dx,dy)`, `mouse_button(btn,down)`, `quit` |
 | 4 | TICK | both | `tick(n)`, `pace(ms)` (client may pace; engine never reads wall clocks) |
@@ -60,15 +60,85 @@ u32  len             payload length before decoding
 Per-family, not one-size-fits-all:
 
 - VIDEO: only dirty rectangles; inside a rect, rows are encoded with skip/literal/repeat opcodes
-  (unchanged runs become skips). Palette changes are separate messages, so palette animation costs
-  a few bytes. No full-frame rebuilds unless a mode/reset forces them.
+  (unchanged runs become skips). A picture that moved as a whole (the game's camera pans) is one
+  `scroll` message plus the rows that slide in, never one rect per row. Palette changes are separate
+  messages, so palette animation costs a few bytes. No full-frame rebuilds unless a mode/reset
+  forces them.
 - AUDIO: OPL *register writes* travel, not PCM; synthesis is client-side. Messages are tiny, ergo
   no compression.
 - INPUT/TICK/CONTROL: never compressed (overhead exceeds payload).
 - FILES: bulk data, chunked to bounded message sizes; codec-eligible (RLE first, LZ later).
-- Codec id is per-frame; adding a codec must never change semantics, only size.
+- Codec id is per-message; adding a codec must never change semantics, only size.
 - Rule of thumb: any codec must be implementable in ~100 lines in asm, C and C# - that is the bar
   for "shared and trivial".
+
+### Codec 1: row runs (VIDEO rects)
+
+Codec 0 is the raw form: a rect payload of `w*h` pixels, row-major, one byte per pixel. Codec 1
+replaces those pixels with runs, per row, still after the 9-byte rect header
+(`kind, x, y, w, h`):
+
+| opcode | bytes | meaning |
+|---|---|---|
+| `00 nn` | 2 | repeat the previous pixel `nn` times (`nn` = 1..255) |
+| `01 nn vv` | 3 | pixel `vv` repeated `nn` times |
+| `02 nn <nn bytes>` | 2+nn | `nn` literal pixels |
+| `03` | 1 | end of row |
+
+Rules:
+
+- Every row is encoded independently and starts with an `01` or `02` (nothing precedes it, so `00`
+  is invalid there). Each row ends with `03`; a row is short/long if the counts do not add up to
+  `w`, which is a protocol error.
+- Runs of three or more pixels use `00`/`01`; one- and two-pixel runs become literals, because
+  three bytes for two pixels is not a saving. Literals are merged into chunks of at most 255, so
+  the worst case is the raw size plus one opcode and one count byte per 255 pixels - a rect can
+  never outgrow the raw form, and a flat row is 4 bytes instead of 320.
+- The opcode byte only describes the row, so the rect header (and therefore the client's
+  dirty-row bookkeeping) is unchanged: decoding writes exactly `w` pixels per row.
+- Message framing is untouched: `codec` in the 14-byte header is 1, and the payload length covers
+  the whole encoded rect. Non-rect messages are always codec 0.
+- The engine only emits it once a row changed (the shadow checksum says so), so the codec is a
+  pure size/speed trade for the row itself, never a correctness one.
+
+Decoding is a straight line: keep the previous pixel and a cursor, and stop at `03` or at `w`.
+Encoder, C# decoder and the Python reference decoder are covered together by
+`tests/replay/run.sh` over `tests/data/sample-video-rle.bin`.
+
+### Whole-screen pans (VIDEO `scroll`)
+
+A panning camera redraws every row of the screen, which as rects costs a row message per row -
+on the game's gate slide-down that was 168 messages and 22 KB per presented picture, and the
+engine could only afford 11 pictures a second. The same picture is one small message plus the
+rows that slide in:
+
+| type | message | payload after `u8 type` |
+|---|---|---|
+| 5 | `scroll` | `i8 dy` (positive: the picture moved down by `dy` rows) |
+
+Rules:
+
+- A `scroll` moves the client's replica by `dy` rows: for `dy > 0` row `y` takes the old row
+  `y-dy`; for `dy < 0` row `y` takes the old row `y+|dy|`. The rows that slide in did not exist
+  before and are always sent as ordinary rects **in the same frame, after the scroll**; every row
+  that did not move with the picture (a sprite, an animated flag over a panning background) is
+  sent the same way. Apply the scroll to what has arrived so far, presented or not.
+- Order matters inside a frame: `scroll` first, then the rects. A `scroll` with no rect after it
+  is legal and means the whole picture was the old picture moved.
+- `|dy|` must be smaller than the client's height (a jump bigger than that is a repaint, not a
+  pan); `dy = 0` is a no-op a client may ignore.
+- The `codec` field is 0: a scroll has no pixel payload.
+- Detection is engine-side and cheap: the seam already keeps a 32-bit checksum per row of what the
+  client has, and a pan makes this pass's row `y` equal the checksum of the row at `y-dy`. The seam
+  scores every step in +-8 rows and takes the best one **only when it explains more rows than no
+  shift at all and at least 100 rows**; otherwise the rows go out as rects exactly as before. So
+  the game stays correct when the heuristic does not fire, and a step costs 2 bytes when it does.
+  The client's checksum table is shifted with the message, which is what makes the following rows
+  comparable again.
+- A pan beyond +-8 rows per presented picture falls back to rects: correct, just not cheap. The
+  detector is covered by `tests/seam-scroll/run.sh` (the asm routine against a Python model of
+  these rules), and `tests/data/sample-pan-rows.bin` / `sample-pan-scroll.bin` are the same twelve
+  pictures encoded both ways, which `tests/replay/run.sh` renders with both decoders.
 
 ### Client display state
 
@@ -89,8 +159,9 @@ Per-family, not one-size-fits-all:
   stays engine-internal: those rows are still `rect(0,y,640,1)`, and the client never sees a bank.
   `set_mode` carries the height, and a change of VBE mode (or of its height) clears the checksum
   table and sends a fresh `set_mode`, exactly like entering VBE from 13h.
-- A `set_mode` means "start from a blank screen": the client drops its replica, reallocates at the
-  new size and expands the palette again.  The engine relies on this — it does not send a full
+- A `scroll` moves the replica and marks the whole frame dirty; the rows that slid in arrive as
+  rects behind it. A `set_mode` means "start from a blank screen": the client drops its replica,
+  reallocates at the new size and expands the palette again.  The engine relies on this — it does not send a full
   repaint just because the mode changed.
 - A pass carries at most ~16 KB of VBE rows, so a full intro repaint is spread over a few passes
   instead of stalling the game for a frame time.
@@ -112,16 +183,21 @@ unpadded. VIDEO, CONTROL and INPUT (keys) are implemented in the seam builds (se
 |---|---|---|
 | 0 | `set_mode` | `u16 w`, `u16 h`, `u8 bpp` |
 | 1 | `palette` | `u16 start`, `u16 count`, `count*3` bytes of 6-bit DAC R,G,B |
-| 2 | `rect` | `u16 x`, `u16 y`, `u16 w`, `u16 h`, `w*h` bytes of 8-bit indices (row-major) |
+| 2 | `rect` | `u16 x`, `u16 y`, `u16 w`, `u16 h`, then `w*h` 8-bit indices row-major (codec 0) or row runs (codec 1, below) |
 | 3 | `frame_end` | *(empty)* |
 | 4 | `reset` | *(empty)* |
+| 5 | `scroll` | `i8 dy` (see "Whole-screen pans") |
 
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
 - Compared with the M1b spike (one full 256-entry palette message per fade step) the palette
   message is now a diff span and `frame_end` closes every pass; the seam builds record bare
-  message streams (no session header yet), VIDEO family only, codec `raw`, with `h=1` rects (one
-  message per changed row, at most 640 wide), in 320x200x8 for the game and 640x480x8 for the VBE
-  intro.  `tests/data/sample-video.bin` covers mode 13h, `tests/data/sample-vbe.bin` the intro.
+  message streams (no session header yet), VIDEO family only, with `h=1` rects (one message per
+  changed row, at most 640 wide), in 320x200x8 for the game and 640x480x8 for the VBE intro.
+  Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam build uses codec 1 and a
+  recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
+  `tests/data/sample-vbe.bin` the intro raw, `tests/data/sample-video-rle.bin` both modes with the
+  run codec, and `tests/data/sample-pan-rows.bin` / `sample-pan-scroll.bin` the same twelve-picture
+  pan encoded as rows and as scroll messages.
 - Types are only unique within a family; later families define their own table.
 
 CONTROL (family 5), implemented in the seam build:

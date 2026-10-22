@@ -1,7 +1,7 @@
 #!/bin/sh
 # Replay a recording through both decoders and compare the renders.
 #
-#   sh tests/replay/run.sh [RECORDING]     (default: both tests/data/sample-*.bin)
+#   sh tests/replay/run.sh [RECORDING]     (default: every tests/data/sample-*.bin)
 #
 # The C# client (--file --headless --ppm) and the Python reference decoder
 # (tools/stream/replay.py --ppm) must produce byte-identical final frames: same
@@ -11,7 +11,7 @@
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 case "$#" in
-    0) RECS="$ROOT/tests/data/sample-video.bin $ROOT/tests/data/sample-vbe.bin" ;;
+    0) RECS="$ROOT/tests/data/sample-video.bin $ROOT/tests/data/sample-vbe.bin $ROOT/tests/data/sample-video-rle.bin $ROOT/tests/data/sample-pan-rows.bin $ROOT/tests/data/sample-pan-scroll.bin" ;;
     *) RECS="$1" ;;
 esac
 WORK=$ROOT/build/runs/replay/$(date +%Y%m%d-%H%M%S)

@@ -2,8 +2,8 @@
 
 The point of the seam work: run the real game, stream the display out of it, and drive a client
 that is a first sketch of the C# host. Status as of 2026-10-20: **working end-to-end** for the
-VIDEO family (protocol v0, raw codec; 320x200x8 for the game, 640x480x8 for the VBE intro) over a
-serial link.
+VIDEO family (protocol v0; raw and run-length row codecs, 320x200x8 for the game, 640x480x8 for
+the VBE intro) over the folder link (`STREAM.BIN`/`INPUT.BIN`; the serial link is kept for fun).
 
 The seam build is not byte-identical by design; the oracle build stays byte-perfect
 (`sh engine/asm/swreg/tools/verify.sh` -> `SWREG.EXE: OK` + `IDENTICAL`). The seam itself is described in
@@ -139,6 +139,13 @@ DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
 
 - The seam emits `set_mode`, then `rect` / `palette` diffs, and closes every send pass with
   `frame_end` (so a pass with only palette changes still presents).
+- A mode-13h picture that moved as a whole — the game pans the camera past the gate in the opening
+  scene — arrives as one VIDEO `scroll(dy)` message followed by the rows that slid in, and
+  any row that did not move with the picture.  The client shifts its replica when the message
+  arrives (before the frame is presented) and marks the whole frame dirty, because every row
+  moved: the filter re-scales from scratch, which costs 3 ms at 320x200.  This is what keeps the
+  pan at the game's own picture rate: as row rects it was 168 messages and 22 KB per picture and
+  the seam managed 11 pictures/s, as a scroll it is one 2-byte message and one row.
 - On connect the client sends CONTROL `keyframe_request` and `hello` (`--no-keyframe` drops the
   former) and repeats each once a second until it is answered: the `hello` until the engine's
   `hello(role 0, version 0)` arrives, the keyframe until a `set_mode` arrives.  Retrying the
@@ -189,13 +196,20 @@ DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
   immediately, bypassing the quiet-jump hold.  After a mode set the keyframe rows wait out the
   four-pass palette hold (`seam_palhold`): sending them earlier presented them with the previous
   palette — one garbage-coloured frame.
-- A video pass runs at most once per BIOS tick (18.2 Hz), driven from the game's INT 1Ch tick
-  handler.  The input-poll hooks alone were not enough: the intro draws animated frames without
-  polling input between them, so the stream only saw the final frame of each transition (the
-  client appeared to run at under 1 FPS while DOSBox drew 15-45 changes/s).  Presenting from the
-  tick follows the game's real animation: the intro now streams ~15 frames/s and `shown` tracks
-  `frames`.  The row scan is a few milliseconds, so the game keeps its own speed; the VBE pass
-  moves 32 KB of rows per visit, which keeps a full 640x480 keyframe under a second.
+- A video pass runs at most three times per BIOS tick, driven from the game's INT 1Ch tick
+  handler and from the input-poll hooks.  The input-poll hooks alone were not enough: the intro
+  draws animated frames without polling input between them, so the stream only saw the final
+  frame of each transition (the client appeared to run at under 1 FPS while DOSBox drew 15-45
+  changes/s).  Presenting from the tick follows the game's real animation.  One pass per tick
+  turned out to be the limit that made a camera pan (one screen row per picture) step: the game
+  advances the pan once per BIOS tick, and the client saw 16-17 of those 18.2 pictures a second.
+  The gate now allows `SEAM_PASSES_PER_TICK` = 3 passes per tick (55/s), which is enough for the
+  game's own frame rate and for the intro's fades (36-53 pictures a second measured): a poll loop
+  still cannot flood the screen, and the game keeps its speed.  A finer clock
+  inside the tick is not available: SBFMDRV reprograms PIT channel 0 to ~64 Hz (a 15.6 ms reload,
+  see `docs/sbfmdrv.md`), so its counter cannot time a pass interval.  The row scan is a few
+  milliseconds; the VBE pass moves 32 KB of rows per visit, which keeps a full 640x480 keyframe
+  under a second.
 - The client presents only on `frame_end`.  Presenting on every rect and palette message meant
   converting the whole framebuffer once per row (about 200 times per frame) and showing half-drawn
   frames: the window stuttered, and rows drawn before their palette arrived flickered.  One
@@ -377,7 +391,7 @@ and mouse share the path, and scripted input is easiest to observe early in a ru
 
 ## Not here yet
 
-Audio (OPL register writes), codecs/compression, session headers for recordings, and the host
-file service.  VBE is supported for the one mode the game uses (640x480x8, the intro); the seam
+Audio (OPL register writes), further codecs (the row runs of codec 1 are in; LZ is not), session
+headers for recordings, and the host file service.  VBE is supported for the one mode the game uses (640x480x8, the intro); the seam
 ignores any other VBE mode.  The client is a development harness: one window, no filters, no
 audio.
