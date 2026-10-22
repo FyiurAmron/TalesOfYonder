@@ -1,6 +1,7 @@
 # Tests
 
-Seven checks pin the seam link and the client. All are ordinary shell scripts;
+Seven checks pin the link and the client; six cover the folder transport and the client, and
+`tests/link` covers the obsolete serial one (kept for fun). All are ordinary shell scripts;
 artifacts land under `build/runs/<kind>/<stamp>/`.
 
 ## `tests/replay/run.sh`
@@ -94,7 +95,9 @@ Needs `dotnet` only.
 
 ## `tests/link/run.sh`
 
-Live: builds the tee variant of the engine (`-DSEAM -DSEAM_FILE -DSEAM_TEE`,
+**Obsolete** - the folder link is the product transport; this drives the COM1/nullmodem link,
+kept for fun (and because it is the only socket-level live check). Live: builds the tee variant
+of the engine (`-DSEAM -DSEAM_FILE -DSEAM_TEE`,
 which writes `STREAM.BIN` *and* mirrors every message to COM1), runs it under
 DOSBox-X on a private Xvfb display with COM1 bridged to TCP, connects the C#
 client with `--dump`, and verifies with `tools/stream/compare_streams.py` that

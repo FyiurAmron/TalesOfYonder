@@ -14,7 +14,7 @@ transport (protocol-v0 over COM1 and a nullmodem) is **obsolete** and kept only 
 | Side | Owns |
 |---|---|
 | engine | game state, memory + EMS, logical clock, determinism, file *names/handles/offsets* |
-| client | display state (framebuffer replica, palette, mode), window/scaling/filters, OPL synthesis, input capture, debug overlays; host filesystem (final step) |
+| client | display state (framebuffer replica, palette, mode), window/scaling/filters, OPL synthesis, input capture, debug overlays |
 
 - The engine never owns host resources; the client never owns *game* state.
 - In-process operation is the degenerate transport: direct calls, same message structs.
@@ -53,7 +53,7 @@ u32  len             payload length before decoding
 | 3 | INPUT | client to engine | `key(scancode,down)`, `mouse_move(dx,dy)`, `mouse_button(btn,down)`, `quit` |
 | 4 | TICK | both | `tick(n)`, `pace(ms)` (client may pace; engine never reads wall clocks) |
 | 5 | CONTROL | both | `hello(role,version)`, `bye`, `error(code,text)`, `debug(channel,payload)` (product clients ignore `debug`) |
-| 6 | FILES | both | `fs_open(name,mode) -> handle`, `fs_close`, `fs_read(handle,len) -> chunk|eof`, `fs_write(handle,payload)`, `fs_seek(handle,off,whence)`, `fs_findfirst(pattern) -> entries`, `fs_delete`, `fs_rename` |
+| 6 | FILES | - | retired: the folder transport already shares the game directory, so a host file service adds nothing |
 
 ### Encoding policy ("smart but trivial")
 
@@ -67,7 +67,6 @@ Per-family, not one-size-fits-all:
 - AUDIO: OPL *register writes* travel, not PCM; synthesis is client-side. Messages are tiny, ergo
   no compression.
 - INPUT/TICK/CONTROL: never compressed (overhead exceeds payload).
-- FILES: bulk data, chunked to bounded message sizes; codec-eligible (RLE first, LZ later).
 - Codec id is per-message; adding a codec must never change semantics, only size.
 - Rule of thumb: any codec must be implementable in ~100 lines in asm, C and C# - that is the bar
   for "shared and trivial".
@@ -255,20 +254,12 @@ INPUT (family 3), keys and mouse implemented in the seam build:
   unaffected, and functions the shim does not implement are chained to the driver that was
   installed before it (DOSBox-X's own).
 
-### Files (specified now, implemented last)
-
-- DOS semantics live on the client: 8.3 names, case-insensitive matching, wildcard find, EOF,
-  create/write/delete/rename as the game uses them.
-- Bulk reads/writes are chunked (bounded messages) with explicit `eof`; the engine loops like it
-  does around DOS reads.
-- The engine deals in name+offset+length only; no host paths, no host quirks.
-
 ## Recordings / replay
 
 - A recording is a two-directional framed session: header (protocol version, engine version,
   config, input map, data-file hashes) followed by direction-tagged messages.
-- Self-contained mode (default once the client owns files): FS responses are included, so a replay
-  needs no data files. Pinned mode (CI / fast): hashes only; files must match.
+- Files stay engine-local: recordings carry data-file hashes, and a replay needs the same game
+  directory next to the engine (pinned mode).
 - Determinism rules: engine time = logical ticks only; input order canonical; `debug` messages are
   ignored during replay unless requested.
 - Recordings interleave periodic full-frame keyframes (full-screen `rect` / `reset`) so a consumer

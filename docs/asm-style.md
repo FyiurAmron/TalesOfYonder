@@ -82,15 +82,15 @@ Platform access is tagged where it happens — on the `int`/port instruction its
 
 - `grep '; SEAM'` is the boundary inventory: every direct `int`/port access in annotated code
   must carry a tag. That set is exactly what the platform layer replaces.
-- Families: `VIDEO`, `AUDIO`, `INPUT`, `TICK`, `CONTROL`, `FILES` — the companion protocol's
-  message families (`docs/protocol.md`) — and the engine-internal platform services `EMS`,
-  `DOS`, `BIOS`, `MOUSE`, `SOUND`.
+- Families: `VIDEO`, `AUDIO`, `INPUT`, `TICK`, `CONTROL` — the companion protocol's message
+  families (`docs/protocol.md`) — and the engine-internal platform services `EMS`, `DOS`,
+  `BIOS`, `MOUSE`, `SOUND`.
 - A wrapper routine carries the tag inside itself (`fn_DOSAlloc` around int 21h 48h); callers
   only name the wrapper.
 - Stream rules (`docs/porting.md` §5): only VIDEO (mode/palette/dirty rects), AUDIO (OPL
-  register writes), INPUT, TICK, CONTROL and (last) FILES ever cross to the client; EMS, DOS
-  and BIOS never do. The tag names the operation the client or platform layer must provide,
-  e.g. `; SEAM VIDEO: palette 0..255`, `; SEAM AUDIO: OPL write port 388h`.
+  register writes), INPUT, TICK and CONTROL ever cross to the client; EMS, DOS and BIOS never
+  do. The tag names the operation the client or platform layer must provide, e.g.
+  `; SEAM VIDEO: palette 0..255`, `; SEAM AUDIO: OPL write port 388h`.
 
 ## Workflow
 

@@ -13,10 +13,10 @@ The seam build is not byte-identical by design; the oracle build stays byte-perf
 
 | piece | path | what it is |
 |---|---|---|
-| engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant serial` | the integration surface: hooks in the game source, present/keyframe/palette logic, COM1 backend |
-| bridge | `tools/dosbox/dosbox-x-client.conf` | DOSBox-X profile; COM1 is a nullmodem TCP server on 127.0.0.1:2324 |
+| engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant file` | the integration surface: hooks in the game source, present/keyframe/palette logic, `STREAM.BIN`/`INPUT.BIN` backend |
+| bridge | the game's working directory | the engine appends `STREAM.BIN` and reads `INPUT.BIN`; a local or shared folder |
 | client | `client/` (C#, `net11.0`) | SDL3 window via P/Invoke (no NuGet), decoder, renderer, stats, recorder/replay |
-| link check | `tools/stream/compare_streams.py` | proves the received stream is a byte-exact run of what the engine sent |
+| gates | `tests/replay`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode byte-exactness, codec/detector/pacing, filter and window checks |
 
 The window and taskbar icon is the game's own 32x32 `YENDOR2.BMP`: a byte-identical copy lives in
 `client/Assets/yendor2.bmp`, is embedded in the assembly and set with `SDL_SetWindowIcon` right
@@ -25,25 +25,33 @@ after the window is created.  The Windows executable carries the same pixels as
 
 ## Quick start
 
-    sh engine/asm/swreg/tools/build.sh --variant serial        # -> build/swreg/serial/ (exe + minimum game files)
-    client/server.sh                    # DOSBox-X window; the game starts
+    sh engine/asm/swreg/tools/build.sh --variant file  # -> build/swreg/file/ (exe + game files)
+    sh client/publish-linux.sh                         # engine + client -> build/dist/yt2-linux-x64/
+    sh build/dist/yt2-linux-x64/play.sh                # DOSBox-X and the client, one command
 
-in a second terminal:
+Without the bundle (same engine build, client from the tree):
 
-    dotnet run --project client -c Release
+    dotnet run --project client -c Release -- \
+        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN
 
-`client/server.sh --client` starts both. The client asks the engine for a keyframe when it
-connects, so the start order does not matter (start it late and it resynchronises).
+The client waits for `STREAM.BIN`, so the start order does not matter; on a video ring wrap the
+engine follows with a keyframe, so a client that starts late resynchronises.
 
 Headless (no window; useful over ssh or for checks):
 
-    dotnet build/client/bin/Release/net11.0/Yt2Client.dll --tcp 127.0.0.1:2324 --headless \
+    dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
+        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN --headless \
         --stats 5 --ppm build/tmp/client.ppm
 
-Replay a recording made by the file backend (`sh engine/asm/swreg/tools/build.sh --variant file`,
-`sh tools/dosbox/stream.sh 45`):
+Replay a recording made by the file backend (`sh tools/dosbox/stream.sh 45`):
 
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll --file STREAM.BIN --headless --ppm out.ppm
+
+The obsolete serial link (kept for fun):
+
+    sh engine/asm/swreg/tools/build.sh --variant serial  # -> build/swreg/serial/
+    client/server.sh                                     # DOSBox-X window, COM1 -> TCP :2324
+    dotnet run --project client -c Release -- --tcp 127.0.0.1:2324
 
 ## Windows build
 
@@ -111,31 +119,39 @@ window". Every offline gate renders offscreen and stays green. `tests/window/run
 client on a private X server and requires `Map State: IsViewable` plus the first presented
 frame; it is the guard for this class of bug.
 
-## The link
+## Folder link (`STREAM.BIN` + `INPUT.BIN`)
 
-DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
+The serial/UART path tops out at ~180 KiB/s in DOSBox-X, so the bundle uses a shared folder
+instead: two files, one per direction, in the engine's working directory (`server\game` in the
+Windows bundle).
 
-    [serial]
-    serial1 = nullmodem port:2324 multiplier:16
+| direction | file | writer | reader |
+|---|---|---|---|
+| video/control/audio | `STREAM.BIN` | engine (INT 21h append) | client `--follow` |
+| input | `INPUT.BIN` | client (append, flushed per message) | engine (present poll) |
 
-- **Server mode is the default.** `nullmodem port:2324` listens; `server:<host>` means *client*
-  mode (connect out to `<host>`) — easy to get backwards, and a wrong form fails silently: no
-  listener is created and `dosbox-x -printconf` only prints the config path, not the config.
-- **`multiplier:N` scales the emulated baud rate** without the guest knowing. Measured with a
-  polled writer: `1` -> 11,465 B/s (exactly 115200/10), `4` -> 46,004 B/s, `16` -> ~165 KB/s.
-  A full keyframe is ~70 KB, so 16 keeps a full repaint under half a second.
-- **The link doubles every `0xFF` byte** (telnet-style escape, `CNullModem::transmitByte`):
-  `0xFF` arrives as `0xFF 0xFF`. `client/NullModemStream.cs` undoes it on receive and re-escapes
-  on send; `--raw` turns that off for links that do not escape. This is deliberate DOSBox
-  behaviour, switchable with `transparent:1` in the `serial1` line — the value must be numeric
-  (`transparent:true` is *silently ignored*). The shipped profile keeps the escaping default so
-  the client works out of the box against any stock nullmodem line; with `transparent:1` the link
-  is raw and the client needs `--raw` (both combinations are verified byte-exact). Recordings from
-  the file backend are raw.
-- The seam polls THRE and writes in 16-byte FIFO bursts, with a bounded wait: a dead link makes it
-  drop the rest of that message instead of freezing the game.
+Both files are pseudo-rings.  At a size limit the writer truncates the file to zero and continues
+from offset 0 (8 MiB for video, 64 KiB for input); the reader notices the shrink and rewinds.  On a
+video wrap the engine immediately follows with `set_mode`, a full palette and a full frame, so a
+client that restarts at offset 0 is back in sync.  The client checks both the read position against
+the length and a length decrease between polls, so it catches the wrap even when new data has
+already regrown the file past its old length.
 
-## Protocol behaviour over this link
+    sh engine/asm/swreg/tools/build.sh --variant file      # build/swreg/file, the folder build
+    build/client/bin/Release/net11.0/Yt2Client --follow build/swreg/file/STREAM.BIN \
+        --input build/swreg/file/INPUT.BIN
+
+The engine opens `INPUT.BIN` lazily (the client may start later) and seeks to its own read position
+before every chunk, which also clears the DOS EOF flag that a growing file would otherwise leave
+set.  `--input` defaults to `INPUT.BIN` next to the followed file.  Losing the link still works:
+the client keeps following the file and the engine rewrites it when DOSBox restarts.
+
+The directory can be local or shared, so the folder link crosses a machine boundary as well - a
+mounted or synced directory needs no network protocol of its own.  The serial transport
+(`--tcp`, COM1 over a nullmodem) that the client could also speak is **obsolete** and kept only
+for fun.
+
+## Protocol behaviour over the link
 
 - The seam emits `set_mode`, then `rect` / `palette` diffs, and closes every send pass with
   `frame_end` (so a pass with only palette changes still presents).
@@ -225,37 +241,29 @@ DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
 - The engine sends a debug control message at start-up with its build marker; the client prints
   it as `engine debug: ...`, which tells a log apart from an older engine.
 
-## Folder link (`STREAM.BIN` + `INPUT.BIN`)
+## The legacy serial link (kept for fun)
 
-The serial/UART path tops out at ~180 KiB/s in DOSBox-X, so the bundle uses a shared folder
-instead: two files, one per direction, in the engine's working directory (`server\game` in the
-Windows bundle).
+DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
 
-| direction | file | writer | reader |
-|---|---|---|---|
-| video/control/audio | `STREAM.BIN` | engine (INT 21h append) | client `--follow` |
-| input | `INPUT.BIN` | client (append, flushed per message) | engine (present poll) |
+    [serial]
+    serial1 = nullmodem port:2324 multiplier:16
 
-Both files are pseudo-rings.  At a size limit the writer truncates the file to zero and continues
-from offset 0 (8 MiB for video, 64 KiB for input); the reader notices the shrink and rewinds.  On a
-video wrap the engine immediately follows with `set_mode`, a full palette and a full frame, so a
-client that restarts at offset 0 is back in sync.  The client checks both the read position against
-the length and a length decrease between polls, so it catches the wrap even when new data has
-already regrown the file past its old length.
-
-    sh engine/asm/swreg/tools/build.sh --variant file      # build/swreg/file, the folder build
-    build/client/bin/Release/net11.0/Yt2Client --follow build/swreg/file/STREAM.BIN \
-        --input build/swreg/file/INPUT.BIN
-
-The engine opens `INPUT.BIN` lazily (the client may start later) and seeks to its own read position
-before every chunk, which also clears the DOS EOF flag that a growing file would otherwise leave
-set.  `--input` defaults to `INPUT.BIN` next to the followed file.  Losing the link still works:
-the client keeps following the file and the engine rewrites it when DOSBox restarts.
-
-The directory can be local or shared, so the folder link crosses a machine boundary as well - a
-mounted or synced directory needs no network protocol of its own.  The serial transport
-(`--tcp`, COM1 over a nullmodem) that the client could also speak is **obsolete** and kept only
-for fun.
+- **Server mode is the default.** `nullmodem port:2324` listens; `server:<host>` means *client*
+  mode (connect out to `<host>`) — easy to get backwards, and a wrong form fails silently: no
+  listener is created and `dosbox-x -printconf` only prints the config path, not the config.
+- **`multiplier:N` scales the emulated baud rate** without the guest knowing. Measured with a
+  polled writer: `1` -> 11,465 B/s (exactly 115200/10), `4` -> 46,004 B/s, `16` -> ~165 KB/s.
+  A full keyframe is ~70 KB, so 16 keeps a full repaint under half a second.
+- **The link doubles every `0xFF` byte** (telnet-style escape, `CNullModem::transmitByte`):
+  `0xFF` arrives as `0xFF 0xFF`. `client/NullModemStream.cs` undoes it on receive and re-escapes
+  on send; `--raw` turns that off for links that do not escape. This is deliberate DOSBox
+  behaviour, switchable with `transparent:1` in the `serial1` line — the value must be numeric
+  (`transparent:true` is *silently ignored*). The shipped profile keeps the escaping default so
+  the client works out of the box against any stock nullmodem line; with `transparent:1` the link
+  is raw and the client needs `--raw` (both combinations are verified byte-exact). Recordings from
+  the file backend are raw.
+- The seam polls THRE and writes in 16-byte FIFO bursts, with a bounded wait: a dead link makes it
+  drop the rest of that message instead of freezing the game.
 
 ## Scaling
 
@@ -392,6 +400,6 @@ and mouse share the path, and scripted input is easiest to observe early in a ru
 ## Not here yet
 
 Audio (OPL register writes), further codecs (the row runs of codec 1 are in; LZ is not), session
-headers for recordings, and the host file service.  VBE is supported for the one mode the game uses (640x480x8, the intro); the seam
-ignores any other VBE mode.  The client is a development harness: one window, no filters, no
-audio.
+headers for recordings.  VBE is supported for the one mode the game uses (640x480x8, the intro);
+the seam ignores any other VBE mode.  The client is a development harness: one window, no filters,
+no audio.

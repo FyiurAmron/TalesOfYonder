@@ -113,11 +113,11 @@ Platform layer (the only modern code):
 - files: DOS-ish semantics (8.3, case-insensitive, wildcards) behind the service interface;
   engine-local shim while porting, flipped to the client as the final layer step (§5);
 - EMS: arena + 64 KB window emulation (int 67h 40h–51h implemented);
-- video: windowed linear framebuffer + palette + SDL2 present (texture with 8-bit palette);
-- input: scripted events (harness) and SDL2 keyboard/mouse mapped onto the existing dispatch
+- video: windowed linear framebuffer + palette + SDL3 present (texture with 8-bit palette);
+- input: scripted events (harness) and SDL3 keyboard/mouse mapped onto the existing dispatch
   tables / int 33h equivalents, incl. invoking the game's user handler;
 - clock: logical 18.2 Hz tick; `int 1Ah`/int 1Ch served from it → deterministic replay;
-- sound: OPL2/3 core + reimplemented `SBFMDRV` INT 00h protocol (see §7);
+- sound: OPL2/3 core + reimplemented `SBFMDRV` INT 00h protocol (see `docs/sbfmdrv.md`);
 - record/replay + transport backends: the same service calls can be logged to a stream, replayed,
   or forwarded to a companion client (§5).
 
@@ -147,8 +147,8 @@ becomes the GUI resource editor. The C# app starts as a companion client over th
 - **Stream diffing**: instrumented original builds emit the same service-event stream (video
   deltas + palette, input, OPL writes, ticks) that the C port emits; diffing streams localises
   translation bugs that checkpoint hashes only localise to "somewhere before here".
-- Recordings are two-directional session captures (input + video/audio events + FS responses):
-  self-contained replays need no data files; pinned-hash mode keeps CI fast.
+- Recordings are two-directional session captures (input + video/audio events); the game
+  directory stays next to the engine, and data-file hashes keep a replay pinned.
 - Determinism: logical clock + scripted input + located/scripted RNG seeding.
 
 ## 5. Companion client / thin-frontend mode
@@ -164,6 +164,8 @@ service seam as §3 — a client is just another service backend. Message detail
   OPL register writes; input events (client -> engine); tick/pacing; tiny control ops.
 - **Transports**: in-process/direct (default), shared memory, TCP/Unix sockets. No hardware or
   baud constraints — the protocol is transport-independent; anything else is a trivial tunnel.
+  The asm seam ships on a shared folder (`STREAM.BIN`/`INPUT.BIN`, `docs/client.md`); the earlier
+  COM1/nullmodem link is obsolete and kept only for fun.
 - **Why it earns its keep beyond the showcase**: (a) the record/replay backend is the test harness
   from day one; (b) streams from instrumented original builds diff against C-port streams —
   localised translation debugging; (c) clients are developed against recordings, in parallel with
@@ -171,10 +173,9 @@ service seam as §3 — a client is just another service backend. Message detail
 - **Client to the end**: the split is architecture, not scaffolding. In the C# product the engine
   is a core library with a formal host interface (same messages) and the app is host/client;
   in-process is just the degenerate transport. Tests target the boundary (record/replay).
-- **Disk I/O joins the client last**: while porting, files stay engine-local (simple testing);
-  the final layer step flips the FS service to the client, which implements DOS-ish semantics
-  (8.3, case-insensitivity, wildcards, EOF) over host files. Engine keeps name/offset semantics
-  only. Both directions are recorded, so replays stay self-contained.
+- **Disk I/O stays engine-local**: the folder transport already gives the engine the host
+  directory, so a file service over the link would add a second filesystem layer without moving
+  the game data anywhere. Replays keep the game directory next to the engine and check its hashes.
 - **asm-level variant**: the annotated asm already draws through a screen-segment variable and
   funnels I/O through a handful of wrappers (present/retrace wait, two palette loaders, mode set,
   key wrapper, mouse wrapper, sound wrapper), so "replace only the lowest boundary" is a bounded
@@ -183,7 +184,7 @@ service seam as §3 — a client is just another service backend. Message detail
 - **Reality checks**: video is delta-encoded (dirty rects + row-skip RLE) and audio travels as OPL
   register writes, not PCM — cheap by construction; input latency is bounded by poll-per-frame
   queueing (fine for a turn-based RPG); the client never owns *game* state (it owns host
-  resources: window, audio, later the filesystem).
+  resources: window and audio).
 - **Scheduling**: stream format + recording backend early (M2); one asm seam spike (M1b, optional);
   full companion client at M8; C# client at M9.
 
@@ -200,10 +201,10 @@ service seam as §3 — a client is just another service backend. Message detail
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
 | M6 | Sound | FM music + SFX audible; port-write goldens match; digital path documented |
 | M7 | C cleanup & packaging | typed structures, 16-bit artifacts removed; Linux/Windows builds; spec frozen |
-| M8 | Companion client | SDL client renders/plays/injects over in-process + TCP; replay from recordings; disk I/O flipped to the client (final layer step) |
+| M8 | Companion client | SDL client renders/plays/injects over in-process + TCP; replay from recordings; input and audio in sync |
 | M9 | C# bootstrap | new solution; starts as stream client/front-end; mechanical translation of frozen C passes replay tests |
 
-## 6. Risks / unknowns (ordered)
+## 7. Risks / unknowns (ordered)
 
 1. **SBFMDRV protocol / music data source** — the INT half is now mapped. The game-side half is
    annotated (driver vector found by signature scan and patched into `sub_SoundCall`; the
@@ -215,9 +216,10 @@ service seam as §3 — a client is just another service backend. Message detail
    `v_SoundEntry` is zero, has no MZ relocation and no writer; the game does reach the far-call
    site, but the call goes to `0000:0000` (which executes the IVT bytes, not an INT 0 dispatch),
    and SBFMDRV 1.34 has no far dispatcher at all. The far path is a vestigial/other-driver API;
-   the resident INT API is the driver's only interface (see `docs/sbfmdrv.md` section 7). Still
-   open: the full stream/OPL event decode and an audio-captured game run to confirm the int music
-   path. Worst case still stands: a captured-write-stream implementation suffices for v1.
+   the resident INT API is the driver's only interface (see `docs/sbfmdrv.md` section 7). The
+   stream/OPL event decode and an audio-captured game run are done as well (`docs/sbfmdrv.md`
+   6.1/6.2; `tools/dosbox/audio.sh` reports 267 note-ons on the tick grid). Worst case still
+   stands only as a fallback: a captured-write-stream implementation suffices for v1.
 2. **EMS window and 64K wrap semantics** — mitigated by flat memory + explicit `uint16_t` casts;
    module tests with fuzzed page mappings.
 3. **Flag modelling** in generated C — conservative flag updates first, dataflow-prune later.
@@ -235,30 +237,18 @@ Non-goals: emulator-in-a-box product, Windows-only runtime, engine/editor framew
 faithful C layer is stable, remote display of the unmodified binary (dropped — that is an
 emulator-hook demo, not this port).
 
-## 7. Immediate next actions (M0 checklist)
-
-1. `git init` + `.gitignore` (`*.obj`, `*.lst`, built `SWREG.EXE`, `fb.pkl`, `__pycache__`).
-2. Install/get UASM for Linux; run `engine/asm/swreg/tools/verify.sh` (outputs to `build/swreg/oracle/`, staged with
-   the minimum game files); confirm MD5 `c3bdd3…`.
-3. `engine/asm/swreg/tools/verify_asm.py` (per-instruction byte diff vs `_ref/orig-bin/SWREG.EXE`).
-4. DOSBox-X profile: EMS, mouse, SB16/OPL3, `SBFMDRV` load, `CH2.BAT`; capture a baseline
-   save-state and a no-input run (configs in `tools/dosbox/`, outputs in `build/`).
-5. Draft the annotation style guide (`docs/asm-style.md`), including the service/stream
-   interface rules (§5).
-6. Draft stream format v0 (message families, record framing) — it doubles as the harness format.
-7. Start M1 pilot on the EMS manager (0x0233x) — highest-risk/most-instructive first.
-
 ## 8. Open items
 
 - final decision on annotation granularity per module (functions + variables + structs; flow
   labels untouched).
 - whether `masm/` gets the same annotations later (probably not — frozen historical artifact).
 - transport set for the product (in-process / shared memory / sockets) — decide at M8.
-- codec upgrade (LZSS/LZ4) timing — decide when FS moves client-side.
+- codec upgrade (LZSS/LZ4) timing — only if the video link needs the bytes.
 - SDL3-DOS build target as a future option (skipped for now; the companion design reduces its value).
-- choice of C# binding at M9 (SDL2-CS / SDL3 bindings / hand-rolled P/Invoke) — deferred.
+- choice of C# binding at M9 — settled in practice: the bootstrap client hand-rolls SDL3 P/Invoke
+  (`client/Sdl.cs`) and stays dependency-free; revisit only if the product needs more of SDL.
 
-## 10. Progress log
+## 9. Progress log
 
 - 2026-10-19 — M0 (partial):
   - the repository continues the old TalesOfYonder history (`1d30489`); a single "rebirth" bootstrap
@@ -1269,3 +1259,25 @@ emulator-hook demo, not this port).
   - with that, the driver's open items are document-only (the installer's error strings) or
     unobservable in the shipped content (jumps/`FC`/percussion have crafted coverage, and the
     digitized-SFX far calls are no-ops), so M2 is the next milestone.
+- 2026-10-22 — housekeeping: the folder link leads every document, and the plan's numbering is fixed:
+  - **serial path decision**: the folder transport (`STREAM.BIN`/`INPUT.BIN`) is the product link.
+    The COM1/nullmodem path stays in the tree - the `serial`/`tee` builds, `client/NullModemStream.cs`,
+    `client/server.sh` and `tests/link/` - but every one of them is now marked obsolete, and the
+    README quick start, `docs/client.md` (pieces, quick start, section order), `client/README.md`,
+    `tests/README.md` and the `CONTRIBUTING.md` gate table lead with the folder link instead.
+    Keeping it is deliberate: it carries the only socket-level live check and the wire notes
+    (`0xFF` doubling, `multiplier` baud scaling), at ~120 lines per side;
+  - **plan numbering**: there were two sections numbered 6 and no 9.  Milestones stays 6, risks
+    becomes 7, the completed M0 checklist (a stale "immediate next actions" list whose every item
+    was done) is gone, open items stays 8 and the progress log is 9; the cross-references in
+    `README.md`, `AGENTS.md` and `CONTRIBUTING.md` follow.  Risk 1 now records the finished
+    stream/OPL decode and audio-captured run (`docs/sbfmdrv.md` 6.1/6.2) instead of listing them as
+    open, section 3's SDL2 leftovers say SDL3, the `(see §7)` pointer in the sound bullet points at
+    `docs/sbfmdrv.md`, and the M9 C# binding item notes the bootstrap client's hand-rolled SDL3
+    P/Invoke;
+  - `docs/stream.md` no longer claims the file backend cannot read input: it does, from
+    `INPUT.BIN` (the folder link), and only the obsolete serial backend has no input channel;
+  - the progress log had two runs: the bootstrap's M0/M1/SBFMDRV entries had ended up after the
+    later ones.  They now sit in date order at the top, so the section reads oldest first again;
+  - no code changed, so all gates stay as they were (byte gate `IDENTICAL`, seam/client gates
+    green); the last full run is the entry above.
