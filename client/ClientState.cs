@@ -15,6 +15,9 @@ public sealed class ClientStats
     public long Scrolls;
     public long PaletteUpdates;
     public long ControlMessages;
+    public long AudioWrites;
+    public long AudioBatches;
+    public long AudioControls;
     public long EngineErrors;
     public long UnknownFamilies;
     public long UnknownMessages;
@@ -39,6 +42,9 @@ public sealed class ClientStats
         $"frames={Frames} rects={Rects} " +
         (Scrolls > 0 ? $"scrolls={Scrolls} " : string.Empty) +
         $"palette={PaletteUpdates} control={ControlMessages} " +
+        (AudioWrites + AudioBatches + AudioControls > 0
+            ? $"audio={AudioWrites}w/{AudioBatches}b/{AudioControls}c "
+            : string.Empty) +
         $"records={Records} bytes={Bytes} shown={Presented} " +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
         (Filtered > 0 ? $"filter={FilterMs / Filtered:F1}ms " : string.Empty) +
@@ -64,6 +70,12 @@ public sealed class ClientState(int width, int height)
     public byte[] Palette { get; private set; } = new byte[768];
 
     public ClientStats Stats { get; } = new() { Width = width, Height = height };
+
+    /// <summary>
+    /// The FM state the AUDIO family feeds (OPL register file per port plus the stream's
+    /// rate/format/on).  Synthesis reads it; the frame pipeline only applies the writes.
+    /// </summary>
+    public Opl Audio { get; } = new();
 
     public bool PaletteDirty { get; private set; } = true;
 
@@ -133,6 +145,10 @@ public sealed class ClientState(int width, int height)
             if (header.Family == Family.Control)
             {
                 return ApplyControl(payload, length);
+            }
+            if (header.Family == Family.Audio)
+            {
+                return ApplyAudio(payload, length);
             }
             if (header.Family != Family.Video)
             {
@@ -358,6 +374,83 @@ public sealed class ClientState(int width, int height)
             case ControlMessage.Debug when length >= 2:
                 Notice?.Invoke($"engine debug: {Encoding.ASCII.GetString(payload, 1, length - 1)}");
                 return false;
+            default:
+                Stats.UnknownMessages++;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Handles an AUDIO message (called with the lock held).  Writes never touch the
+    /// framebuffer, so the return value is always false: only VIDEO opens a frame.
+    /// </summary>
+    private bool ApplyAudio(byte[] payload, int length)
+    {
+        if (length < 1)
+        {
+            Stats.UnknownMessages++;
+            return false;
+        }
+        switch ((AudioMessage)payload[0])
+        {
+            case AudioMessage.Write when length >= 5:
+                Audio.Write(
+                    BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(1)),
+                    payload[3], payload[4]);
+                Stats.AudioWrites++;
+                return false;
+
+            case AudioMessage.Batch when length >= 2:
+            {
+                int count = payload[1];
+                if (length < 2 + count * 4)
+                {
+                    Stats.UnknownMessages++;
+                    return false;
+                }
+                for (int i = 0; i < count; i++)
+                {
+                    int at = 2 + i * 4;
+                    Audio.Write(
+                        BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(at)),
+                        payload[at + 2], payload[at + 3]);
+                }
+                Stats.AudioWrites += count;
+                Audio.Batch();
+                Stats.AudioBatches++;
+                return false;
+            }
+
+            case AudioMessage.TimedBatch when length >= 4:
+            {
+                int port = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(1));
+                int count = payload[3];
+                if (length < 4 + count * 6)
+                {
+                    Stats.UnknownMessages++;
+                    return false;
+                }
+                for (int i = 0; i < count; i++)
+                {
+                    int at = 4 + i * 6;
+                    Audio.WriteTimed(
+                        port, payload[at + 4], payload[at + 5],
+                        BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(at)));
+                }
+                Stats.AudioWrites += count;
+                Audio.Batch();
+                Stats.AudioBatches++;
+                return false;
+            }
+
+            case AudioMessage.AudioCtrl when length >= 6:
+                Audio.Control(
+                    BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(1)),
+                    BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(3)),
+                    payload[5] != 0);
+                Stats.AudioControls++;
+                return false;
+
             default:
                 Stats.UnknownMessages++;
                 return false;

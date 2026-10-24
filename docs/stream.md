@@ -134,6 +134,27 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
   `-DSEAM_TEE` define and the expression silently loses its operand. Names avoid the defines.
 - **A stalled link must not freeze the game**: the serial writer waits for THRE with a bounded
   counter and drops the rest of the message when it is exhausted.
+- **Audio travels as register writes, not samples**: the seam patches the resident SBFMDRV's OPL
+  writer (`sub_0A78`, a five-byte prologue at `0A78h`) with a far jump to `fn_SeamOplHook`.  The
+  hook runs from the driver's timer ISR, appends `(u32 PIT stamp, register, value)` to a
+  double-buffered log in the seam block (682 writes per buffer) and executes the five displaced
+  bytes before returning to `0A7Dh`.  The stamp is the BIOS tick at `40:006Ch` times the driver's
+  reload (`CS:0141h`) plus its tick phase (`CS:0147h`), read under `cli` so both halves come from
+  one instant.  The driver zeroes the phase at every music start; the hook adds the lost part to
+  the timeline (`seam_opl_adj`), so the stamps never step back and a new track keeps its tick
+  spacing.
+  A present pass, and the `fn_SeamPresentMusic` poll hook, drain one buffer into
+  `opl_batch_timed` messages (1..128 writes per message, port from the driver's `0114h`) while
+  `seam_inpresent` keeps the tick ISR out; the writes ride the same `STREAM.BIN` batch as the
+  video and are flushed even when no frame closes.  The log is drained at the poll rate, so a
+  batch can carry several driver ticks; the stamps keep their order and their ~10.4 ms spacing.
+  `audio_ctrl(44100, 0, on)` mirrors the driver's `[02F2h]` state.  The
+  driver's checksum only reads `[0101h]` at the first command 6, so it does
+  not detect the patch, and `fn_SoundShutdown` sends command 7 (stop) before
+  the game exits, so the resident driver never runs the patch into freed
+  SWREG memory.  A 20 s file run carries 240 timed batches / 1,699 writes / 4
+  controls over 353 frames / 2,073 rects / 328 palette messages, with no
+  backwards stamp in the stream.
 - The block is allocated before `fn_07010`/`fn_01BE8`; it needs ~64 KB of conventional memory.
 
 ## Validation (2026-10-20)
@@ -147,7 +168,10 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
 - Oracle build re-verified after every batch: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings; the pin
   gate is green.
 
-Limitations: timing-dependent (the run length bounds what is captured), two modes only (13h and
-the 640x480 and 640x400 VBE screens; any other VBE mode is ignored), no audio
-yet, and the seam build is slower than the original.  The file backend reads input from
-`INPUT.BIN` (the folder link); the obsolete serial backend has no input channel.
+Limitations: timing-dependent (the run length bounds what is captured), two
+modes only (13h and the 640x480 and 640x400 VBE screens; any other VBE mode is
+ignored), the PIT stamp is derived from the low BIOS-tick word (so it rolls
+over about hourly and clients must use modular differences), and the seam
+build is slower than the original.  The file backend reads input from
+`INPUT.BIN` (the folder link); the obsolete serial backend has no input
+channel.

@@ -33,6 +33,14 @@ public enum VideoMessage : byte
     Scroll = 5,
 }
 
+public enum AudioMessage : byte
+{
+    Write = 0,
+    Batch = 1,
+    AudioCtrl = 2,
+    TimedBatch = 3,
+}
+
 public enum ControlMessage : byte
 {
     Hello = 0,

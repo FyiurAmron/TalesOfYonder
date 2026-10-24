@@ -1,9 +1,12 @@
 # Companion client (live display link)
 
-The point of the seam work: run the real game, stream the display out of it, and drive a client
-that is a first sketch of the C# host. Status as of 2026-10-20: **working end-to-end** for the
-VIDEO family (protocol v0; raw and run-length row codecs, 320x200x8 for the game, 640x480x8 for
-the VBE intro) over the folder link (`STREAM.BIN`/`INPUT.BIN`; the serial link is kept for fun).
+The point of the seam work: run the real game, stream the display and sound
+out of it, and drive a client that is a first sketch of the C# host.  Status
+as of 2026-10-24: **working end-to-end** for the VIDEO and AUDIO families and
+input (protocol v0; raw and run-length row codecs, 320x200x8 for the game,
+640x480x8 for the VBE intro, OPL register writes synthesised in the client)
+over the folder link (`STREAM.BIN`/`INPUT.BIN`; the serial link is kept for
+fun).
 
 The seam build is not byte-identical by design; the oracle build stays byte-perfect
 (`sh engine/asm/swreg/tools/verify.sh` -> `SWREG.EXE: OK` + `IDENTICAL`). The seam itself is described in
@@ -16,7 +19,7 @@ The seam build is not byte-identical by design; the oracle build stays byte-perf
 | engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant file` | the integration surface: hooks in the game source, present/keyframe/palette logic, `STREAM.BIN`/`INPUT.BIN` backend |
 | bridge | the game's working directory | the engine appends `STREAM.BIN` and reads `INPUT.BIN`; a local or shared folder |
 | client | `client/` (C#, `net11.0`) | SDL3 window via P/Invoke (no NuGet), decoder, renderer, stats, recorder/replay |
-| gates | `tests/replay`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode byte-exactness, codec/detector/pacing, filter and window checks |
+| gates | `tests/replay`, `tests/audio`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode, OPL synthesis, codecs/pacing, filter and window |
 
 The window and taskbar icon is the game's own 32x32 `YENDOR2.BMP`: a byte-identical copy lives in
 `client/Assets/yendor2.bmp`, is embedded in the assembly and set with `SDL_SetWindowIcon` right
@@ -286,6 +289,54 @@ The filter scales only the rows that changed (with the row above and below them,
 blend looks two rows up and down), so a frame costs about 5 ms at 3x instead of scaling the
 whole picture every time.
 
+## Audio
+
+The seam streams the resident SBFMDRV's OPL register writes over the AUDIO
+family (`docs/protocol.md`); the client is the FM chip.  `client/Opl2.cs` is
+an independent YM3812 core: nine two-operator channels, FM or additive
+connection, feedback, the four OPL2 waveforms, the ADSR envelope with the
+YMF278B rate tables, key scaling, total level and KSL, and tremolo/vibrato.
+`client/Opl.cs` keeps one 256-byte register file per FM port and feeds one
+chip per port; `client/SdlAudio.cs` opens an SDL3 signed-16 stereo stream at
+44100 Hz and keeps about 100 ms queued.  Rendering runs on the main thread, so
+the reader thread only applies register writes.
+
+The client opens the device unless `--headless` or `--no-audio` is given; a
+missing device is reported and the picture continues without sound.  `--dro
+PATH [--wav PATH]` renders a DOSBox-X raw OPL capture (DRO 2.0) through the
+same core, which is how the synth is checked against the reference WAV without
+running the game.  `--file rec.bin --wav out.wav` renders a protocol
+recording's AUDIO family offline, with the write timestamps, so a folder-link
+capture can be checked (or heard) without the engine.
+
+The bundled DOSBox-X profiles set `nosound = true`: the emulated Sound
+Blaster/OPL still runs (the game and its driver need it, and the seam reads
+its writes), but DOSBox-X does not play the host audio, so the client is the
+only output and there is no second, delayed copy.  To hear the emulator
+instead, set `nosound = false` in the bundle's `server/dosbox-x.conf` and
+start the client with `--no-audio`.
+
+Each write carries a 32-bit PIT stamp (1,193,182 Hz; `docs/protocol.md`), and
+`client/Opl.cs` schedules it on the render timeline: the first timed write
+anchors at the render front, later stamps advance the schedule by their
+difference, and a write that maps behind the front is played at the front.
+A batch that carries several SBFMDRV ticks therefore keeps their ~10.4 ms
+spacing instead of collapsing into one instant.  The client keeps about
+100 ms rendered ahead of the device, so the whole track is heard that much
+after the engine's events; that is queue latency, not a per-write error.
+The stream's stamps are non-decreasing (the seam shifts the timeline when the
+driver resets its phase at a music start); the 32-bit count rolls over about
+hourly and the client compares deltas modulo 2^32.
+
+SBFMDRV is a music driver: the game's SFX path (`fn_PlaySFX`) needs
+`v_SoundState` bit 3, which only the far-entry pre-init (`sub_SoundPreInit`)
+sets.  That pre-init never runs in this chapter (the capture has no FM-detect
+writes from it; the resident INT driver is the working path) and the options
+toggle is gated on the same bit, so the game has no OPL sound effects.  The
+only effect left is id 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2),
+which the protocol does not carry.  A music-only capture therefore contains
+no OPL sound effects to check.
+
 ## Client options
 | option | meaning |
 |---|---|
@@ -301,6 +352,9 @@ whole picture every time.
 | `--no-keyframe` | do not ask for a keyframe on connect |
 | `--keyframe-every S` | ask for a full frame every S seconds (diagnostics) |
 | `--hold` | keep the window open after a recording ends |
+| `--no-audio` | do not open an audio device |
+| `--dro PATH` | render a DOSBox-X raw OPL capture (offline test) |
+| `--wav PATH` | with `--dro` or `--file`: render the audio to this WAV instead of opening a device |
 | `--ppm PATH` | write the last frame to a PPM file |
 | `--dump PATH` | record every byte the decoder saw to PATH |
 | `--raw` | do not unescape the nullmodem `0xFF` doubling (obsolete) |
@@ -308,7 +362,18 @@ whole picture every time.
 
 Keys go to the game (arrows and function keys included, as extended keys).
 `Esc` is forwarded too, since the game needs it: quit with the window close
-button or `Ctrl+Q`. Audio is not wired yet.
+button or `Ctrl+Q`.
+
+## Audio verification (2026-10-24)
+
+- `tests/audio/run.sh`: the committed `music-walk.dro` fixture renders to
+  12.66 s, peak 41.2% FS, rms 2261 (the paired DOSBox-X WAV: 41.8% FS, rms
+  2310); the Goertzel checks pin the pitches of the first bars; the same DRO
+  encoded as `opl_batch_timed` and replayed with `--file --wav` is
+  sample-identical to the direct render; the dummy SDL device opens and the
+  client pushes 4,410 frames from `sample-audio.bin`.
+- Live folder run (2026-10-24): 20 s, 240 timed batches / 1,699 writes / 4
+  controls, no backwards stamp, 96 Hz tick spacing (12,428 PIT counts).
 
 ## Verification (2026-10-20)
 
@@ -399,7 +464,8 @@ and mouse share the path, and scripted input is easiest to observe early in a ru
 
 ## Not here yet
 
-Audio (OPL register writes), further codecs (the row runs of codec 1 are in; LZ is not), session
-headers for recordings.  VBE is supported for the one mode the game uses (640x480x8, the intro);
-the seam ignores any other VBE mode.  The client is a development harness: one window, no filters,
-no audio.
+Further codecs (the row runs of codec 1 are in; LZ is not), session headers
+for recordings, and a PC-speaker beep family if the game's fallback effect
+should be heard.  VBE is supported for the one mode the game uses (640x480x8,
+the intro); the seam ignores any other VBE mode.  The client is a development
+harness: one window and the live folder link.

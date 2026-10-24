@@ -20,7 +20,7 @@ read them in order:
 | `client/` | the C# companion client (SDL3), `client/server.sh` for the live link and `client/publish-win.sh` for the Windows bundle |
 | `tools/dosbox/` | DOSBox-X profiles and headless runners: oracle baseline (`baseline.sh`), audio/OPL capture (`audio.sh`), X11 helpers (`keys.py`, `snap.py`), the client link profile (`dosbox-x-client.conf`); outputs under `build/runs/` |
 | `tools/stream/` | recording tooling: `replay.py` (the reference decoder), `compare_streams.py`, `dro.py`, `wav.py` |
-| `tests/` | committed gates: `replay/run.sh` (offline), `link/run.sh` (live), `data/` fixtures |
+| `tests/` | gates: `replay/run.sh` (offline), `audio/run.sh` (synth), `link/run.sh` (live), `data/` fixtures |
 | `build/` | **all** build outputs and scratch (gitignored); scratch goes to `build/tmp/` |
 
 ## Ground rules
@@ -110,7 +110,7 @@ The M8/M9 rules above still govern the product client.
 | `engine/asm/swreg/` | `verify.sh` ends `OK` + `IDENTICAL` (includes the `swreg.pin` check); no commit ever changes `_ref/` |
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
-| `client/` | `dotnet build client -c Release` clean; `sh tests/replay/run.sh` renders byte-identically to `tools/stream/replay.py`; `sh tests/link/run.sh` (obsolete serial link, optional) reports every received message byte-exact |
+| `client/` | `dotnet build client -c Release` clean; `sh tests/replay/run.sh` renders byte-identically to `tools/stream/replay.py`; `sh tests/audio/run.sh` renders the DRO fixture and opens SDL audio; `sh tests/link/run.sh` (obsolete serial link, optional) reports every received message byte-exact |
 | Windows bundle | `publish-win.sh` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |
