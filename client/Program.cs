@@ -30,6 +30,9 @@ public sealed class Options
     public bool Keyframe = true;
     public double KeyframeEvery;
     public bool Hold;
+    public bool NoAudio;
+    public string? Dro;
+    public string? Wav;
     public string? Ppm;
     public string? Dump;
     public string? DumpFrame;
@@ -89,6 +92,15 @@ public sealed class Options
                     break;
                 case "--hold":
                     options.Hold = true;
+                    break;
+                case "--no-audio":
+                    options.NoAudio = true;
+                    break;
+                case "--dro":
+                    options.Dro = Next(arg);
+                    break;
+                case "--wav":
+                    options.Wav = Next(arg);
                     break;
                 case "--ppm":
                     options.Ppm = Next(arg);
@@ -203,6 +215,10 @@ public sealed class Options
                                   a window keeps waiting until it is closed
               --no-keyframe       do not ask the engine for a keyframe on connect
               --hold              keep the window open after a recording ends
+              --no-audio          do not open an audio device
+              --dro PATH          render a DOSBox DRO OPL capture with the synth
+              --wav PATH          with --dro or --file: render the audio to this
+                                  WAV instead of opening a device
               --ppm PATH          write the last frame as a PPM file
               --dump PATH         record every byte received to PATH
               --raw               do not unescape the nullmodem 0xFF doubling
@@ -273,6 +289,14 @@ internal static class Program
                                     "(nearest or xbrz)");
             return 2;
         }
+        if (options.Dro is not null)
+        {
+            return DroRenderer.Run(options.Dro, options.Wav);
+        }
+        if (options.File is not null && options.Wav is not null)
+        {
+            return StreamAudio.Run(options.File, options.Wav);
+        }
         // xBRZ scales the frame in the client, by the window scale factor.
         XbrzFilter? filter = options.Filter == "xbrz" ? new XbrzFilter(options.Scale) : null;
         SdlScreen? created = null;
@@ -305,6 +329,21 @@ internal static class Program
             // may take a while to answer, and the window must stay paint-able
             created.Present(new byte[created.TextureBytes]);
         }
+        SdlAudioStream? audio = null;
+        if (!options.Headless && !options.NoAudio)
+        {
+            audio = SdlAudio.TryOpen(44100, out string audioError);
+            if (audio is null)
+            {
+                Console.Error.WriteLine($"client: audio unavailable ({audioError}); " +
+                                        "continuing without sound");
+            }
+            else
+            {
+                Console.WriteLine($"client: audio {audio.Rate} Hz stereo s16");
+            }
+        }
+        using var audioScope = audio;
         var nextWaitLine = DateTime.UtcNow.AddSeconds(5);
         Func<bool>? pumpWhileConnecting = created is null ? null : () =>
         {
@@ -455,6 +494,7 @@ internal static class Program
                 {
                     while (!quit && !session.IsCancellationRequested)
                     {
+                        audio?.Pump(state.Audio);
                         if (screen is not null &&
                             (state.Width != screenWidth || state.Height != screenHeight))
                         {
@@ -655,6 +695,10 @@ internal static class Program
             Console.WriteLine("client: window held open; close it to finish");
             while (screen.Pump())
             {
+                if (finalState is not null)
+                {
+                    audio?.Pump(finalState.Audio);
+                }
                 if (last is not null)
                 {
                     screen.Present(last);
@@ -663,6 +707,15 @@ internal static class Program
             }
         }
 
+        if (audio is not null)
+        {
+            Console.WriteLine($"client: audio {audio.Pushed} frames, {audio.Underruns} underruns");
+            if (finalState is not null && finalState.Audio.Scheduled > 0)
+            {
+                Console.WriteLine($"client: audio schedule: {finalState.Audio.Scheduled} writes, " +
+                                  $"{finalState.Audio.LateWrites} played late");
+            }
+        }
         Console.WriteLine($"client: done  {finalState?.Stats}");
         dumpStop.Cancel();
         dump?.Dispose();

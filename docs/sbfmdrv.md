@@ -515,6 +515,16 @@ the sequencer never runs.
 - `sub_A78(AH=register, AL=value)` writes an OPL register pair: address to
   `[0114h]`, then data to `[0114h]+1`, with CLI and calibrated delays
   `[013Dh]/[013Fh]`.
+- The seam's AUDIO capture patches the five-byte `sub_0A78` prologue
+  (`pushf; cli; push ax; push dx; push cx`, `0A78h..0A7Ch`) with a far jump
+  to its own hook, logs `(PIT stamp, AH, AL)` and then executes the displaced
+  bytes and resumes at `0A7Dh`.  The hook runs in the driver's timer ISR, so it
+  only copies into a double-buffered log; the game-side present pass turns the
+  log into `opl_batch_timed` messages (docs/stream.md).  The integrity check of 4.5
+  reads `[0101h]` once and does not hash the image, so it does not detect the
+  patch.  `fn_SoundShutdown` sends command 7 (stop) before the game exits, so
+  the resident driver stops calling the patched routine before SWREG's
+  segment is freed.
 - `sub_17CE` polls the FM status port with a mask; `sub_17EC` is the FM
   presence test.
 - `sub_1907` resets the DSP, `sub_18C4` reads a DSP data byte (base+`0Ah`,

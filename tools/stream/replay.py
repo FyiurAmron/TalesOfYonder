@@ -18,6 +18,7 @@ from PIL import Image
 MAGIC = 0x5954
 HDR = struct.Struct("<HBBBBII")
 FAMILY_VIDEO = 1
+FAMILY_AUDIO = 2
 FAMILY_CONTROL = 5
 
 SET_MODE, PALETTE, RECT, FRAME_END, RESET, SCROLL = range(6)
@@ -122,6 +123,10 @@ def main():
     pal_updates = 0
     control = 0
     scrolls = 0
+    audio_writes = 0
+    audio_batches = 0
+    audio_controls = 0
+    opl = {}                    # (port, register) -> value; the FM register file
 
     def save_frame(tag=None):
         nonlocal last, frames_saved, fb, width, height
@@ -141,6 +146,42 @@ def main():
     for family, codec, seq, payload in records:
         if family == FAMILY_CONTROL:
             control += 1
+            continue
+        if family == FAMILY_AUDIO:
+            # AUDIO (family 2, docs/protocol.md): OPL register writes plus the
+            # stream's rate/format/on.  They never touch the picture, but the
+            # decoder applies them so a recording with audio replays the same
+            # way the client decodes it.
+            if not payload:
+                continue
+            kind = payload[0]
+            if kind == 0 and len(payload) >= 5:                 # opl_write
+                port, reg, val = struct.unpack_from("<HBB", payload, 1)
+                opl[(port, reg)] = val
+                audio_writes += 1
+            elif kind == 1 and len(payload) >= 2:               # opl_batch
+                count = payload[1]
+                if len(payload) < 2 + 4 * count:
+                    print(f"replay: short opl_batch at seq {seq}", file=sys.stderr)
+                    continue
+                for i in range(count):
+                    port, reg, val = struct.unpack_from("<HBB", payload, 2 + 4 * i)
+                    opl[(port, reg)] = val
+                audio_writes += count
+                audio_batches += 1
+            elif kind == 2 and len(payload) >= 6:               # audio_ctrl
+                audio_controls += 1
+            elif kind == 3 and len(payload) >= 4:               # opl_batch_timed
+                port = struct.unpack_from("<H", payload, 1)[0]
+                count = payload[3]
+                if len(payload) < 4 + 6 * count:
+                    print(f"replay: short opl_batch_timed at seq {seq}", file=sys.stderr)
+                    continue
+                for i in range(count):
+                    _stamp, reg, val = struct.unpack_from("<IBB", payload, 4 + 6 * i)
+                    opl[(port, reg)] = val
+                audio_writes += count
+                audio_batches += 1
             continue
         if family != FAMILY_VIDEO:
             continue
@@ -226,7 +267,7 @@ def main():
     if not args.quiet:
         print(f"records: {len(records)} ({consumed}/{total} bytes consumed)")
         print(f"palette updates: {pal_updates}, rects: {rects}, frames: {frames}, "
-              f"control: {control}")
+              f"control: {control}, audio: {audio_writes}w/{audio_batches}b/{audio_controls}c")
         print(f"distinct frames saved: {frames_saved} in {args.out}")
         if last_name:
             print(f"final frame: {os.path.join(args.out, last_name)}")

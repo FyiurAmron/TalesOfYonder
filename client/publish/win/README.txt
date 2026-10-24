@@ -11,6 +11,14 @@ at a size limit the writer truncates them to zero and restarts from offset 0,
 and the other side notices the shrink and rewinds.  This bundle runs the
 client natively on Windows.
 
+The sound follows the same link: the game streams the resident driver's OPL
+register writes and the client synthesises the FM music.  The bundled
+DOSBox-X profile sets `nosound = true`, so the emulated Sound Blaster/OPL
+still runs (the game needs it) but DOSBox-X does not play a second, delayed
+copy; the client is the only audio output.  To hear the emulator instead, set
+`nosound = false` in `server\dosbox-x.conf` and run `client-start.bat
+--no-audio`.
+
 Contents
 --------
   client\Yt2Client.exe     self-contained (no .NET install needed), 64-bit
@@ -71,6 +79,9 @@ Client options (see --help)
   --scale N           window scale (default 3 -> 960x600)
   --stats SECONDS     progress line interval, 0 disables
   --headless          no window, decode only
+  --no-audio          do not open an audio device
+  --dro PATH          render a DOSBox-X raw OPL capture (offline test)
+  --wav PATH          where --dro writes its WAV
   --ppm PATH          write the last frame as a PPM
   --dump PATH         record every byte the decoder saw
   --raw               do not unescape the nullmodem 0xFF doubling
@@ -101,6 +112,10 @@ Troubleshooting
 * The pointer is never captured: over the client window it moves the game's
   cursor, and leaving the window hands it back to the desktop.  Press Ctrl+Q
   (or close the window) to quit the client; Esc is forwarded to the game.
+* No music: the client prints `client: audio 44100 Hz stereo s16` when the
+  device opened.  If that line is missing, the console says why (no device,
+  or `--no-audio`); the picture keeps running.  DOSBox-X is silent by design
+  (see "What it is").
 
 Notes
 -----

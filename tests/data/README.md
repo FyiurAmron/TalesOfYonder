@@ -43,6 +43,34 @@ merges rows, the Python decoder counts records), final mode `320x200x8`. `tests/
 decodes it with both implementations and compares the rendered PPMs, so the asm encoder, the C#
 decoder and the Python reference cannot drift apart unnoticed.
 
+## `sample-audio.bin`
+
+A small synthetic protocol-v0 stream (4,843 bytes, 11 records) that interleaves the AUDIO family
+with VIDEO: `hello`, `set_mode(320,200,8)`, a full palette, two 320x6 rects and two `frame_end`s,
+with one `opl_write`, one `opl_batch`, one `opl_batch_timed` and one `audio_ctrl` between them.
+`tests/replay/run.sh` renders it through the C# client and the Python decoder and compares the
+PPMs, so the picture path must be unaffected by the audio messages while both sides parse the same
+layout (family 2, `docs/protocol.md`). Regenerate with
+`python3 tests/replay/mkaudio.py tests/data/sample-audio.bin`.
+
+Decode stats: `frames=2 rects=2 palette=1 control=1 audio=7w/2b/1c records=11 bytes=4843`.
+
+## `music-walk.dro`
+
+A DOSBox-X raw OPL (DRO 2.0) capture of the resident SBFMDRV playing one
+`WORLD.DAT` music block (2,318 bytes, 808 register writes, 161 note-ons,
+11.656 s).  It is the reference input for the client's OPL2 core:
+`client --dro music-walk.dro --wav ...` renders it, and `tests/audio/run.sh`
+checks the duration, level and pitches.  Regenerate with
+
+    MUSIC_PLAY=1 MUSIC_CAP=dro sh engine/asm/sbfmdrv/test/run.sh music
+
+and copy `capture/music_000.dro` (the capture is a test artifact, not a
+recording of the game's own output).  `tests/replay/mkdrostream.py` turns the
+DRO into a protocol recording with `opl_batch_timed`; `tests/audio/run.sh`
+replays it and requires a byte-identical WAV, which pins the stamp layout and
+the client's scheduler to the direct render.
+
 ## `sample-pan-rows.bin` / `sample-pan-scroll.bin`
 
 The same twelve pictures — a 320x200 scene sliding up six rows and back down
