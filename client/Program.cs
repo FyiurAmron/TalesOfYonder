@@ -632,13 +632,18 @@ internal static class Program
             Console.WriteLine($"client: wrote {options.Ppm}");
         }
 
-        if (options.DumpFrame is not null && filter is not null)
+        if (options.DumpFrame is not null && filter is not null && finalState is not null)
         {
-            // the filtered frame, for the xBRZ gate: the words are the
+            // the filtered final frame, for the xBRZ gate: the words are the
             // texture's own layout (ARGB8888 in memory), so the dump is the
-            // little endian RGBA the gate expects
-            byte[] frame = new byte[filter.Last.Length * 4];
-            Buffer.BlockCopy(filter.Last, 0, frame, 0, frame.Length);
+            // little endian RGBA the gate expects.  Scale it here instead of
+            // reading filter.Last: the reader can reach end of stream before
+            // the render loop's first pass, and the dump must not depend on
+            // that race.
+            byte[] lastFrame = finalState.SnapshotFrame();
+            uint[] scaled = filter.Apply(lastFrame, finalState.Width, finalState.Height, [], true);
+            byte[] frame = new byte[scaled.Length * 4];
+            Buffer.BlockCopy(scaled, 0, frame, 0, frame.Length);
             File.WriteAllBytes(options.DumpFrame, frame);
             Console.WriteLine($"client: wrote {options.DumpFrame}");
         }
