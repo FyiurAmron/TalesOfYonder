@@ -31,6 +31,11 @@
 ;   1140h..13BFh  VBE row staging (one 640-pixel row)
 ;   1540h..1CC0h  this pass's row checksums (mode 13h scroll detection)
 ;   2000h..5FFFh  batched TX bytes  (file backend, flushed once per frame)
+;   8000h..8FFFh  OPL write log A  (PIT timestamp + register/value from the
+;                                   driver hook; 682 writes per buffer)
+;   9000h..9FFFh  OPL write log B  (the hook fills one while the flush drains
+;                                   the other, so the timer ISR never races
+;                                   the present pass)
 ;
 ; Message policy (identical for both backends, so a recording replays the
 ; live link):
@@ -85,6 +90,11 @@ SEAM_BLK_PARAS   equ 1040h              ; 66 560 bytes, see the banner
 
 SSTREAM segment byte use16
 
+SEAM_OPL_A      equ 8000h              ; OPL write log, buffer A
+SEAM_OPL_B      equ 9000h              ; OPL write log, buffer B
+SEAM_OPL_SIZE   equ 1000h              ; bytes per buffer (682 writes)
+SEAM_OPL_MAX    equ 80h                ; writes per opl_batch_timed message
+
 seam_blk        dw 0                    ; DOS block segment (0 = seam off)
 seam_backend    dw 0                    ; 0 off, 1 serial, 2 file
 seam_handle     dw 0                    ; file handle (file backend)
@@ -132,6 +142,15 @@ seam_scrbestdy  dw 0                    ; scroll search: the best step
 seam_scrstep    dw 0                    ; scroll search: candidate step under test
 seam_holdleft   dw 0                    ; extra present passes allowed before frame close
 seam_txfam      dw 1                    ; family of the next outgoing message
+seam_musicid    dw 0FFFFh               ; last v_MusicId mirrored as audio_ctrl
+seam_opl_port   dw 0                    ; the driver's FM port (0 = not patched)
+seam_opl_ret    dd 0                    ; driver:0A7Dh, where the hook resumes
+seam_opl_cur    dw SEAM_OPL_A           ; the buffer the write hook fills
+seam_opl_alt    dw SEAM_OPL_B           ; the buffer the flush drains
+seam_opl_len    dw 0                    ; bytes in seam_opl_cur, 6 per write
+seam_opl_last   dd 0                    ; last PIT stamp emitted (monotonic)
+seam_opl_adj    dd 0                    ; phase lost at music starts, added back
+seam_opl_vec    dw 80h                  ; IVT scan position for the driver
 seam_rxlen      dw 0                    ; bytes staged in seam_rx
 seam_rx         db 64 dup(0)            ; RX: 14-byte header + small payload
 seam_ring       db 32 dup(0)            ; RX bytes picked up while transmitting
@@ -231,6 +250,7 @@ ELSE
     mov word ptr [seam_backend], 1
 ENDIF
     call sub_SeamMouseInstall       ; before the game probes INT 33h
+    call sub_SeamOplPatch           ; log the driver's OPL writes (if it is there)
 IFDEF SEAM_LOG
     call fn_SeamLogOpen
 ENDIF
@@ -483,6 +503,11 @@ sub_SeamSend:
     jne ssend_done                    ; a flush is writing the batch: the tick ISR
                                       ; must not touch the TX buffer, or the file
                                       ; copy and the wire would differ
+    mov ax, word ptr cs:[seam_blk]
+    test ax, ax
+    je ssend_done
+    mov ds, ax                        ; the message lives in the block, whatever
+                                      ; segment the caller was using
     mov al, byte ptr cs:[seam_txfam]
     mov word ptr cs:[seam_txfam], 1 ; every caller defaults back to VIDEO
     mov word ptr [SEAM_BUF], 5954h  ; 'YT'
@@ -641,6 +666,10 @@ sub_SeamFlush:
     mov cx, word ptr cs:[seam_txlen]
     test cx, cx
     je sfl_done
+    mov ax, word ptr cs:[seam_blk]
+    test ax, ax
+    je sfl_done
+    mov ds, ax                        ; SEAM_TX is addressed through DS
     ; the batch is written with the DOS calls below, and a tick during them
     ; would send into the same buffer: block that, or the file copy and the
     ; mirrored wire copy would carry different bytes
@@ -2514,6 +2543,19 @@ sp_frame:
     mov word ptr cs:[seam_palout], 0
     call sub_SeamFrameEnd
 sp_off:
+    ; The audio messages share SEAM_BUF with the video pass, so they are
+    ; built here, inside the pass, where seam_inpresent keeps the tick ISR
+    ; out.  The batch goes out even when this pass closes no frame: music
+    ; changes on the driver's tick, not on the picture.  sp_finish can be
+    ; reached from the mode check with DS still pointing at the seam, so
+    ; re-establish the block here for the send and the flush.
+    mov ax, word ptr cs:[seam_blk]
+    mov ds, ax
+    call sub_SeamAudioFlush
+    call sub_SeamAudioState
+IFDEF SEAM_FILE
+    call sub_SeamFlush
+ENDIF
     mov word ptr cs:[seam_inpresent], 0
 sp_done:
     pop es
@@ -3054,7 +3096,347 @@ ENDIF
 ; ---------------------------------------------------------------------------
 fn_SeamPresentMusic:
     call far ptr fn_SeamPresent
+    ; The full present pass is rate-limited (it scans rows and writes the
+    ; input ring), but the driver's OPL log changes on its 96 Hz tick.  Drain
+    ; it here as well, at the poll rate, so a batch carries one tick's writes
+    ; rather than several frames' worth.  seam_inpresent keeps the tick ISR
+    ; from touching SEAM_BUF while the messages are built.
+    pushf
+    push ax
+    push ds
+    mov word ptr cs:[seam_inpresent], 1
+    mov ax, word ptr cs:[seam_blk]
+    test ax, ax
+    je spm_done
+    mov ds, ax
+    call sub_SeamAudioFlush
+    call sub_SeamAudioState
+IFDEF SEAM_FILE
+    call sub_SeamFlush
+ENDIF
+spm_done:
+    mov word ptr cs:[seam_inpresent], 0
+    pop ds
+    pop ax
+    popf
     jmp far ptr fn_MusicService
+
+; ---------------------------------------------------------------------------
+; fn_SeamOplHook - called instead of the resident driver's OPL write prologue.
+;
+; The driver's sub_0A78 (offset 0A78h) is patched with a far jump here.  The
+; routine's contract is AH = register, AL = value; it writes the port pair at
+; [0114h] itself.  The hook logs the pair for the next present pass, then runs
+; the five displaced bytes and jumps back to the driver at 0A7Dh, so the
+; driver executes exactly the code it expects.
+;
+; This runs from the driver's timer ISR: no DOS calls, no game state, and all
+; registers, DS and ES are preserved.  The five displaced bytes are
+; pushf/cli/push ax/push dx/push cx, and pushf must see the caller's flags,
+; which is why the flags are restored before they run.
+; ---------------------------------------------------------------------------
+fn_SeamOplHook:
+    pushf
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    cmp word ptr cs:[seam_blk], 0
+    je shop_done
+    mov si, ax                       ; AH = register, AL = value
+    ; Timestamp the write in PIT counts, the finest clock both sides share:
+    ; BIOS tick at 40:006Ch times the driver's BIOS reload [0141h], plus the
+    ; ISR's tick phase [0147h].  The hook runs before the ISR adds this tick's
+    ; divisor, so all writes from one driver tick carry the same stamp.
+    ; cli keeps the timer from moving the pair between the two reads: the
+    ; game context also calls the writer while loading patches.
+    cli
+    push 40h
+    pop ds
+    mov dx, word ptr ds:[6Ch]
+    mov ds, word ptr cs:[seam_opl_ret+2]
+    mov cx, word ptr ds:[0141h]
+    mov ax, word ptr ds:[0147h]
+    mov di, ax
+    mov ax, dx
+    mul cx
+    add ax, di
+    adc dx, 0
+    ; The driver zeroes its tick phase [0147h] at every music start, while the
+    ; BIOS tick keeps running, so the raw stamp can step back by less than one
+    ; BIOS tick.  Shift the whole coming timeline by the lost part instead: the
+    ; stamps stay monotonic and the new track keeps its 10 ms tick spacing.
+    add ax, word ptr cs:[seam_opl_adj]
+    adc dx, word ptr cs:[seam_opl_adj+2]
+    cmp dx, word ptr cs:[seam_opl_last+2]
+    ja shop_stamp
+    jb shop_back
+    cmp ax, word ptr cs:[seam_opl_last]
+    jae shop_stamp
+shop_back:
+    mov bx, word ptr cs:[seam_opl_last]
+    sub bx, ax
+    mov cx, word ptr cs:[seam_opl_last+2]
+    sbb cx, dx
+    test cx, cx
+    jnz shop_stamp                   ; far behind: the 32-bit count wrapped
+    add word ptr cs:[seam_opl_adj], bx
+    adc word ptr cs:[seam_opl_adj+2], 0
+    mov ax, word ptr cs:[seam_opl_last]
+    mov dx, word ptr cs:[seam_opl_last+2]
+    jmp shop_stamp
+shop_stamp:
+    mov word ptr cs:[seam_opl_last], ax
+    mov word ptr cs:[seam_opl_last+2], dx
+    mov bx, word ptr cs:[seam_opl_len]
+    cmp bx, SEAM_OPL_SIZE
+    jae shop_done                    ; the flush is behind: drop the write
+    mov es, word ptr cs:[seam_blk]
+    add bx, word ptr cs:[seam_opl_cur]
+    mov word ptr es:[bx], ax         ; PIT count low
+    mov word ptr es:[bx+2], dx       ; PIT count high
+    mov ax, si
+    mov byte ptr es:[bx+4], ah       ; register
+    mov byte ptr es:[bx+5], al       ; value
+    add word ptr cs:[seam_opl_len], 6
+shop_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    popf
+    pushf                            ; the driver's displaced prologue
+    cli
+    push ax
+    push dx
+    push cx
+    jmp dword ptr cs:[seam_opl_ret]
+
+; ---------------------------------------------------------------------------
+; sub_SeamAudioFlush - turn the logged OPL writes into AUDIO opl_batch
+; messages (family 2).  Called from the music hook, which runs in game
+; context, so the DOS writes are safe.  The hook fills one log while this
+; drains the other: the buffer swap happens with interrupts off, so the 64 Hz
+; ISR can never race the copy.
+; in:  DS = game data; the caller's registers are preserved
+; out: -
+; ---------------------------------------------------------------------------
+sub_SeamAudioFlush:
+    push ax
+    push bx
+    push bp
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    cmp word ptr cs:[seam_blk], 0
+    je saf_done
+    cmp word ptr cs:[seam_opl_len], 6    ; one write: flush at the poll rate,
+    jb saf_done                          ; so the driver's 96 Hz timing survives
+    pushf
+    cli
+    mov bx, word ptr cs:[seam_opl_cur]   ; the buffer to drain
+    mov cx, word ptr cs:[seam_opl_len]
+    mov ax, word ptr cs:[seam_opl_alt]
+    mov word ptr cs:[seam_opl_cur], ax   ; the hook continues there
+    mov word ptr cs:[seam_opl_alt], bx
+    mov word ptr cs:[seam_opl_len], 0
+    popf
+    mov si, bx
+    mov ax, cx
+    xor dx, dx
+    mov bx, 6
+    div bx                               ; writes, not bytes
+    mov bp, ax
+    test bp, bp
+    jz saf_done
+    mov ds, word ptr cs:[seam_blk]
+saf_batch:
+    mov ax, bp
+    cmp ax, SEAM_OPL_MAX
+    jbe saf_count
+    mov ax, SEAM_OPL_MAX
+saf_count:
+    mov bx, ax                           ; writes in this message
+    mov byte ptr [SEAM_BUF+14], 3        ; AUDIO opl_batch_timed
+    mov ax, word ptr cs:[seam_opl_port]
+    mov word ptr [SEAM_BUF+15], ax       ; port
+    mov byte ptr [SEAM_BUF+17], bl       ; count
+    mov di, SEAM_BUF+18
+    mov cx, bx
+saf_copy:
+    mov ax, word ptr [si]                ; PIT timestamp low
+    mov word ptr [di], ax
+    mov ax, word ptr [si+2]              ; PIT timestamp high
+    mov word ptr [di+2], ax
+    mov ax, word ptr [si+4]              ; register/value
+    mov word ptr [di+4], ax
+    add si, 6
+    add di, 6
+    loop saf_copy
+    mov cx, bx
+    mov ax, 6
+    mul cx                               ; 6*count
+    add ax, 4
+    adc dx, 0
+    mov cx, ax                           ; payload including the type byte
+    mov word ptr cs:[seam_txfam], 2
+    call sub_SeamSend
+    sub bp, bx
+    jnz saf_batch
+saf_done:
+    pop es
+    pop di
+    pop si
+    pop ds
+    pop dx
+    pop cx
+    pop bp
+    pop bx
+    pop ax
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamOplPatch - patch the resident driver's OPL write routine.
+; in:  DS = block (the caller's DS is not used)
+; out: -
+; Scans IVT vectors 80h..BFh for the "FMDRV" signature at 103h and patches
+; the write prologue at 0A78h only when the five bytes are the known
+; pushf/cli/push ax/push dx/push cx.  Anything else is left alone, and
+; seam_opl_port stays 0 so the flush sends nothing.
+; ---------------------------------------------------------------------------
+sub_SeamOplPatch:
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    mov word ptr cs:[seam_opl_port], 0
+    mov word ptr cs:[seam_opl_ret], 0
+    mov word ptr cs:[seam_opl_ret+2], 0
+    mov word ptr cs:[seam_opl_vec], 80h
+sop_scan:
+    mov ax, word ptr cs:[seam_opl_vec]
+    mov ah, 35h
+    int 21h
+    or bx, bx
+    je sop_next
+    mov ax, es
+    or ax, ax
+    je sop_next
+    cmp byte ptr es:[103h], 'F'
+    jne sop_next
+    cmp byte ptr es:[104h], 'M'
+    jne sop_next
+    cmp byte ptr es:[105h], 'D'
+    jne sop_next
+    cmp byte ptr es:[106h], 'R'
+    jne sop_next
+    cmp byte ptr es:[107h], 'V'
+    jne sop_next
+    cmp byte ptr es:[0A78h], 9Ch
+    jne sop_next
+    cmp byte ptr es:[0A79h], 0FAh
+    jne sop_next
+    cmp byte ptr es:[0A7Ah], 50h
+    jne sop_next
+    cmp byte ptr es:[0A7Bh], 52h
+    jne sop_next
+    cmp byte ptr es:[0A7Ch], 51h
+    jne sop_next
+    ; the driver we know: remember its FM port and patch the prologue
+    mov ax, word ptr es:[114h]
+    mov word ptr cs:[seam_opl_port], ax
+    mov word ptr cs:[seam_opl_ret], 0A7Dh
+    mov ax, es
+    mov word ptr cs:[seam_opl_ret+2], ax
+    cli
+    mov byte ptr es:[0A78h], 0EAh        ; jmp far ptr SSTREAM:fn_SeamOplHook
+    mov word ptr es:[0A79h], offset fn_SeamOplHook
+    mov word ptr es:[0A7Bh], cs
+    sti
+    jmp sop_done
+sop_next:
+    inc word ptr cs:[seam_opl_vec]
+    cmp word ptr cs:[seam_opl_vec], 0C0h
+    jb sop_scan
+sop_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamAudioState - mirror the game's music on/off state as an AUDIO
+; audio_ctrl message (family 2, docs/protocol.md).
+;
+; The register writes themselves travel through fn_SeamOplHook; this only
+; adds the stream's sound state and the rate/format to synthesise at, read
+; from the driver's sequencer byte ([02F2h], docs/sbfmdrv.md 4.5).  Called
+; from the end of a present pass, with DS on the seam block.
+; in:  -
+; out: -
+; ---------------------------------------------------------------------------
+sub_SeamAudioState:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    push es
+    ; The caller's DS is not the game's data segment at every poll site
+    ; (some callers point it at a buffer), so the music state comes from the
+    ; driver itself: [02F2h] is 1 while its sequencer runs (docs/sbfmdrv.md
+    ; 4.5).  The driver segment was stored when its write routine was patched.
+    mov ax, word ptr cs:[seam_opl_ret+2]
+    or ax, ax
+    je sas_done                         ; no driver patched: nothing to say
+    push es
+    mov es, ax
+    mov al, byte ptr es:[02F2h]         ; 0 = stopped, 1 = playing
+    pop es
+    xor ah, ah
+    cmp ax, word ptr cs:[seam_musicid]
+    je sas_done
+    mov word ptr cs:[seam_musicid], ax
+    mov dx, word ptr cs:[seam_blk]
+    or dx, dx
+    je sas_done                         ; the seam is off
+    mov ds, dx                          ; the message buffer
+    mov byte ptr [SEAM_BUF+14], 2       ; AUDIO audio_ctrl
+    mov word ptr [SEAM_BUF+15], 0AC44h  ; 44100 Hz
+    mov word ptr [SEAM_BUF+17], 0       ; fmt 0: signed 16-bit stereo
+    mov byte ptr [SEAM_BUF+19], al      ; the driver's state is on/off
+sas_send:
+    mov word ptr cs:[seam_txfam], 2
+    mov cx, 6
+    call sub_SeamSend
+sas_done:
+    pop es
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
 
 fn_SeamWriteDACStub:
     call far ptr fn_SeamPalette

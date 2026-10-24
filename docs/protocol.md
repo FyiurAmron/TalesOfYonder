@@ -49,7 +49,7 @@ u32  len             payload length before decoding
 | id | name | direction | messages |
 |---|---|---|---|
 | 1 | VIDEO | engine to client | `set_mode(w,h,palette?)`, `palette(start,data)`, `rect(x,y,w,h,payload)`, `frame_end`, `reset`, `scroll(dy)` |
-| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `audio_ctrl(rate,fmt,on)` (the PC-speaker beep fallback is not modelled in v0) |
+| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `opl_batch_timed(payload)`, `audio_ctrl(rate,fmt,on)` (the PC-speaker beep fallback is not modelled in v0) |
 | 3 | INPUT | client to engine | `key(scancode,down)`, `mouse_move(dx,dy)`, `mouse_button(btn,down)`, `quit` |
 | 4 | TICK | both | `tick(n)`, `pace(ms)` (client may pace; engine never reads wall clocks) |
 | 5 | CONTROL | both | `hello(role,version)`, `bye`, `error(code,text)`, `debug(channel,payload)` (product clients ignore `debug`) |
@@ -176,7 +176,10 @@ Rules:
 
 The first payload byte is the message type (per family). Multi-byte fields are little-endian and
 unpadded. VIDEO, CONTROL and INPUT (keys) are implemented in the seam builds (see
-`docs/stream.md`); AUDIO, TICK, mouse INPUT and FILES are still spec-only here:
+`docs/stream.md`); AUDIO is implemented in the seam builds (they emit the
+driver's register writes) and consumed by the client (it keeps the per-port
+register file and synthesises the samples, `docs/client.md`); TICK, mouse
+INPUT and FILES are still spec-only here:
 
 | type | message | payload after `u8 type` |
 |---|---|---|
@@ -186,6 +189,42 @@ unpadded. VIDEO, CONTROL and INPUT (keys) are implemented in the seam builds (se
 | 3 | `frame_end` | *(empty)* |
 | 4 | `reset` | *(empty)* |
 | 5 | `scroll` | `i8 dy` (see "Whole-screen pans") |
+
+AUDIO (family 2), emitted by the seam builds and consumed by the client:
+
+| type | message | payload after `u8 type` |
+|---|---|---|
+| 0 | `opl_write` | `u16 port` (LE), `u8 reg`, `u8 val` (length 5) |
+| 1 | `opl_batch` | `u8 count`, then `count` × (`u16 port`, `u8 reg`, `u8 val`) (length `2 + 4*count`) |
+| 2 | `audio_ctrl` | `u16 rate` (LE), `u16 fmt` (LE), `u8 on` (length 6) |
+| 3 | `opl_batch_timed` | `u16 port` (LE), `u8 count`, then `count` × (`u32 pit`, `u8 reg`, `u8 val`) (length `4 + 6*count`) |
+
+- `opl_write` streams one OPL register write; `opl_batch` is the untimed
+  coalesced form kept for older recordings; `opl_batch_timed` is what the
+  current seam builds send.  The driver hook batches 1..128 writes, all with
+  the FM register base (`0x228` with the usual `BLASTER=A220`), and a client
+  applies a batch in order.
+- `u32 pit` is the write's time in 8253 counts (1,193,182 Hz): the BIOS tick
+  at `40:006Ch` times the driver's tick reload (`CS:0141h`), plus the driver's
+  tick phase (`CS:0147h`).  Writes from one driver tick carry the same stamp,
+  so a batch keeps the ticks' ~10.4 ms spacing even when several ticks land in
+  one present pass.  The origin is arbitrary and only differences matter.
+  The driver zeroes its phase at every music start; the seam adds the lost
+  part to the timeline, so stamps are non-decreasing (a client may still see
+  a wrap: the count is derived from the low BIOS-tick word and rolls over
+  about hourly, so it must compare with a modular difference).  The reset
+  happens in game context between ticks, so the exact instant is only known
+  to the tick: the first gap after a music start can be up to one tick short
+  (measured: 0.1 and 6.6 ms on a 20 s run).
+- A timed write takes effect at the frame the client's render timeline
+  reaches its stamp; writes that map behind the render front are played at
+  the front (late), which is the old untimed behaviour.  The client keeps
+  ~100 ms queued, so a batch that arrives a frame late still schedules its
+  ticks in the right order.
+- `audio_ctrl(rate,fmt,on)` carries the DAC rate/format the client should
+  synthesise at and whether sound is on.  The PC-speaker beep fallback is not
+  modelled in v0 (the game emits no OPL sound effects in the SBFMDRV
+  configuration; see `docs/client.md`).
 
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
 - Compared with the M1b spike (one full 256-entry palette message per fade step) the palette

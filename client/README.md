@@ -1,8 +1,10 @@
 # Yt2Client
 
-Development client for the seam build of `SWREG.EXE`: it decodes the protocol-v0 VIDEO stream the
-engine appends to the folder link (`STREAM.BIN`, input back through `INPUT.BIN`) and renders it
-with SDL3 (via P/Invoke — no NuGet packages).
+Development client for the seam build of `SWREG.EXE`: it decodes the
+protocol-v0 VIDEO and AUDIO streams the engine appends to the folder link
+(`STREAM.BIN`, input back through `INPUT.BIN`), renders the picture with SDL3
+(via P/Invoke - no NuGet packages) and plays the FM music through its own OPL2
+synth.
 
     sh engine/asm/swreg/tools/build.sh --variant file   # build the engine side (folder seam)
     dotnet run --project client -c Release -- \
@@ -17,7 +19,8 @@ Headless check / replay:
         --follow STREAM.BIN --headless --stats 5 --ppm out.ppm
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll --file STREAM.BIN --headless --ppm out.ppm
 
-`--help` lists every option (`--dump`, `--scale`, `--stats`, `--raw`, `--no-keyframe`, ...;
+`--help` lists every option (`--dump`, `--scale`, `--stats`, `--raw`,
+`--no-keyframe`, `--no-audio`, `--dro`/`--wav` for an offline OPL capture, ...;
 `--tcp` is the obsolete serial link). With a live link the window captures the mouse;
 `Ctrl+M` releases it and `Ctrl+Q` quits, so does closing the window (which
 also cancels a connect still waiting for the server).  If the server goes

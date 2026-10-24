@@ -11,6 +11,14 @@ at a size limit the writer truncates them to zero and restarts from offset 0,
 and the other side notices the shrink and rewinds.  This bundle runs the
 client natively on Linux.
 
+The sound follows the same link: the game streams the resident driver's OPL
+register writes and the client synthesises the FM music.  The bundled
+DOSBox-X profile sets `nosound = true`, so the emulated Sound Blaster/OPL
+still runs (the game needs it) but DOSBox-X does not play a second, delayed
+copy; the client is the only audio output.  To hear the emulator instead, set
+`nosound = false` in `server/dosbox-x.conf` and run `./client-start.sh
+--no-audio`.
+
 Contents
 --------
   client/Yt2Client         self-contained 64-bit client (no .NET needed)

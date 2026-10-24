@@ -199,7 +199,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
-| M6 | Sound | FM music + SFX audible; port-write goldens match; digital path documented |
+| M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter, PC-speaker fallback remains); port-write goldens match |
 | M7 | C cleanup & packaging | typed structures, 16-bit artifacts removed; Linux/Windows builds; spec frozen |
 | M8 | Companion client | SDL client renders/plays/injects over in-process + TCP; replay from recordings; input and audio in sync |
 | M9 | C# bootstrap | new solution; starts as stream client/front-end; mechanical translation of frozen C passes replay tests |
@@ -1281,3 +1281,120 @@ emulator-hook demo, not this port).
     later ones.  They now sit in date order at the top, so the section reads oldest first again;
   - no code changed, so all gates stay as they were (byte gate `IDENTICAL`, seam/client gates
     green); the last full run is the entry above.
+- 2026-10-24 — AUDIO family: the seam mirrors the music state, the client decodes the family:
+  - the protocol now has concrete AUDIO payload layouts (`docs/protocol.md`): `opl_write`
+    (`port, reg, val`), `opl_batch` (`count`, then `count` triples), `audio_ctrl`
+    (`rate`, `fmt`, `on`).  The family existed by name only ("spec-only") before;
+  - **client**: `ClientState.Apply` handles family 2.  Writes land in a per-port 256-byte OPL
+    register file (`client/Opl.cs`), `audio_ctrl` sets rate/format/on, and the stats line grows
+    `audio=<writes>w/<batches>b/<controls>c`.  Writes never touch the framebuffer, so the picture
+    path and every render gate are unchanged;
+  - **seam**: `sub_SeamAudioState` runs in the size-preserving music hook and compares `v_MusicId`
+    (DS, the track the game wants) with the last id sent; when it changes it emits
+    `audio_ctrl(44100, 0, on)`.  A 45 s file-backend run carries three of them
+    (`audio: 0w/0b/3c`) and the picture stream is unchanged (6844 rects, 846 frames);
+  - **gate**: `tests/data/sample-audio.bin` (synthetic, 4,807 bytes, built by
+    `tests/replay/mkaudio.py`) interleaves an `opl_write`, an `opl_batch` and an `audio_ctrl` with
+    two video frames.  `tests/replay/run.sh` renders it through the C# client and the Python
+    decoder (`tools/stream/replay.py` now applies family 2 as well) and compares the PPMs:
+    `replay: OK`;
+  - **not yet**: the driver's OPL register writes.  The writing happens inside the resident
+    SBFMDRV (its `sub_0A78` writes the port pair on the 64 Hz ISR), so capturing it means hooking
+    that routine in the driver segment and buffering the writes for the present pass; the client's
+    register file and `opl_batch` layout are the substrate.  Client-side FM synthesis and SDL
+    audio output are the other half (M6).
+- 2026-10-24 — AUDIO capture: the resident driver's OPL writes reach the stream:
+  - **driver hook**: the seam scans `INT 80h..BFh` for the `"FMDRV"` signature and patches
+    `sub_0A78`'s five-byte prologue (`9Ch FAh 50h 52h 51h`, `0A78h..0A7Ch`) with `EAh` + the
+    seam's hook offset/segment.  The hook (`fn_SeamOplHook`) runs from the driver's timer ISR,
+    copies `(AH, AL)` into the current log buffer and then executes the displaced bytes before
+    jumping back to `0A7Dh`; all registers, `DS`, `ES` and the caller's flags are restored, so the
+    driver sees exactly the code it expects.  The driver's integrity check only reads `[0101h]` at
+    the first command 6 and never re-hashes, so the patch is invisible to it (`docs/sbfmdrv.md`
+    4.5/5);
+  - **log and batching**: two 4 KB buffers in the seam block (`8000h`/`9000h`, 1024 writes each)
+    are swapped with interrupts off; the present pass and the `fn_SeamPresentMusic` poll hook
+    drain one into `opl_batch` messages of 1..192 writes (port from the driver's `0114h`,
+    `0x228`) at the poll rate, since the log changes on the driver's 96 Hz tick.  The messages go
+    out with `seam_inpresent` held and the batch is flushed even when the pass closes no frame, so
+    a static picture does not hold the sound.  The music hook saves `DS`, `AX` and the flags (the
+    game calls it with its own `DS`), and the 4 KB size covers ~12 s of writes with no drain;
+  - **music state**: `sub_SeamAudioState` now reads the driver's `[02F2h]` sequencer byte instead
+    of the game's `v_MusicId`; the poll sites do not all run with `DS` pointing at the game data
+    (some point at buffers), which made the old read flap and flooded `audio_ctrl` (39,591
+    messages in 15 s).  The driver byte changes only on play/stop (4 messages in 45 s);
+  - **segments**: `sp_finish` can reach the end of a present pass with `DS` still on the seam
+    segment, and a batch flushed with the game's `DS` wrote game code/`EXE` image into
+    `STREAM.BIN`.  `sub_SeamSend` and `sub_SeamFlush` now load the block segment themselves (and
+    the pass re-establishes it at `sp_off`), so no caller context can corrupt a batch;
+  - **run**: 45 s file backend, 8,828 records / 1,200,758 bytes, 853 frames, 6,823 rects, 165
+    scrolls, 625 palette messages, 353 `opl_batch` / 2,361 register writes / 4 `audio_ctrl`; the
+    C# client replays it with `unknown=0` and reports `audio=2361w/353b/4c`, final frame the
+    opening gate scene; melodic key-ons/offs balance 275/268 (the last chord is still held), and
+    all writes use the FM base `0x228`;
+  - **gates**: `verify.sh` stays `IDENTICAL`; `tests/replay/run.sh` (including the AUDIO fixture)
+    stays green; the batch-write count now feeds the client's `audio=w/b/c` stat;
+  - **not yet**: client-side FM synthesis and SDL3 audio output (M6), plus timestamps for the
+    batches if the present-pass quantisation turns out audible.
+- 2026-10-24 - AUDIO output: the client synthesises the driver's OPL stream:
+  - **core**: `client/Opl2.cs` is an independent YM3812 implementation: nine
+    two-operator channels, FM or additive connection, feedback, the four OPL2
+    waveforms, the ADSR envelope with the YMF278B 64-rate tables, key scaling
+    (KSR/KSL), total level, tremolo and vibrato.  The first attempt used a
+    hand-fitted rate curve and a half-cycle modulation index; against the
+    paired DOSBox-X WAV the notes died about 50x too fast and the timbre had
+    almost no sidebands.  The rate tables and the chip's four-cycle (8*pi)
+    modulator index bring it in line;
+  - **output**: `client/Opl.cs` owns one chip and one 256-byte register file
+    per FM port; `client/SdlAudio.cs` opens an SDL3 s16 stereo stream at
+    44100 Hz and keeps ~100 ms queued.  Rendering runs on the main thread, the
+    reader thread only applies writes.  `--headless` and `--no-audio` leave the
+    device closed.  The shipped DOSBox-X profiles now set `nosound = true`:
+    the emulated SB/OPL still runs and the seam still sees its writes, but
+    the host plays only the client, not a second delayed copy;
+  - **reference check**: `tests/data/music-walk.dro` is a 2.3 KB DRO capture of
+    the real SBFMDRV playing one WORLD.DAT block; `--dro/--wav` renders it
+    through the same core.  Against the paired 14.69 s DOSBox-X WAV, the
+    12.66 s render has peak 41.2% FS / rms 2261 vs 41.8% / 2310, the envelope
+    follows the reference, and the first bars' pitches match;
+  - **gates**: `verify.sh` `IDENTICAL`; `tests/audio/run.sh` (new) checks the
+    DRO render's duration, level and pitches and requires the dummy SDL device
+    to push frames; `tests/replay/run.sh` stays green; the 45 s client replay
+    reports `audio=2361w/353b/4c`, `unknown=0`; a live 20 s folder-link run
+    decoded 1,694 writes / 241 batches / 4 controls with the dummy device
+    open;
+  - **not yet**: per-write timestamps; v0 applies each batch at the present
+    pass that carries it, so rhythm can be quantised by tens of milliseconds.
+    The live link has no audible check on this machine (no sound device); the
+    dummy device and the DRO reference are the gates here.
+- 2026-10-24 - AUDIO timestamps and the SFX question:
+  - **engine**: `fn_SeamOplHook` now appends `(u32 PIT, register, value)`
+    (6 bytes per write, 682 per buffer).  The stamp is the BIOS tick at
+    `40:006Ch` times the driver's reload `CS:0141h` plus its tick phase
+    `CS:0147h`, read under `cli`; the driver zeroes the phase at every music
+    start, so `seam_opl_adj` adds the lost part and the stamps never step
+    back.  `sub_SeamAudioFlush` sends `opl_batch_timed` (type 3: port, count,
+    then 6-byte records, 1..128 writes per message); the untimed type 1 stays
+    in the protocol for older recordings;
+  - **client**: `client/Opl.cs` schedules timed writes on the render timeline
+    (the first anchors at the render front, later stamps advance by their
+    modular difference, a late write plays at the front) and splits its
+    render blocks at event frames; `ClientState` parses type 3.  `--file
+    rec.bin --wav out.wav` renders a recording's audio offline (`StreamAudio`
+    + `Opl.FreeRun`), so a folder-link capture can be checked or heard without
+    the engine.  `tools/stream/replay.py` decodes type 3 too;
+  - **verification**: a 20 s file run carries 240 timed batches / 1,699
+    writes / 4 controls over 353 frames / 2,073 rects; no batch is
+    non-monotonic, the stamps advance by 12,428 counts (96 Hz) inside a music
+    sequence, and the span matches the wall clock.  `tests/audio/run.sh`
+    encodes `tests/data/music-walk.dro` as timed batches, replays it with
+    `--file --wav` and gets a WAV byte-identical to the direct DRO render.
+    A live 20 s folder run with the dummy device decoded 1,774 writes / 254
+    batches / 4 controls, `unknown=0`, and an instrumented 18 s run scheduled
+    1,657 writes with none behind the render front (`late=0`);
+  - **SFX**: `fn_PlaySFX` needs `v_SoundState` bit 3, which only
+    `sub_SoundPreInit` sets; the chapter skips that path (the capture shows no
+    FM-detect writes from it), and the options toggle is gated on the
+    pre-init bit, so this configuration has no OPL sound effects.  Only
+    effect 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2) remains, and
+    the protocol does not carry it; M6's wording now says so.

@@ -1,8 +1,9 @@
 # Tests
 
-Seven checks pin the link and the client; six cover the folder transport and the client, and
-`tests/link` covers the obsolete serial one (kept for fun). All are ordinary shell scripts;
-artifacts land under `build/runs/<kind>/<stamp>/`.
+Eight checks pin the link and the client; seven cover the folder transport
+and the client, and `tests/link` covers the obsolete serial one (kept for fun).
+All are ordinary shell scripts; artifacts land under
+`build/runs/<kind>/<stamp>/`.
 
 ## `tests/replay/run.sh`
 
@@ -12,9 +13,24 @@ Offline and hermetic (no DOSBox-X, no game): replays the recordings in
 `cmp`. Same framing, same palette expansion, same state, byte for byte. The
 recordings cover mode 13h raw, the VBE intro raw, both modes with the
 run-length row codec (codec 1), and the same twelve-picture camera pan encoded
-once as rows and once as `scroll` messages.
+once as rows and once as `scroll` messages, and a small stream that interleaves AUDIO messages
+with video (`sample-audio.bin`).
 
     sh tests/replay/run.sh [RECORDING]
+
+## `tests/audio/run.sh`
+
+The client's OPL2 synthesis and SDL3 output.  `client --dro
+tests/data/music-walk.dro --wav ...` renders a DOSBox-X raw OPL capture of a
+real `WORLD.DAT` music block through the same `Opl2` core the live client
+uses; the WAV must be 12.7 s of signal (peak near 41% FS, RMS near 2260) and
+the Goertzel checks pin the first bars' pitches.  The second half opens SDL
+audio with the dummy drivers and requires the client to push frames from a
+recording, which catches the binding and the stream plumbing.
+
+    sh tests/audio/run.sh
+
+Needs `dotnet` and SDL3 (the client already needs it for the window).
 
 ## `tests/window/run.sh`
 
