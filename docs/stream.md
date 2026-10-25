@@ -2,7 +2,8 @@
 
 The seam is the integration surface: everything that talks to the outside world lives in
 `engine/asm/swreg/src/seam.asm`, included by the game source under `IFDEF SEAM`, and the game source itself
-only grows **six tagged hook sites** (a 5-byte `call far` each):
+only grows tagged, size-preserving hook sites (mostly a 5-byte `call far`).  The original display/input
+sites are:
 
 | hook | called from | does |
 |---|---|---|
@@ -12,8 +13,12 @@ only grows **six tagged hook sites** (a 5-byte `call far` each):
 | `fn_SeamDACBlock` | `sub_SetDACBlock` (BIOS `1017h`, `ES:DX`) | same |
 | `fn_SeamDAC768` | `sub_WriteDAC768` (intro loader, already 6-bit) | same |
 
-(The sixth site is the `include` of the seam file itself.) The default build compiles none of it:
-`sh engine/asm/swreg/tools/verify.sh` ends `SWREG.EXE: OK` + `IDENTICAL`.
+(The other original site is the `include` of the seam file itself.)  The sound
+path adds the OPL, speaker and SFX hooks described below; the engine and
+speaker hooks carry the displaced instructions themselves because the game's
+layout is hard-coded to the original function sizes.  The default build
+compiles none of it: `sh engine/asm/swreg/tools/verify.sh` ends
+`SWREG.EXE: OK` + `IDENTICAL`.
 
 ## Keeping the game source honest (`swreg.pin`)
 
@@ -44,6 +49,15 @@ and stage the minimum game files, so the output directory runs as-is.
     sh engine/asm/swreg/tools/build.sh --variant file
     sh tools/dosbox/stream.sh 45                      # run + replay, artifacts in build/runs/stream/…
     python3 tools/stream/replay.py STREAM.BIN --out frames/
+
+`STREAM_KEYS` injects XTEST keys at second marks relative to the DOSBox-X
+launch, which is how the intro is skipped for a gameplay capture:
+
+    STREAM_KEYS="62:Return 63:space 68:Return 69:space" sh tools/dosbox/stream.sh 95
+
+`STREAM_SKIP_BUILD=1` reuses `build/swreg/file/` (useful when iterating on the
+input script); the replay also counts `sample` messages when the recording
+carries sound effects.
 
 The product link is the file backend's folder transport (`STREAM.BIN`/`INPUT.BIN`, the C# client
 with `--follow`); it is documented in `docs/client.md`, together with the obsolete COM1/nullmodem
@@ -164,6 +178,14 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
   the same stamp as the OPL writes.  This is effect 3's fallback when OPL
   sound effects are disabled, and it can sound while the sequencer is
   stopped.
+- **The digitized effects bypass the dead far entry**: `fn_PlaySFX` normally
+  needs `v_SoundEntry`, which SBFMDRV 1.34 does not provide.  The seam
+  replaces its first six-byte `TEST` with a far call plus nop to
+  `fn_SeamPlaySFX`, which sends `sample(id, offset, pit)` with the WORLD.DAT
+  file offset from the game's own pointer table.  The caller's flags are
+  preserved (the displaced TEST runs last), so the reference path is
+  unchanged.  The client reads and mixes the VOC record; see
+  `docs/client.md`.
 - The block is allocated before `fn_07010`/`fn_01BE8`; it needs ~64 KB of conventional memory.
 
 ## Validation (2026-10-20)

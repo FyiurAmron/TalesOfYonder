@@ -3278,6 +3278,76 @@ ssoff_done:
     retf
 
 ; ---------------------------------------------------------------------------
+; fn_SeamPlaySFX - report one sound effect to the client (AUDIO type 5).
+;
+; fn_PlaySFX's first TEST is displaced by a far call plus nop (same six
+; bytes), so this runs for every effect request, including the id-3 speaker
+; fallback.  The game's WORLD.DAT effect records are Creative Voice Files;
+; the client owns a copy of the file and plays the record at the offset from
+; the game's own pointer table (DS:0CF51h), on the same PIT timeline as the
+; FM writes.  Only the id, the file offset and the stamp travel: the samples
+; are up to 35 KiB, and the client can read WORLD.DAT next to STREAM.BIN.
+;
+; All registers, DS, ES and flags are preserved; the displaced TEST runs last
+; so the caller's `jne` still sees its flags.  retf returns to the nop after
+; the five-byte far call, then falls through to the `jne`.
+; ---------------------------------------------------------------------------
+fn_SeamPlaySFX:
+    pushf
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    cmp word ptr cs:[seam_blk], 0
+    je spsfx_done
+    mov si, ax                       ; effect id
+    call sub_SeamStamp               ; DX:AX = monotonic PIT count
+    push ax                          ; stamp low
+    push dx                          ; stamp high
+    xor ax, ax
+    xor dx, dx
+    cmp si, 1                        ; id 0 / past the table: no offset
+    jb spsfx_no_off
+    cmp si, 80                       ; v_5160: 80 SFX records
+    ja spsfx_no_off
+    mov bx, si
+    dec bx
+    shl bx, 1
+    shl bx, 1
+    add bx, 0CF51h                   ; WORLD.DAT record pointer table
+    mov ax, word ptr [bx]            ; file offset low
+    mov dx, word ptr [bx + 2]        ; file offset high
+spsfx_no_off:
+    mov ds, word ptr cs:[seam_blk]
+    mov byte ptr [SEAM_BUF+14], 5     ; AUDIO sample
+    mov word ptr [SEAM_BUF+15], si    ; effect id
+    mov word ptr [SEAM_BUF+17], ax    ; WORLD.DAT offset low
+    mov word ptr [SEAM_BUF+19], dx    ; WORLD.DAT offset high
+    pop dx                            ; PIT count high
+    pop ax                            ; PIT count low
+    mov word ptr [SEAM_BUF+21], ax
+    mov word ptr [SEAM_BUF+23], dx
+    mov cx, 11
+    mov word ptr cs:[seam_txfam], 2
+    call sub_SeamSend
+spsfx_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    popf
+    test word ptr [v_SoundState], 8  ; the displaced instruction
+    retf
+
+; ---------------------------------------------------------------------------
 ; fn_SeamOplHook - called instead of the resident driver's OPL write prologue.
 ;
 ; The driver's sub_0A78 (offset 0A78h) is patched with a far jump here.  The

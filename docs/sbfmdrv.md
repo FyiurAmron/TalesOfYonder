@@ -831,16 +831,20 @@ DOSBox-X -- but the call is **not** a valid driver interface:
 - the port should treat the far calls as no-ops (or route the game's sound
   layer directly to the resident API); do not emulate `v_SoundEntry`.
 
-The music path via the int API is functional (section 6).  Whether the game
-actually reaches audibility depends on the `sub_SoundFindDriver` scan and the
-pre-init block read; an audio-captured game run is the remaining check.
+The music path via the int API is functional (section 6).  The seam does
+**not** emulate the far entry: it hooks `fn_PlaySFX` itself, sends the effect
+id, WORLD.DAT offset and PIT stamp, and the client renders the VOC record
+directly (docs/client.md).  The reference build keeps the zero far entry and
+the effect-3 PC-speaker fallback.
 
 ## 8. Open items
 
 - The game-level run is covered at the audio level (`tools/dosbox/audio.sh`: audible
-  output, `267` note-ons all on the tick grid, melodic mode only).  Its
-  digitized-SFX path stays untested: the vestigial far calls are no-ops, so no
-  SB DSP traffic is expected at all (the DRO shows FM writes only).
+  output, `267` note-ons all on the tick grid, melodic mode only).  The 80
+  digitized effects are VOC records in WORLD.DAT; SBFMDRV 1.34 cannot play
+  them (no far entry), so the seam reports `fn_PlaySFX` calls and the client
+  renders the records directly.  The DRO still shows FM writes only, as it
+  should: the driver is music-only.
 - The shipped songs never use jumps or `FC`, so those paths (6.3) are verified
   by crafted streams only; the same goes for percussion on real data.
 - The installer's error codes/messages at `14E1h..1777h` (documented as

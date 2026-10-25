@@ -20,6 +20,7 @@ public sealed class Options
     public string? File;
     public string? Follow;
     public string? Input;
+    public string? World;
     public string Host = "127.0.0.1";
     public int Port = 2324;
     public bool Headless;
@@ -59,6 +60,9 @@ public sealed class Options
                     break;
                 case "--input":
                     options.Input = Next(arg);
+                    break;
+                case "--world":
+                    options.World = Next(arg);
                     break;
                 case "--tcp":
                     ParseEndpoint(Next(arg), options);
@@ -205,6 +209,9 @@ public sealed class Options
               --follow PATH       follow the server's STREAM.BIN in place
                                   (the folder link; the product transport)
               --input PATH        send input to the server's INPUT.BIN
+              --world PATH        WORLD.DAT for the VOC sound effects
+                                  (default: next to --follow / --file, then
+                                  server/game/WORLD.DAT next to the client)
               --headless          no window; decode and report only
               --scale N           window scale (default 3)
               --filter NAME       nearest (default) or xbrz: the pixel art is
@@ -241,6 +248,51 @@ public readonly record struct ScriptedClick(double At, byte Button, bool Down);
 
 internal static class Program
 {
+    /// <summary>
+    /// Finds the WORLD.DAT that carries the VOC effect bank.  The live folder
+    /// link always has it next to STREAM.BIN; the bundle's offline smoke test
+    /// finds it under server/game; --world overrides both.
+    /// </summary>
+    private static string? ResolveWorldPath(Options options)
+    {
+        if (!string.IsNullOrEmpty(options.World))
+        {
+            return File.Exists(options.World) ? Path.GetFullPath(options.World) : null;
+        }
+
+        var candidates = new List<string>();
+        void AddNear(string? path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return;
+            }
+            string? dir = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (dir is not null)
+            {
+                candidates.Add(Path.Combine(dir, "WORLD.DAT"));
+            }
+        }
+
+        AddNear(options.Follow);
+        AddNear(options.File);
+        string baseDir = AppContext.BaseDirectory;
+        candidates.Add(Path.Combine(Environment.CurrentDirectory, "WORLD.DAT"));
+        candidates.Add(Path.Combine(baseDir, "WORLD.DAT"));
+        candidates.Add(Path.Combine(baseDir, "server", "game", "WORLD.DAT"));
+        candidates.Add(Path.Combine(baseDir, "..", "server", "game", "WORLD.DAT"));
+        candidates.Add(Path.Combine(baseDir, "..", "..", "server", "game", "WORLD.DAT"));
+
+        foreach (string candidate in candidates)
+        {
+            if (File.Exists(candidate))
+            {
+                return Path.GetFullPath(candidate);
+            }
+        }
+        return null;
+    }
+
     private static int Main(string[] args)
     {
         // Redirected stdout is block-buffered, so a running client would keep
@@ -293,9 +345,21 @@ internal static class Program
         {
             return DroRenderer.Run(options.Dro, options.Wav);
         }
+
+        string? worldPath = ResolveWorldPath(options);
         if (options.File is not null && options.Wav is not null)
         {
-            return StreamAudio.Run(options.File, options.Wav);
+            return StreamAudio.Run(options.File, options.Wav, worldPath);
+        }
+        SampleBank? samples = SampleBank.TryLoad(worldPath);
+        if (samples is not null)
+        {
+            Console.WriteLine($"client: samples {samples.Path}");
+        }
+        else
+        {
+            Console.WriteLine("client: samples unavailable (WORLD.DAT not found); " +
+                              "SFX stay silent");
         }
         // xBRZ scales the frame in the client, by the window scale factor.
         XbrzFilter? filter = options.Filter == "xbrz" ? new XbrzFilter(options.Scale) : null;
@@ -392,6 +456,7 @@ internal static class Program
         while (true)
         {
             var state = new ClientState(320, 200);
+            state.Audio.SampleSource = samples;
             state.Notice += message => Console.WriteLine($"client: {message}");
             bool quit = false;
             FrameSource source;
@@ -712,9 +777,13 @@ internal static class Program
             Console.WriteLine($"client: audio {audio.Pushed} frames, {audio.Underruns} underruns");
             if (finalState is not null && finalState.Audio.Scheduled > 0)
             {
+                long scheduledWrites = Math.Max(0,
+                    finalState.Audio.Scheduled - finalState.Audio.SpeakerMessages -
+                    finalState.Audio.SampleMessages);
                 Console.WriteLine($"client: audio schedule: " +
-                                  $"{finalState.Audio.Scheduled - finalState.Audio.SpeakerMessages} writes, " +
+                                  $"{scheduledWrites} writes, " +
                                   $"{finalState.Audio.SpeakerMessages} speaker edges, " +
+                                  $"{finalState.Audio.SampleMessages} samples, " +
                                   $"{finalState.Audio.LateWrites} played late");
             }
         }

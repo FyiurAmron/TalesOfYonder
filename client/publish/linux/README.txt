@@ -12,8 +12,10 @@ and the other side notices the shrink and rewinds.  This bundle runs the
 client natively on Linux.
 
 The sound follows the same link: the game streams the resident driver's OPL
-register writes and the client synthesises the FM music.  The bundled
-DOSBox-X profile sets `nosound = true`, so the emulated Sound Blaster/OPL
+register writes, the PC-speaker gate and its sound-effect calls; the client
+synthesises the FM music and the beep, and plays the digitized effect records
+from `server/game/WORLD.DAT`.  The bundled DOSBox-X profile sets
+`nosound = true`, so the emulated Sound Blaster/OPL
 still runs (the game needs it) but DOSBox-X does not play a second, delayed
 copy; the client is the only audio output.  To hear the emulator instead, set
 `nosound = false` in `server/dosbox-x.conf` and run `./client-start.sh
