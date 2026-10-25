@@ -37,6 +37,12 @@ public sealed class Opl
     private int _speakerDivisor;                        // PIT ch2 reload, 0 = off
     private double _speakerPhase;
     private double _speakerStep;                        // cycles per sample
+    private readonly List<ActiveSample> _activeSamples = [];
+    private SampleBank? _sampleSource;
+    private long _sampleEndFrame;                       // for the offline WAV tail
+    private int _suppressBeep;                          // 1 queued, 2 on edge skipped
+    private const int SampleAmplitude = 96;             // 37.5% fs per sample
+    private const int MaxActiveSamples = 8;
 
     /// <summary>The port of the last write (the FM base from the BLASTER setting).</summary>
     public int Port { get; private set; }
@@ -49,11 +55,43 @@ public sealed class Opl
 
     public long Writes { get; private set; }
     public long SpeakerMessages { get; private set; }
+    public long SampleMessages { get; private set; }
+    public long SamplePlays { get; private set; }
+    public long UnknownSamples { get; private set; }
     public long Scheduled { get; private set; }
     public long LateWrites { get; private set; }
     public long Batches { get; private set; }
     public long Controls { get; private set; }
     public long Samples { get; private set; }
+
+    /// <summary>
+    /// WORLD.DAT sample bank, set once by the client before the stream starts.
+    /// Null means the file was not found; sample messages then stay silent and
+    /// the PC-speaker fallback (effect 3) still plays.
+    /// </summary>
+    public SampleBank? SampleSource
+    {
+        get => _sampleSource;
+        set
+        {
+            lock (_sync)
+            {
+                _sampleSource = value;
+            }
+        }
+    }
+
+    /// <summary>Absolute frame where the last sample ends (offline WAV tail).</summary>
+    public long SampleEndFrame
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _sampleEndFrame;
+            }
+        }
+    }
 
     /// <summary>
     /// Offline mode: the stamps define an absolute timeline from the first
@@ -101,7 +139,8 @@ public sealed class Opl
                 ApplyLocked(port, reg, val);            // the render is not draining
                 return;
             }
-            _events.Enqueue(new OplEvent(frame, false, port, ((reg & 0xFF) << 8) | (val & 0xFF)));
+            _events.Enqueue(new OplEvent(frame, EventKind.Write, port,
+                ((reg & 0xFF) << 8) | (val & 0xFF)));
             Scheduled++;
         }
     }
@@ -122,7 +161,47 @@ public sealed class Opl
                 ApplySpeaker(on, divisor);
                 return;
             }
-            _events.Enqueue(new OplEvent(frame, true, on ? 1 : 0, divisor & 0xFFFF));
+            _events.Enqueue(new OplEvent(frame, EventKind.Speaker, on ? 1 : 0,
+                divisor & 0xFFFF));
+            Scheduled++;
+        }
+    }
+
+    /// <summary>
+    /// Applies one sound-effect message (AUDIO type 5).  The seam sends the
+    /// effect id, the WORLD.DAT VOC offset from the game's own SFX table and a
+    /// PIT stamp; the record starts on the same timeline as the OPL writes.
+    /// Effect 3 replaces its PC-speaker fallback: the sample is queued first,
+    /// so the next speaker on/off pair is dropped by <see cref="ApplyEvent"/>.
+    /// </summary>
+    public void Sample(int id, uint offset, uint stamp)
+    {
+        lock (_sync)
+        {
+            long frame = Advance(stamp);
+            SampleMessages++;
+            Sample? sample = _sampleSource?.Get(offset);
+            if (sample is null)
+            {
+                UnknownSamples++;
+                return;
+            }
+            if (id == 3 && _suppressBeep == 0)
+            {
+                _suppressBeep = 1;                      // the sample replaces the beep
+            }
+            long end = frame + (long)Math.Ceiling(sample.Duration * _rate);
+            if (end > _sampleEndFrame)
+            {
+                _sampleEndFrame = end;
+            }
+            SamplePlays++;
+            if (!FreeRun && _events.Count >= MaxEvents)
+            {
+                StartSample(sample);                    // the render is not draining
+                return;
+            }
+            _events.Enqueue(new OplEvent(frame, EventKind.Sample, id, (int)offset));
             Scheduled++;
         }
     }
@@ -182,6 +261,10 @@ public sealed class Opl
                 _speakerStep = _speakerDivisor == 0
                     ? 0.0
                     : (PitHz / (double)_speakerDivisor) / _rate;
+                foreach (var active in _activeSamples)
+                {
+                    active.Step = active.Sample.Rate / _rate;
+                }
                 foreach (var (port, bank) in _banks)
                 {
                     var chip = new Opl2(_rate);
@@ -239,6 +322,7 @@ public sealed class Opl
                 {
                     chip.RenderMono(_mix, chunk);
                 }
+                MixSamples(_mix, chunk);
                 for (int i = 0; i < chunk; i++)
                 {
                     int s = _mix[i];
@@ -269,13 +353,87 @@ public sealed class Opl
 
     private void ApplyEvent(in OplEvent e)
     {
-        if (e.Speaker)
+        switch (e.Kind)
         {
-            ApplySpeaker(e.A != 0, e.B);
+            case EventKind.Speaker:
+                if (e.A != 0)
+                {
+                    if (_suppressBeep == 1)
+                    {
+                        _suppressBeep = 2;          // effect 3's sample is playing
+                        return;
+                    }
+                    if (_suppressBeep == 2)
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    if (_suppressBeep == 2)
+                    {
+                        _suppressBeep = 0;
+                        return;
+                    }
+                    _suppressBeep = 0;
+                }
+                ApplySpeaker(e.A != 0, e.B);
+                break;
+
+            case EventKind.Sample:
+                if (_sampleSource?.Get((uint)e.B) is { } sample)
+                {
+                    StartSample(sample);
+                }
+                break;
+
+            default:
+                ApplyLocked(e.A, (e.B >> 8) & 0xFF, e.B & 0xFF);
+                break;
         }
-        else
+    }
+
+    private void StartSample(Sample sample)
+    {
+        if (_activeSamples.Count >= MaxActiveSamples)
         {
-            ApplyLocked(e.A, (e.B >> 8) & 0xFF, e.B & 0xFF);
+            _activeSamples.RemoveAt(0);
+        }
+        _activeSamples.Add(new ActiveSample(sample, _rate));
+    }
+
+    /// <summary>Adds every active sample to the current FM mix (linear resample).</summary>
+    private void MixSamples(int[] mix, int frames)
+    {
+        for (int n = _activeSamples.Count - 1; n >= 0; n--)
+        {
+            ActiveSample active = _activeSamples[n];
+            byte[] pcm = active.Sample.Pcm;
+            int last = pcm.Length - 1;
+            if (last < 1)
+            {
+                _activeSamples.RemoveAt(n);
+                continue;
+            }
+            double position = active.Position;
+            for (int i = 0; i < frames; i++)
+            {
+                if (position >= last)
+                {
+                    break;
+                }
+                int index = (int)position;
+                double fraction = position - index;
+                int a = pcm[index] - 128;
+                int b = pcm[index + 1] - 128;
+                mix[i] += (int)((a + (b - a) * fraction) * SampleAmplitude);
+                position += active.Step;
+            }
+            active.Position = position;
+            if (position >= last)
+            {
+                _activeSamples.RemoveAt(n);
+            }
         }
     }
 
@@ -304,9 +462,29 @@ public sealed class Opl
     }
 
     /// <summary>
-    /// One scheduled event: a register write (`Speaker` false, A = port,
-    /// B = register &lt;&lt; 8 | value) or a PC-speaker edge (`Speaker` true,
-    /// A = 1 for on, B = PIT channel 2 divisor).
+    /// One scheduled event: a register write (A = port, B = register &lt;&lt; 8 |
+    /// value), a PC-speaker edge (A = 1 for on, B = PIT channel 2 divisor) or a
+    /// sample start (A = effect id, B = WORLD.DAT VOC offset).
     /// </summary>
-    private readonly record struct OplEvent(long Frame, bool Speaker, int A, int B);
+    private readonly record struct OplEvent(long Frame, EventKind Kind, int A, int B);
+
+    private enum EventKind : byte
+    {
+        Write,
+        Speaker,
+        Sample,
+    }
+
+    private sealed class ActiveSample
+    {
+        public ActiveSample(Sample sample, int rate)
+        {
+            Sample = sample;
+            Step = sample.Rate / rate;
+        }
+
+        public Sample Sample { get; }
+        public double Position;
+        public double Step { get; set; }
+    }
 }

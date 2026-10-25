@@ -19,6 +19,7 @@ public sealed class ClientStats
     public long AudioBatches;
     public long AudioControls;
     public long AudioSpeakers;
+    public long AudioSamples;
     public long EngineErrors;
     public long UnknownFamilies;
     public long UnknownMessages;
@@ -47,6 +48,7 @@ public sealed class ClientStats
             ? $"audio={AudioWrites}w/{AudioBatches}b/{AudioControls}c "
             : string.Empty) +
         (AudioSpeakers > 0 ? $"speaker={AudioSpeakers} " : string.Empty) +
+        (AudioSamples > 0 ? $"samples={AudioSamples} " : string.Empty) +
         $"records={Records} bytes={Bytes} shown={Presented} " +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
         (Filtered > 0 ? $"filter={FilterMs / Filtered:F1}ms " : string.Empty) +
@@ -451,6 +453,14 @@ public sealed class ClientState(int width, int height)
                     BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2)),
                     BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4)));
                 Stats.AudioSpeakers++;
+                return false;
+
+            case AudioMessage.Sample when length >= 11:
+                Audio.Sample(
+                    BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(1)),
+                    BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(3)),
+                    BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(7)));
+                Stats.AudioSamples++;
                 return false;
 
             case AudioMessage.AudioCtrl when length >= 6:

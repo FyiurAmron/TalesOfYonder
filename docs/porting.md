@@ -1428,3 +1428,35 @@ emulator-hook demo, not this port).
     writes / 341 batches / 4 controls.  The temporary call was reverted
     before the commit; `tests/replay/run.sh` stays green;
   - **not yet**: the audible check still needs a machine with a PCM device.
+- 2026-10-25 - WORLD.DAT VOC sound effects:
+  - **data**: the game's 111 `fn_PlaySFX` call sites use 80 Creative Voice
+    File records in WORLD.DAT (8-bit unsigned PCM, 4000–14925 Hz, 0.1–5 s).
+    The SFX pointer table is at `DS:0CF51h` (80 entries, `v_5160`); `fn_183BD`
+    reads the record, but
+    the far entry it calls (`v_SoundEntry`) is zero and SBFMDRV 1.34 has no
+    digitized path, so the reference configuration only beeps for effect 3.
+  - **engine**: `fn_PlaySFX`'s first six-byte `TEST` is replaced, in the seam
+    build only, by a far call plus nop to `fn_SeamPlaySFX`; the stub preserves
+    every register/flag, sends `sample(id, offset, pit)` (AUDIO type 5: u16
+    id, u32 offset from the game's own table, u32 PIT stamp) on the shared
+    stamp timeline and then executes the displaced test.  The oracle branch
+    keeps the original instruction and the reference image stays identical;
+    the pin was refreshed for the guarded hook.
+  - **client**: new `client/Samples.cs` parses the VOC header/blocks (codec 0,
+    type 1/2/8/9) and caches by offset; `Opl` schedules a sample start on the
+    PIT timeline, mixes up to eight records with linear resampling at 37.5%
+    FS, and drops effect 3's following speaker pair when the sample is
+    available.  `--world PATH` overrides the default WORLD.DAT lookup (next to
+    `--follow`/`--file`, then `server/game/WORLD.DAT` next to the client).
+    `--file --wav` renders samples too, extending the tail to the last record;
+  - **verification**: `verify.sh` 0 warnings, `SWREG.EXE: OK`, `IDENTICAL`;
+    `tests/audio/run.sh` renders the real effect 3 (`09FFE6h`, 0.20 s) with
+    its beep pair and alone (identical, so the beep was dropped), effect 5
+    (`0A076Ah`, 1 s at 345 Hz) alone (2.00 s, rms 1488; 345 Hz dominates
+    1800 Hz) and a beep-only control; `tests/replay`, `tests/xbrz`,
+    `tests/window` stay green.  A 95 s keyed run (`STREAM_KEYS="62:Return
+    63:space ..."`) carried 9 sample messages, ids 16–25 with offsets
+    matching `0CF51h`; the client rendered 95.51 s with 9/9 played /
+    0 unknown, sample windows rms 2.2k–4.7k against ~1.1k between lines;
+  - **not yet**: the audible check still needs the user's PCM device; the
+    offline WAV and the live stream counts are the gates on this host.

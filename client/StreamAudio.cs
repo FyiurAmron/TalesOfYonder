@@ -11,10 +11,11 @@ namespace Yt2.Client;
 
 internal static class StreamAudio
 {
-    public static int Run(string path, string wavPath)
+    public static int Run(string path, string wavPath, string? worldPath)
     {
         var state = new ClientState(320, 200);
         state.Audio.FreeRun = true;
+        state.Audio.SampleSource = SampleBank.TryLoad(worldPath);
         using (var file = File.OpenRead(path))
         {
             var reader = new FrameReader(file);
@@ -22,21 +23,27 @@ internal static class StreamAudio
             {
                 state.Apply(header, payload, length, reader.BytesRead, out _);
             }
+            long timedWrites = Math.Max(0,
+                state.Audio.Scheduled - state.Audio.SpeakerMessages - state.Audio.SampleMessages);
             Console.WriteLine($"client: stream audio: {reader.BytesRead} bytes, " +
-                              $"{state.Audio.Scheduled - state.Audio.SpeakerMessages} timed writes, " +
+                              $"{timedWrites} timed writes, " +
                               $"{state.Audio.SpeakerMessages} speaker edges, " +
+                              $"{state.Audio.SampleMessages} samples " +
+                              $"({state.Audio.SamplePlays} played, " +
+                              $"{state.Audio.UnknownSamples} unknown), " +
                               $"{state.Audio.Batches} batches");
         }
         Opl opl = state.Audio;
         int rate = opl.Rate;
-        if (opl.NextFrame <= 0)
+        long audioEnd = Math.Max(opl.NextFrame, opl.SampleEndFrame);
+        if (audioEnd <= 0)
         {
             Console.Error.WriteLine($"client: {path} carries no timed audio");
             return 1;
         }
-        long total = opl.NextFrame + rate;          // one second of tail
-        Console.WriteLine($"client: stream audio: {opl.NextFrame / (double)rate:F2} s, " +
-                          $"{rate} Hz");
+        long total = audioEnd + rate;                // one second of tail
+        Console.WriteLine($"client: stream audio: {audioEnd / (double)rate:F2} s, " +
+                          $"{rate} Hz, source {opl.SampleSource?.Path ?? "none"}");
 
         using var stream = File.Create(wavPath);
         using var w = new BinaryWriter(stream);
