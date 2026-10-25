@@ -199,7 +199,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
-| M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter, PC-speaker fallback remains); port-write goldens match |
+| M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
 | M7 | C cleanup & packaging | typed structures, 16-bit artifacts removed; Linux/Windows builds; spec frozen |
 | M8 | Companion client | SDL client renders/plays/injects over in-process + TCP; replay from recordings; input and audio in sync |
 | M9 | C# bootstrap | new solution; starts as stream client/front-end; mechanical translation of frozen C passes replay tests |
@@ -1398,3 +1398,33 @@ emulator-hook demo, not this port).
     pre-init bit, so this configuration has no OPL sound effects.  Only
     effect 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2) remains, and
     the protocol does not carry it; M6's wording now says so.
+- 2026-10-24 - PC-speaker beep:
+  - **engine**: the OPL hook's stamp logic moved into `sub_SeamStamp` (same
+    clock, same `seam_opl_adj` shift) so the speaker hooks share it.
+    `fn_SpeakerBeep`'s PIT and gate writes are replaced by size-preserving
+    far calls (plus nop padding) to `fn_SeamSpeakerOn`/`fn_SeamSpeakerOff`;
+    the stubs execute the displaced instructions and send
+    `speaker(gate,divisor,pit)` (AUDIO type 4: gate, u16 divisor, u32 PIT)
+    on the same timeline as the register writes.  Keeping `S06E7` the same
+    size matters: a 10-byte growth shifted every later segment and froze the
+    intro after the logo, which is why the first version (and its S1DC9 pad)
+    was replaced.  The oracle build excludes the blocks and stays
+    byte-identical;
+  - **client**: `ClientState` parses type 4, `Opl.Speaker` schedules the edge
+    at its stamp and `Render` mixes a 30% FS square wave at
+    `1,193,182/divisor` between on and off (reset phase at each edge); the
+    `speaker=` count joins the stats line and `--file --wav` renders it
+    offline;
+  - **verification**: `verify.sh` 0 warnings, `SWREG.EXE: OK`, `IDENTICAL`;
+    `tests/data/sample-audio.bin` gained the on/off pair (divisor 662,
+    220 ms) and `tests/audio/run.sh` checks the 1.47 s render, 30% rms,
+    ~1800 Hz and that the tone stays inside the gate window.  The first,
+    size-growing hook emitted the pair in a 20 s run (divisor 662,
+    262,140 counts = 219.7 ms apart) but shifted `S06E7` and froze the intro
+    after the logo; with the size-preserving stubs a temporary one-shot call
+    at `fn_SeamPresentMusic` beeped through the real `fn_SpeakerBeep` in a
+    40 s run (one on/off pair, divisor 662, 262,140 counts apart,
+    non-decreasing stamps) while the game ran normally: 763 frames / 2,296
+    writes / 341 batches / 4 controls.  The temporary call was reverted
+    before the commit; `tests/replay/run.sh` stays green;
+  - **not yet**: the audible check still needs a machine with a PCM device.

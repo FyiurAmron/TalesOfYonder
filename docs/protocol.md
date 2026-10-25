@@ -49,7 +49,7 @@ u32  len             payload length before decoding
 | id | name | direction | messages |
 |---|---|---|---|
 | 1 | VIDEO | engine to client | `set_mode(w,h,palette?)`, `palette(start,data)`, `rect(x,y,w,h,payload)`, `frame_end`, `reset`, `scroll(dy)` |
-| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `opl_batch_timed(payload)`, `audio_ctrl(rate,fmt,on)` (the PC-speaker beep fallback is not modelled in v0) |
+| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `opl_batch_timed(payload)`, `audio_ctrl(rate,fmt,on)`, `speaker(gate,divisor)` |
 | 3 | INPUT | client to engine | `key(scancode,down)`, `mouse_move(dx,dy)`, `mouse_button(btn,down)`, `quit` |
 | 4 | TICK | both | `tick(n)`, `pace(ms)` (client may pace; engine never reads wall clocks) |
 | 5 | CONTROL | both | `hello(role,version)`, `bye`, `error(code,text)`, `debug(channel,payload)` (product clients ignore `debug`) |
@@ -64,8 +64,8 @@ Per-family, not one-size-fits-all:
   `scroll` message plus the rows that slide in, never one rect per row. Palette changes are separate
   messages, so palette animation costs a few bytes. No full-frame rebuilds unless a mode/reset
   forces them.
-- AUDIO: OPL *register writes* travel, not PCM; synthesis is client-side. Messages are tiny, ergo
-  no compression.
+- AUDIO: OPL *register writes* and PC-speaker gate edges travel, not PCM; synthesis is
+  client-side. Messages are tiny, ergo no compression.
 - INPUT/TICK/CONTROL: never compressed (overhead exceeds payload).
 - Codec id is per-message; adding a codec must never change semantics, only size.
 - Rule of thumb: any codec must be implementable in ~100 lines in asm, C and C# - that is the bar
@@ -177,9 +177,9 @@ Rules:
 The first payload byte is the message type (per family). Multi-byte fields are little-endian and
 unpadded. VIDEO, CONTROL and INPUT (keys) are implemented in the seam builds (see
 `docs/stream.md`); AUDIO is implemented in the seam builds (they emit the
-driver's register writes) and consumed by the client (it keeps the per-port
-register file and synthesises the samples, `docs/client.md`); TICK, mouse
-INPUT and FILES are still spec-only here:
+driver's register writes and the PC-speaker gate) and consumed by the client
+(it keeps the per-port register file, synthesises the samples and renders the
+beep, `docs/client.md`); TICK, mouse INPUT and FILES are still spec-only here:
 
 | type | message | payload after `u8 type` |
 |---|---|---|
@@ -198,6 +198,7 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
 | 1 | `opl_batch` | `u8 count`, then `count` × (`u16 port`, `u8 reg`, `u8 val`) (length `2 + 4*count`) |
 | 2 | `audio_ctrl` | `u16 rate` (LE), `u16 fmt` (LE), `u8 on` (length 6) |
 | 3 | `opl_batch_timed` | `u16 port` (LE), `u8 count`, then `count` × (`u32 pit`, `u8 reg`, `u8 val`) (length `4 + 6*count`) |
+| 4 | `speaker` | `u8 gate`, `u16 divisor` (LE), `u32 pit` (LE) (length 8) |
 
 - `opl_write` streams one OPL register write; `opl_batch` is the untimed
   coalesced form kept for older recordings; `opl_batch_timed` is what the
@@ -222,9 +223,13 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   ~100 ms queued, so a batch that arrives a frame late still schedules its
   ticks in the right order.
 - `audio_ctrl(rate,fmt,on)` carries the DAC rate/format the client should
-  synthesise at and whether sound is on.  The PC-speaker beep fallback is not
-  modelled in v0 (the game emits no OPL sound effects in the SBFMDRV
-  configuration; see `docs/client.md`).
+  synthesise at and whether the music sequencer is on.
+- `speaker(gate,divisor,pit)` carries the PC-speaker gate that
+  `fn_SpeakerBeep` drives: `gate` 1 starts a square wave at
+  `1,193,182 / divisor` Hz (`divisor` 662 in the game, ~1.8 kHz), `gate` 0
+  stops it, and the stamp uses the same timeline as the OPL writes.  This is
+  the game's only effect in the SBFMDRV configuration (effect 3 with OPL SFX
+  off; see `docs/client.md`).
 
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
 - Compared with the M1b spike (one full 256-entry palette message per fade step) the palette

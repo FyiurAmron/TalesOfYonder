@@ -122,11 +122,13 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
 
 ## Implementation gotchas
 
-- **Segment alignment is load-bearing.** The hooks add 30 bytes of code before `S1DEA`, which
-  would move the data segment's paragraph prefix from 7 to 5 and break the game's hard-coded DS
-  offsets (its `EMMXXXX0` check at `0CA0h` aborts with "Minimum of 1MB Expanded RAM must be
-  available."). A 2-byte pad at the end of `S1DC9` restores prefix 7; `check_mz_layout.py` refuses
-  to stage a drifted build.
+- **Segment alignment is load-bearing.** Hook code before `S1DEA` shifts the data segment's
+  paragraph prefix, and the game's hard-coded DS offsets depend on it (its `EMMXXXX0` check at
+  `0CA0h` aborts with "Minimum of 1MB Expanded RAM must be available." when the prefix is not 7).
+  The speaker hooks are size-preserving: a far call plus nop padding replaces the displaced PIT
+  and gate instructions in `fn_SpeakerBeep`, and the stub runs those instructions itself, so
+  `S06E7` keeps its size and every later segment keeps its offset. `check_mz_layout.py` refuses to
+  stage a build whose data segment drifted.
 - **The palette hook must read `DS:SI`, not `CS:SI`**: `fn_WriteDAC` uses `lodsb` and its callers
   only `push cs` so that its `retf` returns to them. The hook must also preserve the caller's
   flags/registers including `ES` (it is the palette source segment).
@@ -155,6 +157,13 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
   SWREG memory.  A 20 s file run carries 240 timed batches / 1,699 writes / 4
   controls over 353 frames / 2,073 rects / 328 palette messages, with no
   backwards stamp in the stream.
+- **The PC-speaker beep bypasses the OPL log**: `fn_SpeakerBeep`'s PIT and
+  gate writes are replaced by size-preserving far calls (plus nops) to
+  `fn_SeamSpeakerOn`/`fn_SeamSpeakerOff`; the stubs execute the displaced
+  instructions and send one `speaker(gate,divisor,pit)` message each, with
+  the same stamp as the OPL writes.  This is effect 3's fallback when OPL
+  sound effects are disabled, and it can sound while the sequencer is
+  stopped.
 - The block is allocated before `fn_07010`/`fn_01BE8`; it needs ~64 KB of conventional memory.
 
 ## Validation (2026-10-20)

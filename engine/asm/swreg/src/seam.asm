@@ -3122,6 +3122,162 @@ spm_done:
     jmp far ptr fn_MusicService
 
 ; ---------------------------------------------------------------------------
+; sub_SeamStamp - monotonic PIT stamp shared by the AUDIO messages.
+; in:  -
+; out: DX:AX = stamp; all other registers and DS preserved.
+; The clock is the BIOS tick at 40:006Ch times the driver's reload [0141h]
+; plus its tick phase [0147h].  Without a resident driver the phase is
+; unknown, so the tick alone is used (55 ms resolution) and the messages
+; still share one monotonic timeline.  The driver zeroes its phase at every
+; music start; the lost part is added to seam_opl_adj, so stamps never step
+; back and a new track keeps its 10 ms tick spacing.
+; ---------------------------------------------------------------------------
+sub_SeamStamp:
+    pushf
+    push bx
+    push cx
+    push si
+    push ds
+    cli
+    push 40h
+    pop ds
+    mov si, word ptr ds:[6Ch]
+    mov ds, word ptr cs:[seam_opl_ret+2]
+    mov ax, ds
+    test ax, ax
+    je sst_coarse
+    mov cx, word ptr ds:[0141h]
+    mov bx, word ptr ds:[0147h]
+    jmp short sst_mul
+sst_coarse:
+    mov cx, 0FFFFh
+    xor bx, bx
+sst_mul:
+    mov ax, si
+    mul cx
+    add ax, bx
+    adc dx, 0
+    add ax, word ptr cs:[seam_opl_adj]
+    adc dx, word ptr cs:[seam_opl_adj+2]
+    cmp dx, word ptr cs:[seam_opl_last+2]
+    ja sst_store
+    jb sst_back
+    cmp ax, word ptr cs:[seam_opl_last]
+    jae sst_store
+sst_back:
+    mov bx, word ptr cs:[seam_opl_last]
+    sub bx, ax
+    mov cx, word ptr cs:[seam_opl_last+2]
+    sbb cx, dx
+    test cx, cx
+    jnz sst_store                   ; far behind: the 32-bit count wrapped
+    add word ptr cs:[seam_opl_adj], bx
+    adc word ptr cs:[seam_opl_adj+2], 0
+    mov ax, word ptr cs:[seam_opl_last]
+    mov dx, word ptr cs:[seam_opl_last+2]
+    jmp short sst_done
+sst_store:
+    mov word ptr cs:[seam_opl_last], ax
+    mov word ptr cs:[seam_opl_last+2], dx
+sst_done:
+    pop ds
+    pop si
+    pop cx
+    pop bx
+    popf
+    ret
+
+; ---------------------------------------------------------------------------
+; fn_SeamSpeakerOn / fn_SeamSpeakerOff - size-preserving PC-speaker hooks.
+; in:  AX = PIT channel 2 divisor (On only)
+; out: -
+; fn_SpeakerBeep programs PIT ch2 and toggles port 61h.  The call sites
+; replace those instructions with a far call plus nop padding, so the game
+; function keeps its exact size (a bigger S06E7 shifts every later segment,
+; and the intro's hard-coded layout cannot take that).  The stubs execute the
+; displaced instructions themselves: On sends the message and then programs
+; the divisor; Off gates the speaker off and then sends the message.  The
+; client renders a square wave at 1193182/divisor between the edges, mixed
+; with the FM output.  The stamps use the same timeline as the OPL writes, so
+; the beep lands where the game played it.  All registers and flags are
+; preserved.
+; ---------------------------------------------------------------------------
+fn_SeamSpeakerOn:
+    pushf
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    cmp word ptr cs:[seam_blk], 0
+    je sson_done
+    mov si, ax                       ; PIT ch2 divisor
+    call sub_SeamStamp
+    mov ds, word ptr cs:[seam_blk]
+    mov byte ptr [SEAM_BUF+14], 4     ; AUDIO speaker
+    mov byte ptr [SEAM_BUF+15], 1     ; gate on
+    mov word ptr [SEAM_BUF+16], si    ; PIT channel 2 divisor
+    mov word ptr [SEAM_BUF+18], ax    ; PIT count low
+    mov word ptr [SEAM_BUF+20], dx    ; PIT count high
+    mov cx, 8
+    mov word ptr cs:[seam_txfam], 2
+    call sub_SeamSend
+sson_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    popf
+    out 42h, al                     ; the three displaced writes
+    mov al, ah
+    out 42h, al
+    retf
+
+fn_SeamSpeakerOff:
+    pushf
+    push ax
+    push bx
+    push cx
+    push dx
+    push si
+    push di
+    push ds
+    push es
+    in al, 61h                      ; the three displaced gate-off writes
+    and al, 0FCh
+    out 61h, al
+    cmp word ptr cs:[seam_blk], 0
+    je ssoff_done
+    call sub_SeamStamp
+    mov ds, word ptr cs:[seam_blk]
+    mov byte ptr [SEAM_BUF+14], 4     ; AUDIO speaker
+    mov byte ptr [SEAM_BUF+15], 0     ; gate off
+    mov word ptr [SEAM_BUF+16], 0
+    mov word ptr [SEAM_BUF+18], ax    ; PIT count low
+    mov word ptr [SEAM_BUF+20], dx    ; PIT count high
+    mov cx, 8
+    mov word ptr cs:[seam_txfam], 2
+    call sub_SeamSend
+ssoff_done:
+    pop es
+    pop ds
+    pop di
+    pop si
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    popf
+    retf
+
+; ---------------------------------------------------------------------------
 ; fn_SeamOplHook - called instead of the resident driver's OPL write prologue.
 ;
 ; The driver's sub_0A78 (offset 0A78h) is patched with a far jump here.  The
@@ -3148,50 +3304,10 @@ fn_SeamOplHook:
     cmp word ptr cs:[seam_blk], 0
     je shop_done
     mov si, ax                       ; AH = register, AL = value
-    ; Timestamp the write in PIT counts, the finest clock both sides share:
-    ; BIOS tick at 40:006Ch times the driver's BIOS reload [0141h], plus the
-    ; ISR's tick phase [0147h].  The hook runs before the ISR adds this tick's
-    ; divisor, so all writes from one driver tick carry the same stamp.
-    ; cli keeps the timer from moving the pair between the two reads: the
-    ; game context also calls the writer while loading patches.
+    ; The stamp is taken under cli: the game context also calls the writer
+    ; while loading patches, and the timer must not move the pair.
     cli
-    push 40h
-    pop ds
-    mov dx, word ptr ds:[6Ch]
-    mov ds, word ptr cs:[seam_opl_ret+2]
-    mov cx, word ptr ds:[0141h]
-    mov ax, word ptr ds:[0147h]
-    mov di, ax
-    mov ax, dx
-    mul cx
-    add ax, di
-    adc dx, 0
-    ; The driver zeroes its tick phase [0147h] at every music start, while the
-    ; BIOS tick keeps running, so the raw stamp can step back by less than one
-    ; BIOS tick.  Shift the whole coming timeline by the lost part instead: the
-    ; stamps stay monotonic and the new track keeps its 10 ms tick spacing.
-    add ax, word ptr cs:[seam_opl_adj]
-    adc dx, word ptr cs:[seam_opl_adj+2]
-    cmp dx, word ptr cs:[seam_opl_last+2]
-    ja shop_stamp
-    jb shop_back
-    cmp ax, word ptr cs:[seam_opl_last]
-    jae shop_stamp
-shop_back:
-    mov bx, word ptr cs:[seam_opl_last]
-    sub bx, ax
-    mov cx, word ptr cs:[seam_opl_last+2]
-    sbb cx, dx
-    test cx, cx
-    jnz shop_stamp                   ; far behind: the 32-bit count wrapped
-    add word ptr cs:[seam_opl_adj], bx
-    adc word ptr cs:[seam_opl_adj+2], 0
-    mov ax, word ptr cs:[seam_opl_last]
-    mov dx, word ptr cs:[seam_opl_last+2]
-    jmp shop_stamp
-shop_stamp:
-    mov word ptr cs:[seam_opl_last], ax
-    mov word ptr cs:[seam_opl_last+2], dx
+    call sub_SeamStamp
     mov bx, word ptr cs:[seam_opl_len]
     cmp bx, SEAM_OPL_SIZE
     jae shop_done                    ; the flush is behind: drop the write
