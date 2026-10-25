@@ -291,8 +291,9 @@ whole picture every time.
 
 ## Audio
 
-The seam streams the resident SBFMDRV's OPL register writes over the AUDIO
-family (`docs/protocol.md`); the client is the FM chip.  `client/Opl2.cs` is
+The seam streams the resident SBFMDRV's OPL register writes and the PC
+speaker's gate over the AUDIO family (`docs/protocol.md`); the client is the
+FM chip and the speaker.  `client/Opl2.cs` is
 an independent YM3812 core: nine two-operator channels, FM or additive
 connection, feedback, the four OPL2 waveforms, the ADSR envelope with the
 YMF278B rate tables, key scaling, total level and KSL, and tremolo/vibrato.
@@ -328,14 +329,26 @@ The stream's stamps are non-decreasing (the seam shifts the timeline when the
 driver resets its phase at a music start); the 32-bit count rolls over about
 hourly and the client compares deltas modulo 2^32.
 
+The PC speaker rides the same timeline.  `fn_SpeakerBeep` calls the seam's
+`fn_SeamSpeakerOn`/`fn_SeamSpeakerOff` around its port 61h edges, and
+`client/Opl.cs` renders a square wave at `1,193,182/divisor` (30% FS) between
+them, mixed with the FM output.  The beep's gate is independent of the music
+state (`audio_ctrl` mirrors the sequencer), so it is heard even when no track
+is playing.
+
 SBFMDRV is a music driver: the game's SFX path (`fn_PlaySFX`) needs
 `v_SoundState` bit 3, which only the far-entry pre-init (`sub_SoundPreInit`)
 sets.  That pre-init never runs in this chapter (the capture has no FM-detect
 writes from it; the resident INT driver is the working path) and the options
 toggle is gated on the same bit, so the game has no OPL sound effects.  The
 only effect left is id 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2),
-which the protocol does not carry.  A music-only capture therefore contains
-no OPL sound effects to check.
+whose gate edges now travel as AUDIO type 4 and are rendered by the client.
+The game-side caller is the rejected-selection path (`fn_04932` passes effect
+id 3).  A temporary one-shot call at `fn_SeamPresentMusic` confirmed the live
+transport: a 40 s run carried one on/off pair, divisor 662, 219.7 ms apart
+(262,140 PIT counts), with non-decreasing stamps; the patch was reverted
+before the commit.  A music-only capture therefore contains no OPL sound
+effects, but the beep is no longer missing from the client.
 
 ## Client options
 | option | meaning |
@@ -374,6 +387,12 @@ button or `Ctrl+Q`.
   client pushes 4,410 frames from `sample-audio.bin`.
 - Live folder run (2026-10-24): 20 s, 240 timed batches / 1,699 writes / 4
   controls, no backwards stamp, 96 Hz tick spacing (12,428 PIT counts).
+- PC-speaker gate: `sample-audio.bin`'s on/off pair renders a 220 ms 1800 Hz
+  square wave at 30% FS; `tests/audio/run.sh` checks the render length, the
+  level, the pitch and that the tone stays inside the gate window.  The final
+  hook shape was also confirmed live: a 40 s run with a temporary one-shot
+  call carried one on/off pair (divisor 662, 262,140 counts = 219.7 ms apart)
+  and the game ran normally.
 
 ## Verification (2026-10-20)
 
@@ -464,8 +483,7 @@ and mouse share the path, and scripted input is easiest to observe early in a ru
 
 ## Not here yet
 
-Further codecs (the row runs of codec 1 are in; LZ is not), session headers
-for recordings, and a PC-speaker beep family if the game's fallback effect
-should be heard.  VBE is supported for the one mode the game uses (640x480x8,
+Further codecs (the row runs of codec 1 are in; LZ is not) and session
+headers for recordings.  VBE is supported for the one mode the game uses (640x480x8,
 the intro); the seam ignores any other VBE mode.  The client is a development
 harness: one window and the live folder link.

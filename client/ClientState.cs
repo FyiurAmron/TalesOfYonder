@@ -18,6 +18,7 @@ public sealed class ClientStats
     public long AudioWrites;
     public long AudioBatches;
     public long AudioControls;
+    public long AudioSpeakers;
     public long EngineErrors;
     public long UnknownFamilies;
     public long UnknownMessages;
@@ -45,6 +46,7 @@ public sealed class ClientStats
         (AudioWrites + AudioBatches + AudioControls > 0
             ? $"audio={AudioWrites}w/{AudioBatches}b/{AudioControls}c "
             : string.Empty) +
+        (AudioSpeakers > 0 ? $"speaker={AudioSpeakers} " : string.Empty) +
         $"records={Records} bytes={Bytes} shown={Presented} " +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
         (Filtered > 0 ? $"filter={FilterMs / Filtered:F1}ms " : string.Empty) +
@@ -442,6 +444,14 @@ public sealed class ClientState(int width, int height)
                 Stats.AudioBatches++;
                 return false;
             }
+
+            case AudioMessage.Speaker when length >= 8:
+                Audio.Speaker(
+                    payload[1] != 0,
+                    BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(2)),
+                    BinaryPrimitives.ReadUInt32LittleEndian(payload.AsSpan(4)));
+                Stats.AudioSpeakers++;
+                return false;
 
             case AudioMessage.AudioCtrl when length >= 6:
                 Audio.Control(

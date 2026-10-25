@@ -126,6 +126,7 @@ def main():
     audio_writes = 0
     audio_batches = 0
     audio_controls = 0
+    speaker_edges = 0
     opl = {}                    # (port, register) -> value; the FM register file
 
     def save_frame(tag=None):
@@ -171,6 +172,8 @@ def main():
                 audio_batches += 1
             elif kind == 2 and len(payload) >= 6:               # audio_ctrl
                 audio_controls += 1
+            elif kind == 4 and len(payload) >= 8:               # speaker
+                speaker_edges += 1
             elif kind == 3 and len(payload) >= 4:               # opl_batch_timed
                 port = struct.unpack_from("<H", payload, 1)[0]
                 count = payload[3]
@@ -267,7 +270,8 @@ def main():
     if not args.quiet:
         print(f"records: {len(records)} ({consumed}/{total} bytes consumed)")
         print(f"palette updates: {pal_updates}, rects: {rects}, frames: {frames}, "
-              f"control: {control}, audio: {audio_writes}w/{audio_batches}b/{audio_controls}c")
+              f"control: {control}, audio: {audio_writes}w/{audio_batches}b/{audio_controls}c" +
+              (f", speaker: {speaker_edges}" if speaker_edges else ""))
         print(f"distinct frames saved: {frames_saved} in {args.out}")
         if last_name:
             print(f"final frame: {os.path.join(args.out, last_name)}")

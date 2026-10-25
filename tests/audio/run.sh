@@ -3,15 +3,17 @@
 #
 #   sh tests/audio/run.sh
 #
-# Two independent checks:
+# Three independent checks:
 #
 #   1. `--dro` renders tests/data/music-walk.dro (a DOSBox-X raw OPL capture
 #      of a real WORLD.DAT music block played through the resident SBFMDRV)
 #      with the same Opl2 core the live client uses.  The WAV must be audible
 #      (peak/RMS/duration) and the notes must land at the right pitches.
-#   2. The live client path opens SDL audio and pushes frames; the dummy
+#   2. The PC-speaker gate in sample-audio.bin must render as a square wave
+#      only between its on/off edges, at the right level and pitch.
+#   3. The live client path opens SDL audio and pushes frames; the dummy
 #      drivers make that headless.  This catches the C# binding and the
-#      stream plumbing, which the DRO check cannot.
+#      stream plumbing, which the offline checks cannot.
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK=$ROOT/build/runs/audio/$(date +%Y%m%d-%H%M%S)
@@ -106,6 +108,41 @@ else
     echo "audio: FAIL - the timed replay differs from the DRO render" >&2
     exit 1
 fi
+
+echo "audio: rendering the PC-speaker beep offline"
+dotnet "$CLIENT" --file "$ROOT/tests/data/sample-audio.bin" --wav "$WORK/beep.wav"
+python3 - "$WORK/beep.wav" <<'PY'
+import array
+import math
+import sys
+import wave
+
+w = wave.open(sys.argv[1], "rb")
+rate = w.getframerate()
+frames = w.getnframes()
+samples = array.array("h")
+samples.frombytes(w.readframes(frames))
+mono = samples[::w.getnchannels()]
+duration = frames / rate
+if not (1.4 <= duration <= 1.55):
+    raise SystemExit(f"audio: beep render is {duration:.2f}s, expected ~1.47s")
+
+def rms(t0, t1):
+    part = mono[int(t0 * rate):int(t1 * rate)]
+    return math.sqrt(sum(v * v for v in part) / max(1, len(part)))
+
+beep = rms(0.28, 0.42)
+if not (0.25 * 32767 <= beep <= 0.35 * 32767):
+    raise SystemExit(f"audio: beep rms {beep:.0f} is outside 25..35% fs")
+if rms(0.05, 0.15) != 0.0 or rms(0.55, 1.2) != 0.0:
+    raise SystemExit("audio: the beep leaks outside its on/off window")
+section = mono[int(0.28 * rate):int(0.42 * rate)]
+crossings = sum(1 for a, b in zip(section, section[1:]) if (a < 0) != (b < 0))
+hz = crossings / 0.14 / 2
+if not (1700.0 <= hz <= 1900.0):
+    raise SystemExit(f"audio: beep is {hz:.0f} Hz, expected ~1800 Hz")
+print(f"audio: beep OK ({beep:.0f} rms, {hz:.0f} Hz)")
+PY
 
 echo "audio: opening the client's SDL stream (dummy drivers)"
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \

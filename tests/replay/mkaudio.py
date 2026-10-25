@@ -5,7 +5,7 @@
 
 The fixture is a small protocol-v0 stream that interleaves the AUDIO family with VIDEO: a mode, a
 palette, two rows of picture, one `opl_write`, one `opl_batch`, one `opl_batch_timed`, one
-`audio_ctrl`, and frame boundaries.  `tests/replay/run.sh` replays it through the C# client and the Python decoder; both
+`audio_ctrl`, one speaker on/off pair, and frame boundaries.  `tests/replay/run.sh` replays it through the C# client and the Python decoder; both
 must render the same final frame, which proves the AUDIO messages are consumed without disturbing
 the picture path (and that both sides parse the same payload layout, docs/protocol.md family 2).
 """
@@ -67,6 +67,11 @@ def main():
         timed += struct.pack("<IBB", i * 12429, reg, val)
     add(AUDIO, list(timed))                                         # opl_batch_timed
     add(AUDIO, [2] + list(struct.pack("<HHB", 44100, 0, 1)))  # audio_ctrl
+    # speaker on/off: PIT channel 2 divisor 662 (~1.8 kHz), 220 ms apart, the
+    # same shape fn_SpeakerBeep streams.  The stamps follow the timed batch
+    # (stream stamps never go backwards).
+    add(AUDIO, [4, 1] + list(struct.pack("<HI", 662, 300000)))   # speaker on
+    add(AUDIO, [4, 0] + list(struct.pack("<HI", 0, 562500)))     # speaker off
 
     add(VIDEO, [3])                                        # frame_end
 

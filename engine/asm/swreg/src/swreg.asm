@@ -9126,17 +9126,33 @@ fn_SpeakerBeep:
     mov dx, 12h
     mov ax, 34DEh
     div cx
+IFDEF SEAM
+    ; Size-preserving hook: a far call plus one nop replace the six bytes of
+    ; PIT-channel-2 programming below; the stub sends the gate-on message and
+    ; then runs those three displaced writes.
+    call far ptr fn_SeamSpeakerOn
+    nop
+ELSE
     out 42h, al             ; SEAM SOUND: PIT ch2 divisor low
     mov al, ah
     out 42h, al             ; SEAM SOUND: PIT ch2 divisor high
+ENDIF
     in al, 61h              ; SEAM SOUND: speaker gate (port 61h)
     or al, 3
     out 61h, al             ; SEAM SOUND: speaker on
     mov ax, 4
     call far ptr fn_DelayTicks
+IFDEF SEAM
+    ; Size-preserving hook: a far call plus one nop replace the six bytes
+    ; below; the stub runs those three displaced writes and then sends the
+    ; gate-off message.
+    call far ptr fn_SeamSpeakerOff
+    nop
+ELSE
     in al, 61h              ; SEAM SOUND: speaker gate (port 61h)
     and al, 0FCh
     out 61h, al             ; SEAM SOUND: speaker off
+ENDIF
     pop dx
     pop cx
     pop bx

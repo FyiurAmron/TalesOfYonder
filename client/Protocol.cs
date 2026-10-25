@@ -39,6 +39,7 @@ public enum AudioMessage : byte
     Batch = 1,
     AudioCtrl = 2,
     TimedBatch = 3,
+    Speaker = 4,
 }
 
 public enum ControlMessage : byte

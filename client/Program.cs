@@ -712,7 +712,9 @@ internal static class Program
             Console.WriteLine($"client: audio {audio.Pushed} frames, {audio.Underruns} underruns");
             if (finalState is not null && finalState.Audio.Scheduled > 0)
             {
-                Console.WriteLine($"client: audio schedule: {finalState.Audio.Scheduled} writes, " +
+                Console.WriteLine($"client: audio schedule: " +
+                                  $"{finalState.Audio.Scheduled - finalState.Audio.SpeakerMessages} writes, " +
+                                  $"{finalState.Audio.SpeakerMessages} speaker edges, " +
                                   $"{finalState.Audio.LateWrites} played late");
             }
         }

@@ -23,7 +23,9 @@ internal static class StreamAudio
                 state.Apply(header, payload, length, reader.BytesRead, out _);
             }
             Console.WriteLine($"client: stream audio: {reader.BytesRead} bytes, " +
-                              $"{state.Audio.Scheduled} writes, {state.Audio.Batches} batches");
+                              $"{state.Audio.Scheduled - state.Audio.SpeakerMessages} timed writes, " +
+                              $"{state.Audio.SpeakerMessages} speaker edges, " +
+                              $"{state.Audio.Batches} batches");
         }
         Opl opl = state.Audio;
         int rate = opl.Rate;
