@@ -10,6 +10,10 @@
 // instant.  The timeline is anchored when the first timed write arrives and follows the stamps
 // from there; a write that maps behind the render front is played at the front (late), which is
 // what the old untimed path always did.
+//
+// The PC speaker (`speaker` messages) rides the same timeline: the game's beep fallback gates
+// port 61h for a few BIOS ticks, and the client renders a square wave between the on and off
+// events, mixed with the FM output.
 
 namespace Yt2.Client;
 
@@ -18,6 +22,7 @@ public sealed class Opl
     private const int RegistersPerPort = 256;
     private const long PitHz = 1_193_182;               // 8253 input clock
     private const int MaxEvents = 8192;                 // ~80 s of music at 96 Hz
+    private const int SpeakerAmplitude = 9830;          // 30% fs; the beep must cut through
     private readonly Dictionary<int, byte[]> _banks = [];
     private readonly Dictionary<int, Opl2> _chips = [];
     private readonly Queue<OplEvent> _events = new();
@@ -29,6 +34,9 @@ public sealed class Opl
     private long _stampRem;                             // fractional frame carry
     private uint _lastStamp;
     private bool _haveStamp;
+    private int _speakerDivisor;                        // PIT ch2 reload, 0 = off
+    private double _speakerPhase;
+    private double _speakerStep;                        // cycles per sample
 
     /// <summary>The port of the last write (the FM base from the BLASTER setting).</summary>
     public int Port { get; private set; }
@@ -40,6 +48,7 @@ public sealed class Opl
     public int Format { get; private set; }
 
     public long Writes { get; private set; }
+    public long SpeakerMessages { get; private set; }
     public long Scheduled { get; private set; }
     public long LateWrites { get; private set; }
     public long Batches { get; private set; }
@@ -86,45 +95,74 @@ public sealed class Opl
     {
         lock (_sync)
         {
-            if (!_haveStamp)
+            long frame = Advance(stamp);
+            if (!FreeRun && _events.Count >= MaxEvents)
             {
-                _haveStamp = true;
-                _lastStamp = stamp;
-                _nextFrame = FreeRun ? 0 : _frame;
+                ApplyLocked(port, reg, val);            // the render is not draining
+                return;
             }
-            else
-            {
-                uint delta = stamp - _lastStamp;
-                _lastStamp = stamp;
-                if (delta <= 0x8000_0000u)              // a larger step is a reset
-                {
-                    _stampRem += (long)delta * _rate;
-                    _nextFrame += _stampRem / PitHz;
-                    _stampRem %= PitHz;
-                }
-            }
-
-            if (!FreeRun)
-            {
-                if (_nextFrame < _frame)
-                {
-                    _nextFrame = _frame;                // late: play it at the front
-                    LateWrites++;
-                }
-                else if (_nextFrame > _frame + (long)_rate * 10)
-                {
-                    _nextFrame = _frame;                // replay skip: forget the gap
-                    _stampRem = 0;
-                }
-                if (_events.Count >= MaxEvents)
-                {
-                    ApplyLocked(port, reg, val);        // the render is not draining
-                    return;
-                }
-            }
-            _events.Enqueue(new OplEvent(_nextFrame, port, reg, val));
+            _events.Enqueue(new OplEvent(frame, false, port, ((reg & 0xFF) << 8) | (val & 0xFF)));
             Scheduled++;
         }
+    }
+
+    /// <summary>
+    /// Applies one PC-speaker edge (AUDIO type 4).  `on` gates a square wave at
+    /// 1,193,182/divisor Hz; `off` stops it.  The edge is placed at its stamp,
+    /// like a register write.
+    /// </summary>
+    public void Speaker(bool on, int divisor, uint stamp)
+    {
+        lock (_sync)
+        {
+            long frame = Advance(stamp);
+            SpeakerMessages++;
+            if (!FreeRun && _events.Count >= MaxEvents)
+            {
+                ApplySpeaker(on, divisor);
+                return;
+            }
+            _events.Enqueue(new OplEvent(frame, true, on ? 1 : 0, divisor & 0xFFFF));
+            Scheduled++;
+        }
+    }
+
+    /// <summary>
+    /// Maps one stamp onto the render timeline: the first stamp anchors at the
+    /// render front, later ones advance it by their modular difference.  In
+    /// FreeRun mode the first anchor is frame 0 and nothing is clamped.
+    /// </summary>
+    private long Advance(uint stamp)
+    {
+        if (!_haveStamp)
+        {
+            _haveStamp = true;
+            _lastStamp = stamp;
+            _nextFrame = FreeRun ? 0 : _frame;
+            return _nextFrame;
+        }
+        uint delta = stamp - _lastStamp;
+        _lastStamp = stamp;
+        if (delta <= 0x8000_0000u)                      // a larger step is a reset
+        {
+            _stampRem += (long)delta * _rate;
+            _nextFrame += _stampRem / PitHz;
+            _stampRem %= PitHz;
+        }
+        if (!FreeRun)
+        {
+            if (_nextFrame < _frame)
+            {
+                _nextFrame = _frame;                    // late: play it at the front
+                LateWrites++;
+            }
+            else if (_nextFrame > _frame + (long)_rate * 10)
+            {
+                _nextFrame = _frame;                    // replay skip: forget the gap
+                _stampRem = 0;
+            }
+        }
+        return _nextFrame;
     }
 
     /// <summary>Applies an audio_ctrl message.</summary>
@@ -141,6 +179,9 @@ public sealed class Opl
                 // files so the state (including silent registers) survives.
                 _rate = rate;
                 _chips.Clear();
+                _speakerStep = _speakerDivisor == 0
+                    ? 0.0
+                    : (PitHz / (double)_speakerDivisor) / _rate;
                 foreach (var (port, bank) in _banks)
                 {
                     var chip = new Opl2(_rate);
@@ -182,8 +223,7 @@ public sealed class Opl
             {
                 while (_events.Count > 0 && _events.Peek().Frame <= _frame)
                 {
-                    var e = _events.Dequeue();
-                    ApplyLocked(e.Port, e.Reg, e.Val);
+                    ApplyEvent(_events.Dequeue());
                 }
                 int chunk = frames - done;
                 if (_events.Count > 0)
@@ -202,6 +242,12 @@ public sealed class Opl
                 for (int i = 0; i < chunk; i++)
                 {
                     int s = _mix[i];
+                    if (_speakerDivisor != 0)
+                    {
+                        _speakerPhase += _speakerStep;
+                        _speakerPhase -= Math.Floor(_speakerPhase);
+                        s += _speakerPhase < 0.5 ? SpeakerAmplitude : -SpeakerAmplitude;
+                    }
                     if (s > short.MaxValue)
                     {
                         s = short.MaxValue;
@@ -221,6 +267,27 @@ public sealed class Opl
         }
     }
 
+    private void ApplyEvent(in OplEvent e)
+    {
+        if (e.Speaker)
+        {
+            ApplySpeaker(e.A != 0, e.B);
+        }
+        else
+        {
+            ApplyLocked(e.A, (e.B >> 8) & 0xFF, e.B & 0xFF);
+        }
+    }
+
+    private void ApplySpeaker(bool on, int divisor)
+    {
+        _speakerDivisor = on && divisor != 0 ? divisor & 0xFFFF : 0;
+        _speakerPhase = 0.0;
+        _speakerStep = _speakerDivisor == 0
+            ? 0.0
+            : (PitHz / (double)_speakerDivisor) / _rate;
+    }
+
     private void ApplyLocked(int port, int reg, int val)
     {
         reg &= 0xFF;
@@ -236,5 +303,10 @@ public sealed class Opl
         Writes++;
     }
 
-    private readonly record struct OplEvent(long Frame, int Port, int Reg, int Val);
+    /// <summary>
+    /// One scheduled event: a register write (`Speaker` false, A = port,
+    /// B = register &lt;&lt; 8 | value) or a PC-speaker edge (`Speaker` true,
+    /// A = 1 for on, B = PIT channel 2 divisor).
+    /// </summary>
+    private readonly record struct OplEvent(long Frame, bool Speaker, int A, int B);
 }
