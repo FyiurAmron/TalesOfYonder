@@ -336,19 +336,34 @@ them, mixed with the FM output.  The beep's gate is independent of the music
 state (`audio_ctrl` mirrors the sequencer), so it is heard even when no track
 is playing.
 
-SBFMDRV is a music driver: the game's SFX path (`fn_PlaySFX`) needs
-`v_SoundState` bit 3, which only the far-entry pre-init (`sub_SoundPreInit`)
-sets.  That pre-init never runs in this chapter (the capture has no FM-detect
-writes from it; the resident INT driver is the working path) and the options
-toggle is gated on the same bit, so the game has no OPL sound effects.  The
-only effect left is id 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2),
-whose gate edges now travel as AUDIO type 4 and are rendered by the client.
-The game-side caller is the rejected-selection path (`fn_04932` passes effect
-id 3).  A temporary one-shot call at `fn_SeamPresentMusic` confirmed the live
-transport: a 40 s run carried one on/off pair, divisor 662, 219.7 ms apart
-(262,140 PIT counts), with non-decreasing stamps; the patch was reverted
-before the commit.  A music-only capture therefore contains no OPL sound
-effects, but the beep is no longer missing from the client.
+SBFMDRV is a music driver: the game's SFX path (`fn_PlaySFX`) normally needs
+`v_SoundState` bit 3 and the far entry (`v_SoundEntry`), which SBFMDRV 1.34
+does not provide.  The data path is still there: WORLD.DAT carries 80
+Creative Voice File records (8-bit unsigned PCM, 4–15 kHz, 0.1–5 s), indexed
+by the game's SFX pointer table at `DS:0CF51h` (`v_5160` = 80 entries).  The
+seam reports every `fn_PlaySFX` call instead: it replaces the first six-byte
+`TEST` with a far call plus nop, sends `AUDIO sample(id,offset,pit)` (type 5),
+and the client
+reads the VOC record at `offset` from the WORLD.DAT next to `STREAM.BIN`
+(`--world` overrides the lookup).  The client resamples the record onto the
+same PIT timeline as the FM writes and mixes it with the OPL output, so the
+samples and music stay in step.  Up to eight records mix at once; a ninth
+drops the oldest.
+
+Effect 3 is special: in the reference configuration the game falls back to
+`fn_SpeakerBeep` (PIT channel 2), whose gate edges travel as AUDIO type 4 and
+render as a 30% square wave.  The seam's sample message for id 3 is queued
+first; the client drops the following on/off pair when it has the sample, so
+the real VOC replaces the beep.  Without WORLD.DAT the bank is unavailable
+and the beep still plays, which keeps music-only recordings useful.  The
+game-side beep caller is the rejected-selection path (`fn_04932` passes
+effect id 3).  A temporary one-shot call at `fn_SeamPresentMusic` confirmed
+the live beep transport: a 40 s run carried one on/off pair, divisor 662,
+219.7 ms apart (262,140 PIT counts); the patch was reverted before the
+commit.  The sample path is pinned offline against the real effect records
+(`09FFE6h` for id 3, `0A076Ah` for id 5) and was exercised by the keyed
+capture below; the remaining check is audible playback on a machine with a
+PCM device.
 
 ## Client options
 | option | meaning |
@@ -357,6 +372,7 @@ effects, but the beep is no longer missing from the client.
 | `--file PATH` | replay a recording instead of connecting |
 | `--follow PATH` | follow the engine's growing `STREAM.BIN` (folder link) |
 | `--input PATH` | input file for `--follow` (default: `INPUT.BIN` next to it) |
+| `--world PATH` | WORLD.DAT for the VOC effects (default: next to `--follow`/`--file`, then `server/game/WORLD.DAT` next to the client) |
 | `--headless` | no window: decode, report, `--ppm`/`--dump` only |
 | `--scale N` | window scale (default 3) |
 | `--filter NAME` | `nearest` (default) or `xbrz`: the pixel art is scaled by the client with the xBRZ filter instead of block by block |
@@ -393,6 +409,21 @@ button or `Ctrl+Q`.
   hook shape was also confirmed live: a 40 s run with a temporary one-shot
   call carried one on/off pair (divisor 662, 262,140 counts = 219.7 ms apart)
   and the game ran normally.
+- VOC effects: the same gate renders the real effect 3 (`09FFE6h`, 0.20 s)
+  with its beep pair, effect 3 alone, effect 5 (`0A076Ah`, 1 s at 345 Hz)
+  alone, and the beep alone.  The effect-3 stream is sample-identical to the
+  sample-only render over the sample-only length, so the beep pair was
+  dropped; a control stream with only the beep still renders the 1800 Hz
+  square wave.
+  Effect 5 renders 2.00 s with rms 1488 in the record window, and its 345 Hz
+  tone dominates 1800 Hz.
+- Live keyed capture (2026-10-25): `STREAM_KEYS="62:Return 63:space ..."`
+  with `tools/dosbox/stream.sh 95` advanced the intro to the story scene.
+  The recording carried 9 `sample` messages (ids 16–25, offsets matching the
+  game's `0CF51h` table), and `--file --wav --world _ref/orig-bin/WORLD.DAT`
+  rendered 95.51 s with 9/9 played and 0 unknown.  The sample windows are
+  rms 2.2k–4.7k against ~1.1k between lines.  That scene never takes the
+  effect-3 fallback, so the recording has no speaker edges.
 
 ## Verification (2026-10-20)
 

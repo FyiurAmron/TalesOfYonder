@@ -34484,9 +34484,18 @@ loc_1897B:
 ;        clear) - it falls back to the PC speaker beep. With effects enabled
 ;        the block is read from WORLD.DAT into v_SfxBufSeg and the far entry
 ;        plays it from the data offset stored at [buffer+14h].
+;        The seam build reports every call (AX = id) to the client, which
+;        plays the VOC record itself; the PC-speaker fallback stays for the
+;        reference build. The hook replaces the displaced TEST (6 bytes) with
+;        a far call plus nop, so fn_PlaySFX keeps its exact size.
 ; ---------------------------------------------------------------------------
 fn_PlaySFX:
+IFDEF SEAM
+    call far ptr fn_SeamPlaySFX
+    nop
+ELSE
     test word ptr [v_SoundState], 8
+ENDIF
     jne loc_1898F
     cmp ax, 3
     jne loc_1898E

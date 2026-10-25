@@ -49,7 +49,7 @@ u32  len             payload length before decoding
 | id | name | direction | messages |
 |---|---|---|---|
 | 1 | VIDEO | engine to client | `set_mode(w,h,palette?)`, `palette(start,data)`, `rect(x,y,w,h,payload)`, `frame_end`, `reset`, `scroll(dy)` |
-| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `opl_batch_timed(payload)`, `audio_ctrl(rate,fmt,on)`, `speaker(gate,divisor)` |
+| 2 | AUDIO | engine to client | `opl_write(port,reg,val)`, `opl_batch(payload)`, `opl_batch_timed(payload)`, `audio_ctrl(rate,fmt,on)`, `speaker(gate,divisor)`, `sample(id,offset)` |
 | 3 | INPUT | client to engine | `key(scancode,down)`, `mouse_move(dx,dy)`, `mouse_button(btn,down)`, `quit` |
 | 4 | TICK | both | `tick(n)`, `pace(ms)` (client may pace; engine never reads wall clocks) |
 | 5 | CONTROL | both | `hello(role,version)`, `bye`, `error(code,text)`, `debug(channel,payload)` (product clients ignore `debug`) |
@@ -199,6 +199,7 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
 | 2 | `audio_ctrl` | `u16 rate` (LE), `u16 fmt` (LE), `u8 on` (length 6) |
 | 3 | `opl_batch_timed` | `u16 port` (LE), `u8 count`, then `count` × (`u32 pit`, `u8 reg`, `u8 val`) (length `4 + 6*count`) |
 | 4 | `speaker` | `u8 gate`, `u16 divisor` (LE), `u32 pit` (LE) (length 8) |
+| 5 | `sample` | `u16 id` (LE), `u32 offset` (LE), `u32 pit` (LE) (length 11) |
 
 - `opl_write` streams one OPL register write; `opl_batch` is the untimed
   coalesced form kept for older recordings; `opl_batch_timed` is what the
@@ -227,9 +228,17 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
 - `speaker(gate,divisor,pit)` carries the PC-speaker gate that
   `fn_SpeakerBeep` drives: `gate` 1 starts a square wave at
   `1,193,182 / divisor` Hz (`divisor` 662 in the game, ~1.8 kHz), `gate` 0
-  stops it, and the stamp uses the same timeline as the OPL writes.  This is
-  the game's only effect in the SBFMDRV configuration (effect 3 with OPL SFX
-  off; see `docs/client.md`).
+  stops it, and the stamp uses the same timeline as the OPL writes.  In the
+  SBFMDRV configuration this is effect 3's fallback; the `sample` message
+  below replaces it when the client has WORLD.DAT (see `docs/client.md`).
+- `sample(id,offset,pit)` carries one `fn_PlaySFX` call.  `id` is the game's
+  effect number and `offset` is the WORLD.DAT file offset from the game's SFX
+  pointer table (`DS:0CF51h`); the record is a Creative Voice File (8-bit
+  unsigned PCM in every shipped record).  Only the id, offset and stamp
+  travel: the samples are up to 35 KiB, and the client reads the file next to
+  `STREAM.BIN`.  The stamp uses the same timeline as the OPL writes.  `id` 3
+  is the effect whose immediately following PC-speaker fallback pair the
+  client drops when it has the sample.
 
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
 - Compared with the M1b spike (one full 256-entry palette message per fade step) the palette
