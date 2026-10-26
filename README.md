@@ -19,7 +19,7 @@ away. The C stage (`engine/c/`) has not started. `docs/porting.md` §9 is the li
 The live link (folder transport):
 
     sh engine/asm/swreg/tools/build.sh --variant file  # -> build/swreg/file/ (exe + game files)
-    sh client/publish-linux.sh                         # engine + client -> build/dist/yt2-linux-x64/
+    sh tools/publish-linux.sh --server asm             # client + asm server -> build/dist/yt2-linux-x64/
     sh build/dist/yt2-linux-x64/play.sh                # DOSBox-X and the client, one command
 
 Without the bundle (same engine build, client from the tree):
@@ -39,7 +39,7 @@ Recordings and gates:
 
 Windows bundle (self-contained, no .NET install on the target):
 
-    sh client/publish-win.sh                 # -> build/dist/yt2-win-x64.zip
+    sh tools/publish-win.sh --server asm     # -> build/dist/yt2-win-x64.zip
 
 ## Layout
 
@@ -48,8 +48,8 @@ Windows bundle (self-contained, no .NET install on the target):
 | `engine/asm/swreg/` | the byte-perfect `SWREG.EXE` disassembly and its build/verify tools |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` (FM driver) disassembly and its black-box harness |
 | `engine/c/` | (planned) the C core and platform layer |
-| `client/` | the C# companion client (SDL3) and the Windows packaging |
-| `tools/` | host tooling: `dosbox/` profiles and runners, `stream/` recording tools, `repro/` wire reproductions |
+| `client/` | the C# companion client (SDL3) and platform bundle files |
+| `tools/` | host tooling, including the `publish-*.sh` bundle publishers |
 | `tests/` | committed gates (the list is in `tests/README.md`) and fixtures |
 | `docs/` | plan, protocol, disassembly/client/stream notes |
 | `_ref/` | read-only reference: the original distribution, the frozen disassembly, the mining project |

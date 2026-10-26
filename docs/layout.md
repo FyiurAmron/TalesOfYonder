@@ -15,9 +15,9 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
     client/                      the C# companion client (SDL3)
       publish/win/               static files that go into the Windows bundle
       publish/linux/             static files that go into the Linux bundle
-      publish-win.sh             builds build/dist/yt2-win-x64.zip
-      publish-linux.sh           builds build/dist/yt2-linux-x64.tar.gz
     tools/                       host-side tooling
+      publish-win.sh             builds the client + selected server bundle
+      publish-linux.sh           builds the client + selected server bundle
       dosbox/                    DOSBox-X profiles + headless runners (oracle, audio, stream, client)
       stream/                    recording tooling: replay.py (reference decoder), compare_streams.py, dro.py, wav.py
       repro/                     reproductions of wire-level behaviour (nullmodem 0xFF)
@@ -47,7 +47,7 @@ Rules:
 - Build outputs keep the source tree's shape (`engine/asm/swreg/` -> `build/swreg/`), so a path in a
   log usually maps back to the script that made it.
 - Scratch and throwaway scripts go to `build/tmp/`; manual assembler invocations target it too.
-- The Windows bundle is produced by `client/publish-win.sh` (pinned SDL3, both the archive and the
+- The Windows bundle is produced by `tools/publish-win.sh` (pinned SDL3, both the archive and the
   DLL sha256-checked) from the *current* `build/swreg/file` build; it and the Linux bundle share the
   same layout — `client/` with the binary and SDL3, `server/` with the profile and game files, and
   `client-start`, `server-start`, `play` and `smoke-test` launchers in the root.
@@ -60,7 +60,7 @@ Rules:
 | seam work (protocol, backends, hooks) | `engine/asm/swreg/src/seam.asm` |
 | FM driver disassembly | `engine/asm/sbfmdrv/src/` |
 | client behaviour (decode, render, options) | `client/*.cs` |
-| client packaging | `client/publish-win.sh` + `client/publish/win/`, `client/publish-linux.sh` + `client/publish/linux/` |
+| bundle packaging | `tools/publish-*.sh` + `client/publish/{win,linux}/` |
 | host scripts, profiles, X helpers | `tools/dosbox/` |
 | recording tools (decode, compare) | `tools/stream/` |
 | a new committed gate | `tests/<kind>/run.sh` (and a line in `tests/README.md`) |

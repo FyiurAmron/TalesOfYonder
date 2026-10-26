@@ -30,7 +30,7 @@ after the window is created.  The Windows executable carries the same pixels as
 ## Quick start
 
     sh engine/asm/swreg/tools/build.sh --variant file  # -> build/swreg/file/ (exe + game files)
-    sh client/publish-linux.sh                         # engine + client -> build/dist/yt2-linux-x64/
+    sh tools/publish-linux.sh --server asm             # client + asm server bundle
     sh build/dist/yt2-linux-x64/play.sh                # DOSBox-X and the client, one command
 
 Without the bundle (same engine build, client from the tree):
@@ -86,34 +86,39 @@ The obsolete serial link (kept for fun):
     client/server.sh                                     # DOSBox-X window, COM1 -> TCP :2324
     dotnet run --project client -c Release -- --tcp 127.0.0.1:2324
 
-## Windows build
+## Windows bundle
 
-    sh client/publish-win.sh                 # -> build/dist/yt2-win-x64(.zip)
+    sh tools/publish-win.sh --server asm     # -> build/dist/yt2-win-x64(.zip)
 
-Publishes a self-contained win-x64 single-file `client/Yt2Client.exe` (no .NET install needed on
-the target), puts the pinned SDL3 runtime next to it (SDL 3.4.18 win32-x64; the archive and the
-DLL are both sha256-checked, `--sdl3 PATH` uses a local DLL instead), and stages the game side:
-`server/game` (the seam build) and `server/dosbox-x.conf`, plus `sample/STREAM.BIN`,
-`smoke-test.bat`, `client-start.bat`, `server-start.bat` and `play.bat`.  The launchers live in
-the bundle root; `play.bat` starts the server in its own window, then the client, and stops the
-server when the client exits.  `--server-dir` selects another seam build (default
-`build/swreg/file`), `--out` the output root, `--no-zip` skips the archive.
+Publishes a client + asm server bundle. It contains a self-contained win-x64
+single-file `client/Yt2Client.exe` (no .NET install needed on the target), and
+the pinned SDL3 runtime (SDL 3.4.18 win32-x64; the archive and DLL are both
+sha256-checked; `--sdl3 PATH` uses a local DLL). The server side includes
+`server/game`, `server/dosbox-x.conf`, the timed `sample/STREAM.BIN`, and the launchers.
+`play.bat` starts the server in its own window, then the client, and stops the
+server when the client exits.
+
+`--server asm` selects the current assembly server (the default). `--server c`
+is reserved until the C server exists. `--server-dir` selects another asm seam
+build (default `build/swreg/file`); `--out` sets the output root, and `-n` or
+`--no-zip` skips the archive.
 
 `client/Sdl.cs` loads `SDL3.dll` on Windows, `libSDL3.so.0`/`libSDL3.so` on Linux and
 `libSDL3.dylib` on macOS, so the same sources run on every platform; only the runtime has to be
 where the loader looks. Note the bundle cannot be executed where it is built (from Linux): the
 smoke test is the first thing to run on the Windows side.
 
-## Linux build
+## Linux bundle
 
-    sh client/publish-linux.sh # -> build/dist/yt2-linux-x64.tar.gz
+    sh tools/publish-linux.sh --server asm # -> build/dist/yt2-linux-x64.tar.gz
 
-Same bundle shape as the Windows one: a self-contained linux-x64 single-file `client/Yt2Client`
-with `libSDL3.so.0` next to it, `server/game` (the file-backend seam build) and
-`server/dosbox-x.conf`, plus `sample/STREAM.BIN`, `smoke-test.sh`, `client-start.sh`,
-`server-start.sh` and `play.sh` (starts the server, then the client, and stops it again).
-`--framework` publishes framework-dependent (needs .NET 11 on the target),
-`--server-dir`/`--out`/`--no-tar` behave as on Windows.
+Same client + asm server bundle shape as Windows: a self-contained linux-x64
+single-file `client/Yt2Client` with `libSDL3.so.0` next to it, `server/game`
+(the file-backend seam build), and the launchers. `play.sh` starts the server,
+then the client, and stops the server when the client exits. `--framework`
+publishes framework-dependent (needs .NET 11 on the target); `-n` or
+`--no-zip` skips the tarball (`--no-tar` remains an alias). `--server-dir` and
+`--out` behave as on Windows.
 
 ## The window
 

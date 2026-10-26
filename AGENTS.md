@@ -69,10 +69,10 @@ adds agent-specific operational rules.
 - Oracle harness: `tools/dosbox/` (DOSBox-X profile + `baseline.sh`; helpers `keys.py`, `snap.py`);
   outputs in `build/runs/oracle/`.
 - Driver: `engine/asm/sbfmdrv/` (`src/`, `tools/`, `test/`); notes in `docs/sbfmdrv.md`.
-- Client: `client/` (C#) — `sh client/publish-linux.sh` then
-  `build/dist/yt2-linux-x64/play.sh` for the live folder link, `sh client/publish-win.sh` for the
-  Windows bundle. Tests: `tests/replay/run.sh` (offline), `tests/link/run.sh` (the obsolete serial
-  link); stream tooling in `tools/stream/`.
+- Client: `client/` (C#) — run `sh tools/publish-linux.sh --server asm`, then
+  `build/dist/yt2-linux-x64/play.sh` for the live folder link. Windows:
+  `sh tools/publish-win.sh --server asm`. Tests: `tests/replay/run.sh` (offline),
+  `tests/link/run.sh` (obsolete serial link); stream tools are in `tools/stream/`.
 - Guard hook: `.githooks/pre-commit` blocks any commit touching `_ref/`.
 - Reference hashes: `SWREG.EXE` MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 

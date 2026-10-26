@@ -1,14 +1,15 @@
 #!/bin/sh
-# Publish the client as a self-contained Windows x64 bundle.
+# Publish the self-contained Windows x64 client + asm server bundle.
 #
-#   sh client/publish-win.sh [options]
+#   sh tools/publish-win.sh [options]
 #
+#     --server KIND       asm (current) or c (future)
 #     --sdl3 PATH         use this SDL3.dll instead of downloading the pinned
 #                         release (its sha256 is still verified)
-#     --server-dir DIR    seam build to stage as server/game
+#     --server-dir DIR    asm seam build to stage as server/game
 #                         (default: build/swreg/file, the folder-link build)
 #     --out DIR           output root (default: build/dist)
-#     --no-zip            leave the bundle directory unpacked only
+#     -n, --no-zip        leave the bundle directory unpacked only
 #
 # The bundle is self-contained: no .NET install is needed on the target, and
 # SDL3.dll sits next to the exe (client/Sdl.cs loads "SDL3.dll" on Windows).
@@ -16,6 +17,7 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PUBLISH_DIR=$ROOT/client/publish/win
 
 # Pinned SDL3 runtime: the official win32-x64 archive (contains SDL3.dll).
 SDL_VERSION=3.4.18
@@ -24,21 +26,36 @@ SDL_ZIP_URL=https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VER
 SDL_ZIP_SHA=75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c
 SDL_DLL_SHA=2b4b128d8d510cc2d442693cf848c050d700d43dc667afe9e5fd82b0570d667e
 
-SERVER_DIR=$ROOT/build/swreg/file
+SERVER=
+SERVER_DIR=
 OUT=$ROOT/build/dist
 ZIP=1
 SDL3=
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        --server) SERVER=$2; shift 2 ;;
         --sdl3) SDL3=$2; shift 2 ;;
         --server-dir) SERVER_DIR=$2; shift 2 ;;
         --out) OUT=$2; shift 2 ;;
-        --no-zip) ZIP=0; shift ;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+        -n|--no-zip) ZIP=0; shift ;;
+        -h|--help) sed -n '2,/^set -e$/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "publish-win: unknown option $1" >&2; exit 2 ;;
     esac
 done
+
+SERVER=${SERVER:-asm}
+case "$SERVER" in
+    asm) SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file} ;;
+    c)
+        echo "publish-win: the C server bundle is not available yet" >&2
+        exit 2
+        ;;
+    *)
+        echo "publish-win: --server must be asm or c" >&2
+        exit 2
+        ;;
+esac
 
 if [ ! -f "$SERVER_DIR/SWREG.EXE" ]; then
     echo "publish-win: no seam build in $SERVER_DIR" >&2
@@ -99,15 +116,15 @@ CLIENT=$BUNDLE/client
 rm -rf "$BUNDLE"
 mkdir -p "$CLIENT" "$BUNDLE/sample" "$BUNDLE/server/game" "$BUNDLE/server/capture"
 
-echo "publish-win: publishing the client (win-x64, self-contained)"
+echo "publish-win: publishing client+asm server bundle (win-x64, self-contained)"
 dotnet publish "$ROOT/client" -c Release -r win-x64 --self-contained true \
     -p:PublishSingleFile=true -p:DebugType=none -o "$CLIENT" >/dev/null
 cp "$DLL" "$CLIENT/SDL3.dll"
-cp "$SCRIPT_DIR/publish/win/README.txt" "$BUNDLE/"
-cp "$SCRIPT_DIR/publish/win/client-start.bat" "$BUNDLE/"
-cp "$SCRIPT_DIR/publish/win/server-start.bat" "$BUNDLE/"
-cp "$SCRIPT_DIR/publish/win/play.bat" "$BUNDLE/"
-cp "$SCRIPT_DIR/publish/win/smoke-test.bat" "$BUNDLE/"
+cp "$PUBLISH_DIR/README.txt" "$BUNDLE/"
+cp "$PUBLISH_DIR/client-start.bat" "$BUNDLE/"
+cp "$PUBLISH_DIR/server-start.bat" "$BUNDLE/"
+cp "$PUBLISH_DIR/play.bat" "$BUNDLE/"
+cp "$PUBLISH_DIR/smoke-test.bat" "$BUNDLE/"
 cp "$SAMPLE" "$BUNDLE/sample/STREAM.BIN"
 for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
     cp "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
@@ -115,7 +132,7 @@ done
 # Windows profile, not the Linux oracle/CI one: it sets
 # "working directory option = noprompt" (DOSBox-X otherwise asks for a folder
 # on every start) and has no autosave/logging leftovers.
-cp "$SCRIPT_DIR/publish/win/dosbox-x-server.conf" "$BUNDLE/server/dosbox-x.conf"
+cp "$PUBLISH_DIR/dosbox-x-server.conf" "$BUNDLE/server/dosbox-x.conf"
 
 # cmd.exe is unreliable with LF-only batch files; normalise every staged .bat
 # so an editor that writes LF cannot ship a broken launcher.
@@ -148,4 +165,4 @@ print("publish-win: %s (%.1f MB)" % (zpath, os.path.getsize(zpath) / 1e6))
 print("publish-win: sha256 %s" % hashlib.sha256(open(zpath, "rb").read()).hexdigest())
 PY
 fi
-echo "publish-win: bundle in $BUNDLE"
+echo "publish-win: client+asm server bundle in $BUNDLE"
