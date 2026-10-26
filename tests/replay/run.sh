@@ -11,7 +11,7 @@
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 case "$#" in
-    0) RECS="$ROOT/tests/data/sample-video.bin $ROOT/tests/data/sample-vbe.bin $ROOT/tests/data/sample-video-rle.bin $ROOT/tests/data/sample-pan-rows.bin $ROOT/tests/data/sample-pan-scroll.bin $ROOT/tests/data/sample-audio.bin" ;;
+    0) RECS="$ROOT/tests/data/sample-video.bin $ROOT/tests/data/sample-timed-stream.bin $ROOT/tests/data/sample-vbe.bin $ROOT/tests/data/sample-video-rle.bin $ROOT/tests/data/sample-pan-rows.bin $ROOT/tests/data/sample-pan-scroll.bin $ROOT/tests/data/sample-audio.bin" ;;
     *) RECS="$1" ;;
 esac
 WORK=$ROOT/build/runs/replay/$(date +%Y%m%d-%H%M%S)

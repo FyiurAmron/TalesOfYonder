@@ -13,11 +13,20 @@ synth.
 Or one command from a bundle: `sh client/publish-linux.sh`, then
 `build/dist/yt2-linux-x64/play.sh`.
 
-Headless check / replay:
+Headless live check (the folder-link files are timed directly):
 
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
         --follow STREAM.BIN --headless --stats 5 --ppm out.ppm
-    dotnet build/client/bin/Release/net11.0/Yt2Client.dll --file STREAM.BIN --headless --ppm out.ppm
+
+Replay the timed output file at its captured pace:
+
+    dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
+        --file build/dist/yt2-linux-x64/sample/STREAM.BIN --headless --ppm out.ppm
+
+`--file` detects timed `YT2B` `.BIN` streams and optional YT2S sessions; raw v0
+fixtures are decoded without pacing. The folder link writes timestamps into
+`STREAM.BIN` and `INPUT.BIN`, so a separate session file is not required.
+`--record-session PATH` explicitly adds a full-duplex YT2S capture.
 
 `--help` lists every option (`--dump`, `--scale`, `--stats`, `--raw`,
 `--no-keyframe`, `--no-audio`, `--dro`/`--wav` for an offline OPL capture, ...;

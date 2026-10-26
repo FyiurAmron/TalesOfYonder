@@ -25,15 +25,15 @@ Contents
 --------
   client/Yt2Client         self-contained 64-bit client (no .NET needed)
   client/libSDL3.so.0      SDL3 runtime, used by the client
-  client-start.sh          follows server/game/STREAM.BIN
+  client-start.sh          follows the live timed BIN transport
   server-start.sh          starts DOSBox-X with the folder-link profile
   play.sh                  starts the server, then the client
-  smoke-test.sh            replays sample/stream.bin, no DOSBox-X needed
-  sample/stream.bin        a short no-input recording
+  smoke-test.sh            replays sample/STREAM.BIN, no DOSBox-X needed
+  sample/STREAM.BIN        a timed engine-to-client stream
   server/                  the game side:
     dosbox-x.conf            no serial port; the link is STREAM.BIN/INPUT.BIN
     game/                    the seam build + game files + the link files
-    capture/                 DOSBox-X screenshots land here
+    capture/                 DOSBox-X screenshots and optional YT2S captures
 
 How to run
 ----------
@@ -43,9 +43,22 @@ or, in two terminals:
   ./client-start.sh         the client window mirrors the display
 
 The client asks the engine for a keyframe when it connects, so the start
-order does not matter; if it connects late it resynchronises by itself.  The
-client opens STREAM.BIN read-only with write sharing and appends to INPUT.BIN,
-so both programs can run at the same time.
+order does not matter; if it connects late it resynchronises by itself. Both
+`STREAM.BIN` and `INPUT.BIN` carry timestamps around their unchanged v0 frames.
+The client follows the server's output file and appends timed input records,
+so each transport file is directly usable for replay.
+
+Replay the last run at its captured pace with:
+
+  ./client/Yt2Client --file server/game/STREAM.BIN
+
+Replay saved input into a fresh server run with:
+
+  cp server/game/INPUT.BIN server/capture/INPUT.BIN
+  ./client/Yt2Client --follow server/game/STREAM.BIN \
+      --input server/game/INPUT.BIN --replay-input server/capture/INPUT.BIN
+
+An additional full-duplex YT2S capture is optional (`--record-session PATH`).
 
 Play in the *client* window: keystrokes and the mouse are sent to the game.
 The pointer stays visible and is not captured.  Its position in the client
@@ -62,6 +75,6 @@ Requirements
 Smoke test without DOSBox-X
 ---------------------------
   ./smoke-test.sh
-Replays the bundled recording in a window, prints a
+Replays the bundled timed BIN stream in a window, prints a
 "client: done  frames=... rects=... palette=... records=..." line and writes
 sample/smoke.ppm.  Exit code 0 means the client is fine.

@@ -10,6 +10,7 @@ namespace Yt2.Client;
 public abstract class FrameSource : IDisposable
 {
     public abstract Stream Stream { get; }
+    internal virtual PitClock? Clock => null;
 
     public virtual void Dispose() => Stream.Dispose();
 
@@ -25,37 +26,121 @@ public abstract class FrameSource : IDisposable
         // started by hand, often after the client, and killing DOSBox must not
         // take the client down with it.
         int timeout = pump is null ? options.ConnectTimeoutSeconds : 0;
-        return options.Follow is not null
-            ? new FollowSource(options.Follow)
-            : options.File is not null
-                ? new FileSource(options.File)
-                : new TcpSource(options.Host, options.Port, timeout, options.Raw, pump);
+        return options.Session is not null
+            ? new SessionFileSource(options.Session)
+            : options.Follow is not null
+                ? new FollowSource(options.Follow)
+                : options.File is not null
+                    ? new FileSource(options.File)
+                    : new TcpSource(options.Host, options.Port, timeout, options.Raw, pump);
     }
 
-    private sealed class FollowSource(string path) : FrameSource
+    private sealed class SessionFileSource(string path) : FrameSource
     {
-        private readonly FollowStream _stream = new(path);
+        private readonly SessionOutputStream _stream = new(path);
 
         public override Stream Stream => _stream;
+    }
+
+    private sealed class FollowSource : FrameSource
+    {
+        private readonly PitClock _clock;
+        private readonly FollowStream _stream;
+
+        public FollowSource(string path)
+        {
+            _clock = new PitClock();
+            _stream = new FollowStream(path, _clock);
+        }
+
+        public override Stream Stream => _stream;
+        internal override PitClock? Clock => _clock;
     }
 
     /// <summary>
     /// Follows a file the engine appends to (the engine owns and creates it).
     /// Readers see the bytes as they land; when the writer truncates the file
-    /// to zero (its pseudo-ring wrap), the read position falls past the end and
-    /// we rewind to zero.  The engine restarts the stream with a keyframe, so
-    /// the caller just keeps decoding.
+    /// (its pseudo-ring wrap, or a new run), the read position falls past the
+    /// end and we rewind to the start, past the timed header when present.
+    /// The engine restarts the stream with a keyframe, so the caller just
+    /// keeps decoding.
     /// </summary>
-    private sealed class FollowStream(string path) : Stream
+    private sealed class FollowStream(string path, PitClock clock) : Stream
     {
         private FileStream? _file;
         private long _lastLength;
         private bool _saidWaiting;
+        private bool _timed;
+        private byte[]? _frame;
+        private int _frameOffset;
+
+        /// <summary>
+        /// Waits for enough of a new link file to tell a timed stream from a
+        /// legacy one.  DOS creates STREAM.BIN before the header is written,
+        /// and the engine recreates it on a wrap, so an empty or partial file
+        /// must not be mistaken for a raw stream: a follower that did would
+        /// decode the header and record lengths as protocol bytes.
+        /// </summary>
+        private static bool DetectFormat(FileStream file)
+        {
+            Span<byte> magic = stackalloc byte[4];
+            while (true)
+            {
+                try
+                {
+                    long length = file.Length;
+                    if (length < magic.Length)
+                    {
+                        Thread.Sleep(5);
+                        continue;
+                    }
+                    file.Seek(0, SeekOrigin.Begin);
+                    if (!TimedBinReader.TryReadTail(file, magic))
+                    {
+                        Thread.Sleep(5);
+                        continue;
+                    }
+                    if (!magic.SequenceEqual("YT2B"u8))
+                    {
+                        return false;
+                    }
+                    if (length < TimedBinFormat.HeaderSize)
+                    {
+                        Thread.Sleep(5);
+                        continue;
+                    }
+                    file.Seek(0, SeekOrigin.Begin);
+                    return TimedBinFormat.TryReadFileHeader(
+                        file, TimedBinDirection.EngineToClient);
+                }
+                catch (IOException)
+                {
+                    // the writer may be truncating or growing it right now
+                    Thread.Sleep(5);
+                }
+            }
+        }
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            if (count == 0)
+            {
+                return 0;
+            }
+            Span<byte> eventHeader = stackalloc byte[TimedBinFormat.EventHeaderSize];
             while (true)
             {
+                if (_frame is not null)
+                {
+                    int copied = Math.Min(count, _frame.Length - _frameOffset);
+                    _frame.AsSpan(_frameOffset, copied).CopyTo(buffer.AsSpan(offset));
+                    _frameOffset += copied;
+                    if (_frameOffset == _frame.Length)
+                    {
+                        _frame = null;
+                    }
+                    return copied;
+                }
                 FileStream? file = _file;
                 if (file is null)
                 {
@@ -67,6 +152,12 @@ public abstract class FrameSource : IDisposable
                         // to leave the client black with no link at all.
                         _file = file = new FileStream(path, FileMode.Open,
                             FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1);
+                        _timed = DetectFormat(file);
+                        // STREAM.BIN is a live pseudo-ring. Ignore old records
+                        // and join at the live edge; the handshake asks for a
+                        // fresh keyframe. Timed records start after the header.
+                        file.Seek(0, SeekOrigin.End);
+                        _lastLength = file.Length;
                         Console.Error.WriteLine($"follow: reading {path}");
                     }
                     catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
@@ -99,14 +190,67 @@ public abstract class FrameSource : IDisposable
                 long position = file.Position;
                 if (length < position || length < _lastLength)
                 {
+                    // A new run may have replaced a legacy raw file with the
+                    // timed one (or the other way round), so re-read the
+                    // format after the shrink instead of trusting the first
+                    // open.  The engine writes the new header before the first
+                    // record, and DetectFormat waits for it.
+                    _timed = DetectFormat(file);
                     Console.Error.WriteLine(
                         $"follow: file wrapped (pos {position}, len {length}, " +
-                        $"last {_lastLength}); restarting at 0");
-                    file.Seek(0, SeekOrigin.Begin);
-                    _lastLength = 0;
+                        $"last {_lastLength}); restarting at " +
+                        (_timed ? "the timed header" : "0"));
+                    file.Seek(_timed ? TimedBinFormat.HeaderSize : 0, SeekOrigin.Begin);
+                    _lastLength = _timed ? TimedBinFormat.HeaderSize : 0;
                     continue;
                 }
                 _lastLength = length;
+                if (_timed)
+                {
+                    if (position < length)
+                    {
+                        if (length - position < TimedBinFormat.EventHeaderSize)
+                        {
+                            Thread.Sleep(5);
+                            continue;
+                        }
+                        long start = position;
+                        if (!TimedBinReader.TryReadTail(file, eventHeader))
+                        {
+                            file.Seek(start, SeekOrigin.Begin);
+                            Thread.Sleep(5);
+                            continue;
+                        }
+                        uint stamp = System.Buffers.Binary.BinaryPrimitives
+                            .ReadUInt32LittleEndian(eventHeader);
+                        uint size = System.Buffers.Binary.BinaryPrimitives
+                            .ReadUInt32LittleEndian(eventHeader[4..]);
+                        if (size < FrameReader.HeaderSize || size > TimedBinFormat.MaxFrame)
+                        {
+                            throw new InvalidDataException("invalid timed STREAM.BIN frame length");
+                        }
+                        if (length - start < TimedBinFormat.EventHeaderSize + size)
+                        {
+                            file.Seek(start, SeekOrigin.Begin);
+                            Thread.Sleep(5);
+                            continue;
+                        }
+                        var frame = new byte[(int)size];
+                        if (!TimedBinReader.TryReadTail(file, frame))
+                        {
+                            file.Seek(start, SeekOrigin.Begin);
+                            Thread.Sleep(5);
+                            continue;
+                        }
+                        TimedBinReader.ValidateFrame(frame, TimedBinDirection.EngineToClient);
+                        clock.Observe(stamp);
+                        _frame = frame;
+                        _frameOffset = 0;
+                        continue;
+                    }
+                    Thread.Sleep(5);
+                    continue;
+                }
                 if (position < length)
                 {
                     int want = (int)Math.Min(count, length - position);
@@ -158,9 +302,11 @@ public abstract class FrameSource : IDisposable
             _limit = limit;
             _file = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite,
                                    FileShare.ReadWrite | FileShare.Delete, 1);
-            // a new session starts a fresh log; the engine sees the shrink and
-            // rewinds its read position
+            // A new link starts a fresh timed input log. The server recognizes
+            // the header and the shrink, then resumes at the first record.
             _file.SetLength(0);
+            TimedBinFormat.WriteHeader(_file, TimedBinDirection.ClientToEngine);
+            _file.Flush();
         }
 
         public override void Write(byte[] buffer, int offset, int count)
@@ -169,6 +315,8 @@ public abstract class FrameSource : IDisposable
             {
                 _file.SetLength(0);
                 _file.Position = 0;
+                TimedBinFormat.WriteHeader(_file, TimedBinDirection.ClientToEngine);
+                _file.Flush();
             }
             _file.Write(buffer, offset, count);
             _file.Flush();
@@ -199,7 +347,11 @@ public abstract class FrameSource : IDisposable
 
     private sealed class FileSource(string path) : FrameSource
     {
-        private readonly FileStream _stream = File.OpenRead(path);
+        private readonly Stream _stream = SessionReader.IsSessionFile(path)
+            ? new SessionOutputStream(path)
+            : TimedBinFormat.HasHeader(path)
+                ? new TimedBinFrameStream(path, pace: true)
+                : File.OpenRead(path);
 
         public override Stream Stream => _stream;
     }

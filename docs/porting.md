@@ -96,6 +96,13 @@ for the C emitter — macros are pre-expanded and every line is byte-attributabl
 Harness builds: `%ifdef HARNESS` blocks in the same source (default build unaffected) for
 scripted input injection and checkpoint dumps; `%ifdef TRACE` for sound port-write logging.
 
+The final assembly-server milestone is a **timed, bidirectional session trace**
+against the companion client. A single monotonic clock at the client boundary
+timestamps each complete engine-to-client and client-to-engine frame. The trace
+keeps the asm server's output and the input that drove it together; replay paces
+output, and input replay can drive another asm server run. Finish this reference
+harness before starting Stage B.
+
 ## 3. Stage B — portable C ("faithful reincarnation")
 
 Target: C11, gcc/clang/msvc, no dependencies besides SDL3. Runs on >= 32-bit systems.
@@ -147,8 +154,9 @@ becomes the GUI resource editor. The C# app starts as a companion client over th
 - **Stream diffing**: instrumented original builds emit the same service-event stream (video
   deltas + palette, input, OPL writes, ticks) that the C port emits; diffing streams localises
   translation bugs that checkpoint hashes only localise to "somewhere before here".
-- Recordings are two-directional session captures (input + video/audio events); the game
-  directory stays next to the engine, and data-file hashes keep a replay pinned.
+- Recordings are timed two-directional session captures: both client inputs and
+  engine outputs use one monotonic session clock. The game directory stays next
+  to the engine, and data-file hashes keep a replay pinned.
 - Determinism: logical clock + scripted input + located/scripted RNG seeding.
 
 ## 5. Companion client / thin-frontend mode
@@ -185,8 +193,9 @@ service seam as §3 — a client is just another service backend. Message detail
   register writes, not PCM — cheap by construction; input latency is bounded by poll-per-frame
   queueing (fine for a turn-based RPG); the client never owns *game* state (it owns host
   resources: window and audio).
-- **Scheduling**: stream format + recording backend early (M2); one asm seam spike (M1b, optional);
-  full companion client at M8; C# client at M9.
+- **Scheduling**: validate the boundary and recording backend against the asm
+  server first (M1b/M1c); start Stage B only after the timed bidirectional
+  reference trace is usable. Full companion client at M8; C# client at M9.
 
 ## 6. Milestones
 
@@ -195,6 +204,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M0 | Setup & baseline | git repo + ignores; UASM build verified on Linux (MD5); DOSBox-X profile runs the original; `verify_asm.py` works; style guide + stream format v0 drafted |
 | M1 | Annotated-asm pilot | 2–3 subsystems annotated (EMS manager, file manager, palette) with byte-verify green |
 | M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md`; **live client link since 2026-10-20**, see `docs/client.md` |
+| M1c | Timed asm session trace | **done 2026-10-25** - capture/replay both directions with paced output and input |
 | M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them |
 | M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
@@ -1460,3 +1470,50 @@ emulator-hook demo, not this port).
     0 unknown, sample windows rms 2.2k–4.7k against ~1.1k between lines;
   - **not yet**: the audible check still needs the user's PCM device; the
     offline WAV and the live stream counts are the gates on this host.
+- 2026-10-25 - M1c: timed, bidirectional asm-server session capture/replay:
+  - **format**: the optional `YT2S` wrapper records complete v0 frames from
+    both directions. One monotonic client clock stamps an engine frame when
+    fully received and a client frame after its write succeeds. Its timestamps
+    describe boundary-observed time, not the exact game instruction that
+    consumed an input;
+  - **client**: TCP runs capture a full-duplex trace by default under
+    `build/runs/session/<stamp>/session.yt2s`; `--record-session` chooses another
+    path and `--no-record-session` disables capture. `--file` detects `YT2S` and
+    replays engine output at its captured pace (`--session` remains an alias).
+    `--replay-input` accepts timed INPUT records as well as the YT2S capture and
+    schedules game INPUT frames into a live `--follow` server (with a fresh
+    handshake);
+  - **asm-server run**: a 12 s DOSBox-X run of the file build produced a
+    190,623-byte session with 169,469 bytes / 1,311 engine messages, the
+    handshake and a scripted Return at 7 s. Replaying the session displayed
+    159 frames over 12.84 s; feeding its input into a fresh asm-server run
+    delivered the recorded key frame;
+  - **gate**: `tests/session/run.sh` uses a fake full-duplex peer to check both
+    directions, nondecreasing timestamps, a 0.26 s output gap, paced playback
+    and timed INPUT replay. `dotnet build client -c Release` and the existing
+    stream decoder gates remain green. With M1c closed, M2 is next.
+- 2026-10-26 - timed folder-link playback (`YT2B`):
+  - **transport**: `STREAM.BIN` and `INPUT.BIN` now wrap each unchanged v0
+    frame with a PIT timestamp and length. The ASM server timestamps output on
+    its monotonic PIT timeline and unwraps client input; the client stamps
+    input on its own monotonic PIT clock (seeded from the first server frame
+    only before any input is written), auto-detects timed `.BIN` playback, and
+    retains raw fixture plus YT2S compatibility;
+  - **sample/bundles**: added a deterministic timed engine-output fixture from
+    `sample-video.bin`; Linux and Windows publishers stage it as
+    `sample/STREAM.BIN`, and smoke-test launchers play that file. Live folder
+    launchers no longer require a separate `.yt2s` capture;
+  - **first-frame clock fix**: replaying a captured `INPUT.BIN` exposed that
+    the client re-anchored its input clock when the first server frame arrived
+    after the handshake; a 0.8 s key could then be written with a 4-5 s gap.
+    The input clock now keeps one client epoch, seeded from the server only
+    when no input has been written yet, and the session gate checks that the
+    gap stays sub-second;
+  - **verification**: `verify.sh` reports `SWREG.EXE: OK` / `IDENTICAL`;
+    `tests/session/run.sh` checks YT2S compatibility, timed BIN paced playback,
+    both Python stream tools, timed input replay and the late-anchor clock;
+    `tests/replay/run.sh` compares the C# and Python renders for the timed
+    sample byte-for-byte. A 15 s DOSBox-X run produced 1,849 records in
+    282,337 bytes spanning 14.897 s; a separate live run consumed a timed
+    `INPUT.BIN` keyframe request (set_mode 1 -> 3) and produced 934 records in
+    8.923 s.
