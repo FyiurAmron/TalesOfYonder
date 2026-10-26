@@ -16,7 +16,9 @@ internal static class StreamAudio
         var state = new ClientState(320, 200);
         state.Audio.FreeRun = true;
         state.Audio.SampleSource = SampleBank.TryLoad(worldPath);
-        using (var file = File.OpenRead(path))
+        using (Stream file = TimedBinFormat.HasHeader(path)
+                   ? new TimedBinFrameStream(path, pace: false)
+                   : File.OpenRead(path))
         {
             var reader = new FrameReader(file);
             while (reader.TryRead(out var header, out var payload, out int length))
@@ -33,16 +35,53 @@ internal static class StreamAudio
                               $"{state.Audio.UnknownSamples} unknown), " +
                               $"{state.Audio.Batches} batches");
         }
-        Opl opl = state.Audio;
+        return Render(state.Audio, wavPath, path);
+    }
+
+    public static int RunSession(string path, string wavPath, string? worldPath)
+    {
+        var state = new ClientState(320, 200);
+        state.Audio.FreeRun = true;
+        state.Audio.SampleSource = SampleBank.TryLoad(worldPath);
+        int outputFrames = 0;
+        using (var session = new SessionReader(path))
+        {
+            while (session.TryRead(out var item))
+            {
+                if (item.Direction != SessionDirection.EngineToClient)
+                {
+                    continue;
+                }
+                using var frame = new MemoryStream(item.Frame, writable: false);
+                var reader = new FrameReader(frame);
+                if (!reader.TryRead(out var header, out var payload, out int length))
+                {
+                    throw new InvalidDataException("empty frame in YT2S session");
+                }
+                state.Apply(header, payload, length, reader.BytesRead, out string? error);
+                if (error is not null)
+                {
+                    throw new InvalidDataException(error);
+                }
+                outputFrames++;
+            }
+        }
+        Console.WriteLine($"client: session audio: {outputFrames} engine frame(s), " +
+                          $"{state.Audio.Scheduled} audio event(s)");
+        return Render(state.Audio, wavPath, $"session {path}");
+    }
+
+    private static int Render(Opl opl, string wavPath, string source)
+    {
         int rate = opl.Rate;
         long audioEnd = Math.Max(opl.NextFrame, opl.SampleEndFrame);
         if (audioEnd <= 0)
         {
-            Console.Error.WriteLine($"client: {path} carries no timed audio");
+            Console.Error.WriteLine($"client: {source} carries no timed audio");
             return 1;
         }
         long total = audioEnd + rate;                // one second of tail
-        Console.WriteLine($"client: stream audio: {audioEnd / (double)rate:F2} s, " +
+        Console.WriteLine($"client: audio timeline: {audioEnd / (double)rate:F2} s, " +
                           $"{rate} Hz, source {opl.SampleSource?.Path ?? "none"}");
 
         using var stream = File.Create(wavPath);

@@ -12,12 +12,40 @@ It is used by
 
 - `tests/replay/run.sh` — the C# client's render must match the Python decoder's render byte for
   byte, so a decoder regression fails without needing DOSBox-X or the game;
-- `client/publish-win.sh` — the Windows bundle ships it as `sample/stream.bin`, so
-  `smoke-test.bat` verifies the published binary on the target machine.
+- `tests/window/run.sh` — checks that the client shows a frame while holding the
+  window open.
 
-Decode stats: `frames=41 rects=402 palette=38 control=1 records=483 bytes=150360`. Regenerate any time with
-a fresh file-backend run; the clients accept any such recording, the numbers above belong to this
-one.
+Decode stats: `frames=41 rects=402 palette=38 control=1 records=483 bytes=150360`.
+Regenerate with a fresh file-backend run; the clients accept any such recording,
+the numbers above belong to this one.
+
+## `sample-timed-stream.bin`
+
+A timed `YT2B` engine-to-client stream built deterministically from
+`sample-video.bin`. Each original v0 frame is preserved; `frame_end` advances
+the PIT clock by 1/24 second. It is the timed `.BIN` sample shipped by both
+bundles and exercises paced playback without requiring a separate recording
+container.
+
+Regenerate or verify it with:
+
+    python3 tests/session/make_sample.py
+    python3 tests/session/make_sample.py --check
+
+`tests/replay/run.sh` compares its C# and Python renders just like the raw
+fixtures above.
+
+## `sample-session.yt2s`
+
+A 12-second full-duplex capture from the asm folder-link client. It remains as
+a compatibility fixture for the optional `YT2S` wrapper: engine output and
+client input frames share one monotonic timestamp timeline. The bundles now
+ship `sample-timed-stream.bin` instead; `--file` continues to detect the
+`YT2S` header automatically.
+
+It is 190,623 bytes / 12.84 seconds and decodes to 159 frames, 783 rects, 157
+palette messages, 3 control messages and 1,288 timed OPL writes. The capture
+includes the handshake and a scripted Return at 7 seconds.
 
 ## `sample-vbe.bin`
 

@@ -34,6 +34,7 @@ Recordings and gates:
 
     sh tools/dosbox/stream.sh 45             # file backend, run + replay the capture to PNG
     sh tests/replay/run.sh                   # client render == Python render, byte for byte
+    sh tests/session/run.sh                  # timed BIN / YT2S capture, playback and input replay
     sh tests/link/run.sh                     # obsolete serial link check, kept for fun
 
 Windows bundle (self-contained, no .NET install on the target):

@@ -5,7 +5,7 @@
 #
 #     oracle  (default)  the port: byte-identical to the reference; the gate build
 #     serial   -DSEAM             protocol-v0 VIDEO messages over COM1 (client link)
-#     file     + -DSEAM_FILE      write the messages to STREAM.BIN instead of COM1
+#     file     + -DSEAM_FILE      write timed v0 records to STREAM.BIN
 #     tee      + -DSEAM_TEE       both at once; the file is the link's ground truth
 #     log      + -DSEAM_LOG       file backend plus SEAMLOG.TXT debug records
 #     fast     + -DSEAM_FAST      file backend, presentation gate open (diagnostic)

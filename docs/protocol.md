@@ -39,7 +39,9 @@ u32  len             payload length before decoding
 
 - Codecs are stateless and side-effect-free; a receiver handles any codec it advertised.
 - Unknown family/flags: ignore + `error` (forward compatibility).
-- No timing/baud/hardware constraints are assumed.
+- v0 live frames have no general timestamp; the sequence number orders one
+  direction only. AUDIO's PIT stamps are local to its audio timeline and do not
+  time VIDEO or INPUT.
 - A transport that can hand over a stream mid-message (a live link joins a running engine, for
   example) may resynchronise on the magic; version/family/length sanity checks make a false
   boundary practically impossible.
@@ -164,10 +166,13 @@ Rules:
   repaint just because the mode changed.
 - A pass carries at most ~16 KB of VBE rows, so a full intro repaint is spread over a few passes
   instead of stalling the game for a frame time.
-- Full-frame rects serve as keyframes; replay consumers use them for seeking (see Recordings). On
-  the live serial link a **keyframe is requestable**: one received byte `'K'` (0x4B) makes the
-  engine answer with `set_mode`, the full palette and a full-frame pass, which is what lets a
-  client connect to an already-running game.
+- A full-frame rect can serve as a display-state checkpoint. `YT2B` and `YT2S`
+  do not insert periodic keyframes or build a seek index, so playback starts at
+  the beginning. On a live link a **keyframe is requestable**: the folder
+  client sends CONTROL `keyframe_request`; the obsolete serial link also
+  accepts one bare byte `'K'` (0x4B). The engine answers with `set_mode`, the
+  full palette and a full-frame pass, letting a client connect to an
+  already-running game.
 - Palette traffic is coalesced engine-side: hooks record writes, and a send carries the span from
   the first to the last entry that differs from the palette the client already has. The span may
   contain unchanged entries; clients must not assume it is minimal.
@@ -241,10 +246,13 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   client drops when it has the sample.
 
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
-- Compared with the M1b spike (one full 256-entry palette message per fade step) the palette
-  message is now a diff span and `frame_end` closes every pass; the seam builds record bare
-  message streams (no session header yet), VIDEO family only, with `h=1` rects (one message per
-  changed row, at most 640 wide), in 320x200x8 for the game and 640x480x8 for the VBE intro.
+- Compared with the M1b spike (one full 256-entry palette per fade step), the
+  palette message is now a diff span and `frame_end` closes every pass. The v0
+  frames remain unchanged; the folder transport wraps each complete frame in a
+  timed `YT2B` record (`STREAM.BIN` engine output, `INPUT.BIN` client input).
+  VIDEO uses `h=1` rects (one message per changed row, at most 640 wide), in
+  320x200x8 for the game and 640x480x8 for the VBE intro. Raw v0 files remain
+  supported for protocol fixtures.
   Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam build uses codec 1 and a
   recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
   `tests/data/sample-vbe.bin` the intro raw, `tests/data/sample-video-rle.bin` both modes with the
@@ -309,14 +317,59 @@ INPUT (family 3), keys and mouse implemented in the seam build:
 
 ## Recordings / replay
 
-- A recording is a two-directional framed session: header (protocol version, engine version,
-  config, input map, data-file hashes) followed by direction-tagged messages.
-- Files stay engine-local: recordings carry data-file hashes, and a replay needs the same game
-  directory next to the engine (pinned mode).
-- Determinism rules: engine time = logical ticks only; input order canonical; `debug` messages are
+- The v0 frame remains unchanged. The default folder-link files are timed
+  `YT2B` streams, so `STREAM.BIN` itself replays at its recorded pace; no
+  sidecar or `YT2S` conversion is needed. The older `YT2S` session format is
+  still accepted; folder links can request one explicitly with
+  `--record-session` (TCP clients still capture it by default).
+- `YT2B` header (16 bytes): ASCII `YT2B`, `u16 format_version=1`,
+  `u16 header_bytes=16`, `u32 timebase=1,193,182` PIT counts per second,
+  `u8 direction` (`0` engine-to-client, `1` client-to-engine), three zero
+  reserved bytes. Each event is `u32 pit_stamp`, `u32 frame_bytes`, then one
+  complete v0 frame including its 14-byte header. Records are appended in
+  order; the 32-bit PIT stamp wraps modulo 2^32 (about hourly), so readers use
+  modular differences. Playback anchors the first event at time zero.
+- `STREAM.BIN` stamps are taken by the asm server on its monotonic PIT timeline
+  (the same timeline used by AUDIO; without the resident timer driver it falls
+  back to BIOS-tick resolution). `INPUT.BIN` stamps use the client's monotonic
+  PIT clock. When the first server frame arrives before any client input has
+  been written, its stamp seeds the client epoch; once input exists the epoch
+  is fixed, so the handshake written before that frame cannot make later input
+  jump. The timestamps are retained for timed input replay; the asm server
+  unwraps each frame and applies it when it polls the file, without changing
+  game timing.
+- The v0 frame remains a pure protocol message: its sequence number orders one
+  direction, while the enclosing YT2B record supplies transport time. This is
+  boundary time, not a claim about the exact instruction that consumed input.
+- The optional `YT2S` format wraps complete frames from both directions with
+  one host-monotonic timestamp assigned by the companion: output is stamped
+  when a full engine frame is received; input is stamped after the client frame
+  is successfully written. This records client-observed timing without clock
+  synchronization with DOSBox-X.
+- Session header (16 bytes): ASCII `YT2S`, `u16 format_version=1`,
+  `u16 header_bytes=16`, `u64 timebase=1,000,000,000` (nanoseconds from the
+  first recorded event).
+- Each event is `u64 time_ns`, `u8 direction` (`0` engine-to-client, `1`
+  client-to-engine), three zero reserved bytes, `u32 frame_bytes`, then a
+  complete v0 frame including its 14-byte header. Events are appended in
+  capture order; timestamps are nondecreasing. EOF ends the file.
+- Folder-link clients write the timed `INPUT.BIN` by default. `--file` detects
+  and paces a timed `STREAM.BIN`, `--replay-input` accepts a timed INPUT.BIN or
+  YT2S session and schedules game INPUT frames into a fresh live link, and
+  `--session` remains an alias for YT2S playback. Raw v0 fixtures are decoded
+  immediately with no recoverable timing.
+- `--record-session PATH` explicitly creates an optional YT2S full-duplex
+  capture; TCP clients retain their automatic YT2S capture unless disabled.
+  Folder-link clients do not create a separate timed recording by default,
+  because their two `.BIN` transport files already carry the timestamps.
+- Game files stay engine-local and are not embedded in the session; sample
+  replay needs the same `WORLD.DAT` beside the client. Tests pin required data
+  hashes alongside their fixtures.
+- Engine time remains logical ticks; transport timestamps schedule boundary
+  events, not game logic. Input order is canonical; `debug` messages are
   ignored during replay unless requested.
-- Recordings interleave periodic full-frame keyframes (full-screen `rect` / `reset`) so a consumer
-  can seek and render from any point.
+- `YT2S` preserves engine-emitted frames; it does not inject periodic keyframes
+  or provide a seek index. Playback starts at the beginning of the session.
 
 ## Backends
 
@@ -339,7 +392,8 @@ Out-of-band detail for this transport only:
   control layer and is kept for scripts);
 - DOSBox-X's `nullmodem` bridge is a TCP socket, and it escapes every `0xFF` byte on the wire as
   `0xFF 0xFF` (telnet style, by design). The client undoes that (`client/NullModemStream.cs`);
-  recordings written by the file backend are raw. `transparent:1` in the `serial1` line disables
+  the obsolete serial mirror is raw; the default folder files use the timed `YT2B` wrapper.
+  `transparent:1` in the `serial1` line disables
   the escaping (the value must be numeric — `transparent:true` is silently ignored), which makes
   the link raw and needs `--raw` on the client instead. A future raw transport (pty, real
   hardware) needs no such step either — `--raw`.
@@ -348,16 +402,20 @@ Out-of-band detail for this transport only:
 
 ## Transport: the folder pseudo-ring
 
-The Windows bundle does not use the serial link.  The engine appends framed messages to
-`STREAM.BIN` with INT 21h writes; the client follows that file.  The client appends input frames
-to `INPUT.BIN`; the engine reads it from the present hook.  Both are plain v0 frames, so a
-recording is still just the video-file byte stream and the replay tools work unchanged.
+The folder link is the default transport (including the Windows bundle). The
+engine appends one timed record per v0 frame to `STREAM.BIN` with INT 21h
+writes; the client follows the file and unwraps the records. The client appends
+timed records to `INPUT.BIN`; the engine unwraps and reads them from the present
+hook. The 16-byte YT2B header is rewritten on a ring wrap, followed by a fresh
+keyframe on the output side. `--file STREAM.BIN` replays at the recorded pace;
+`--replay-input INPUT.BIN` schedules the saved game inputs. The optional YT2S
+full-duplex session remains available for TCP capture and compatibility.
 
-Each file is a pseudo-ring: at a limit (8 MiB video, 64 KiB input) the writer truncates it to zero
-and starts again at offset 0.  A reader detects the wrap from either `length < position` or a
-length decrease since its last poll, rewinds, and drops any partial frame.  The engine answers a
-video wrap with a fresh keyframe (`set_mode`, full palette, full frame), and the client answers
-the wrap by simply continuing to decode from zero.
+Each file is a pseudo-ring: at a limit (64 MiB video, 64 KiB input) the writer truncates it to zero,
+rewrites the 16-byte header, and appends from offset 16. A reader detects the wrap from either
+`length < position` or a length decrease since its last poll, rewinds past the header, and drops any
+partial event/frame. The engine answers a video wrap with a fresh keyframe (`set_mode`, full
+palette, full frame); the client keeps following the records from the beginning.
 
 The engine polls `INPUT.BIN` with a seek to its own position before each read: DOS leaves the EOF
 flag set on a file that grows under it, and a seek is the portable way to clear it.  The file

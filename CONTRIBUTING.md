@@ -110,7 +110,7 @@ The M8/M9 rules above still govern the product client.
 | `engine/asm/swreg/` | `verify.sh` ends `OK` + `IDENTICAL` (includes the `swreg.pin` check); no commit ever changes `_ref/` |
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
-| `client/` | `dotnet build client -c Release` clean; `sh tests/replay/run.sh` renders byte-identically to `tools/stream/replay.py`; `sh tests/audio/run.sh` renders the DRO fixture and opens SDL audio; `sh tests/link/run.sh` (obsolete serial link, optional) reports every received message byte-exact |
+| `client/` | build, replay, timed session, audio and optional serial-link gates (see `tests/README.md`) |
 | Windows bundle | `publish-win.sh` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |

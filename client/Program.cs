@@ -10,6 +10,7 @@
 // Note the nullmodem link doubles every 0xFF byte on the wire; TcpSource
 // undoes that with NullModemStream (--raw turns it off).
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
 
@@ -18,6 +19,10 @@ namespace Yt2.Client;
 public sealed class Options
 {
     public string? File;
+    public string? Session;
+    public string? RecordSession;
+    public bool NoRecordSession;
+    public string? ReplayInput;
     public string? Follow;
     public string? Input;
     public string? World;
@@ -54,6 +59,20 @@ public sealed class Options
             {
                 case "--file":
                     options.File = Next(arg);
+                    break;
+                case "--session":
+                    options.Session = Next(arg);
+                    break;
+                case "--record-session":
+                    options.RecordSession = Next(arg);
+                    options.NoRecordSession = false;
+                    break;
+                case "--no-record-session":
+                    options.RecordSession = null;
+                    options.NoRecordSession = true;
+                    break;
+                case "--replay-input":
+                    options.ReplayInput = Next(arg);
                     break;
                 case "--follow":
                     options.Follow = Next(arg);
@@ -136,6 +155,27 @@ public sealed class Options
                     throw new ArgumentException($"unknown argument {arg}");
             }
         }
+        if (options.Session is not null &&
+            (options.File is not null || options.Follow is not null || options.RecordSession is not null ||
+             options.ReplayInput is not null))
+        {
+            throw new ArgumentException("--session cannot be combined with --file, --follow, " +
+                                        "--record-session or --replay-input");
+        }
+        if (options.RecordSession is not null && options.File is not null)
+        {
+            throw new ArgumentException("--record-session needs a live link, not --file");
+        }
+        if (options.ReplayInput is not null &&
+            (options.Follow is null || options.File is not null))
+        {
+            throw new ArgumentException("--replay-input needs --follow PATH (not --file)");
+        }
+        if (options.ReplayInput is not null &&
+            (options.Keys.Count != 0 || options.Moves.Count != 0 || options.Clicks.Count != 0))
+        {
+            throw new ArgumentException("--replay-input cannot be combined with scripted input");
+        }
         return options;
     }
 
@@ -205,7 +245,13 @@ public sealed class Options
 
               --tcp [host:]port   connect to the DOSBox-X nullmodem socket
                                   (default 127.0.0.1:2324)
-              --file PATH         replay a recording instead of connecting
+              --file PATH         replay; YT2S and timed BIN files are paced automatically
+              --session PATH      compatibility alias for paced YT2S playback
+              --record-session PATH
+                                  also save a YT2S capture here (default only on TCP)
+              --no-record-session
+                                  disable the default TCP YT2S capture
+              --replay-input PATH replay timed input from YT2S or INPUT.BIN
               --follow PATH       follow the server's STREAM.BIN in place
                                   (the folder link; the product transport)
               --input PATH        send input to the server's INPUT.BIN
@@ -224,7 +270,7 @@ public sealed class Options
               --hold              keep the window open after a recording ends
               --no-audio          do not open an audio device
               --dro PATH          render a DOSBox DRO OPL capture with the synth
-              --wav PATH          with --dro or --file: render the audio to this
+              --wav PATH          with --dro, --file or --session: render audio to this
                                   WAV instead of opening a device
               --ppm PATH          write the last frame as a PPM file
               --dump PATH         record every byte received to PATH
@@ -276,6 +322,7 @@ internal static class Program
 
         AddNear(options.Follow);
         AddNear(options.File);
+        AddNear(options.Session);
         string baseDir = AppContext.BaseDirectory;
         candidates.Add(Path.Combine(Environment.CurrentDirectory, "WORLD.DAT"));
         candidates.Add(Path.Combine(baseDir, "WORLD.DAT"));
@@ -292,6 +339,12 @@ internal static class Program
         }
         return null;
     }
+
+    private static string DefaultSessionPath() => Path.Combine(
+        "build", "runs", "session",
+        $"{DateTime.UtcNow.ToString(
+            "yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture)}-{Environment.ProcessId}",
+        "session.yt2s");
 
     private static int Main(string[] args)
     {
@@ -347,9 +400,15 @@ internal static class Program
         }
 
         string? worldPath = ResolveWorldPath(options);
-        if (options.File is not null && options.Wav is not null)
+        string? replayPath = options.Session ?? options.File;
+        bool timedSession = options.Session is not null ||
+            options.File is not null && SessionReader.IsSessionFile(options.File);
+        bool timedBin = options.File is not null && TimedBinFormat.HasHeader(options.File);
+        if ((options.File is not null || options.Session is not null) && options.Wav is not null)
         {
-            return StreamAudio.Run(options.File, options.Wav, worldPath);
+            return timedSession
+                ? StreamAudio.RunSession(replayPath!, options.Wav, worldPath)
+                : StreamAudio.Run(options.File!, options.Wav, worldPath);
         }
         SampleBank? samples = SampleBank.TryLoad(worldPath);
         if (samples is not null)
@@ -420,6 +479,13 @@ internal static class Program
             return alive;
         };
 
+        string? recordPath = options.RecordSession;
+        if (recordPath is null && !options.NoRecordSession && options.File is null &&
+            options.Session is null && options.Follow is null)
+        {
+            recordPath = DefaultSessionPath();
+        }
+        using var sessionRecorder = recordPath is null ? null : new SessionRecorder(recordPath);
         FileStream? dump = options.Dump is null ? null : File.Create(options.Dump);
         using var dumpStop = new CancellationTokenSource();
         if (dump is not null)
@@ -476,10 +542,17 @@ internal static class Program
                         Path.GetDirectoryName(Path.GetFullPath(options.Follow)) ?? ".", "INPUT.BIN");
                 using var input = inputPath is null
                     ? null
-                    : new FrameSource.RingFileStream(inputPath, 64 * 1024);
+                    : new TimedBinWriterStream(
+                        new FrameSource.RingFileStream(inputPath, 64 * 1024),
+                        source.Clock ?? new PitClock());
+                bool passiveReplay = options.File is not null || options.Session is not null;
                 var tx = input is not null
-                    ? new FrameWriter(input)
-                    : options.File is null ? new FrameWriter(source.Stream) : null;
+                    ? new FrameWriter(input, bytes => sessionRecorder?.Record(
+                        SessionDirection.ClientToEngine, bytes))
+                    : !passiveReplay
+                        ? new FrameWriter(source.Stream, bytes => sessionRecorder?.Record(
+                            SessionDirection.ClientToEngine, bytes))
+                        : null;
                 var scripted = new List<(double At, string What, Action<FrameWriter> Send)>();
                 foreach (var key in options.Keys)
                 {
@@ -500,9 +573,18 @@ internal static class Program
                 scripted.Sort((a, b) => a.At.CompareTo(b.At));
                 int nextScripted = 0;
 
-                if (options.File is not null)
+                long sessionTimelineStart = Stopwatch.GetTimestamp();
+                if (timedSession)
                 {
-                    Console.WriteLine($"client: replaying {options.File}");
+                    Console.WriteLine($"client: replaying timed session {replayPath}");
+                }
+                else if (timedBin)
+                {
+                    Console.WriteLine($"client: replaying timed BIN stream {options.File}");
+                }
+                else if (options.File is not null)
+                {
+                    Console.WriteLine($"client: replaying legacy stream {options.File}");
                 }
                 else if (options.Follow is not null)
                 {
@@ -529,15 +611,32 @@ internal static class Program
 
                 using var session = new CancellationTokenSource();
                 var stream = dump is null ? source.Stream : new DumpStream(source.Stream, dump);
-                var reader = new Thread(() => Read(state, stream, session, options.File is null))
+                var reader = new Thread(() => Read(state, stream, session, !passiveReplay,
+                    sessionRecorder))
                 {
                     IsBackground = true,
                     Name = "reader",
                 };
                 reader.Start();
 
+                Thread? inputReplay = null;
+                if (options.ReplayInput is not null)
+                {
+                    Stream replayTarget = input!;
+                    inputReplay = new Thread(() => SessionInputReplay.Run(
+                        options.ReplayInput, replayTarget, session.Token,
+                        sessionTimelineStart,
+                        bytes => sessionRecorder?.Record(SessionDirection.ClientToEngine, bytes)))
+                    {
+                        IsBackground = true,
+                        Name = "session-input-replay",
+                    };
+                    inputReplay.Start();
+                    Console.WriteLine($"client: replaying timed input from {options.ReplayInput}");
+                }
+
                 MouseRelay? mouse = null;
-                if (screen is not null && tx is not null)
+                if (screen is not null && tx is not null && options.ReplayInput is null)
                 {
                     var host = screen;
                     mouse = new MouseRelay(tx, () => (state.Width, state.Height,
@@ -613,7 +712,8 @@ internal static class Program
                         }
 
                         if (screen is not null && !screen.Pump(
-                                tx is null ? null : (scan, ascii) => tx.Key(scan, ascii),
+                                tx is null || options.ReplayInput is not null
+                                    ? null : (scan, ascii) => tx.Key(scan, ascii),
                                 mouse is null ? null : mouse.Abs,
                                 mouse is null ? null : mouse.Button))
                         {
@@ -676,7 +776,7 @@ internal static class Program
                             Console.WriteLine("client: screen and engine disagree; " +
                                               "keyframe requested");
                         }
-                        if (tx is not null)
+                        if (tx is not null && options.ReplayInput is null)
                         {
                             double elapsedScript = (now - start).TotalSeconds;
                             while (nextScripted < scripted.Count &&
@@ -705,6 +805,12 @@ internal static class Program
                 finally
                 {
                     session.Cancel();
+                    source.Dispose();
+                    reader.Join();
+                    if (inputReplay is not null)
+                    {
+                        inputReplay.Join();
+                    }
                     if (quit)
                     {
                         try
@@ -719,7 +825,7 @@ internal static class Program
                 }
             }
             finalState = state;
-            if (options.File is not null || quit || screen is null)
+            if (options.File is not null || options.Session is not null || quit || screen is null)
             {
                 // a headless run has no window to keep alive
                 break;
@@ -869,7 +975,7 @@ internal static class Program
     }
 
     private static void Read(ClientState state, Stream stream, CancellationTokenSource session,
-                             bool live)
+                             bool live, SessionRecorder? sessionRecorder)
     {
         var reader = new FrameReader(stream);
         int errors = 0;
@@ -884,6 +990,8 @@ internal static class Program
                 state.Stats.Resyncs = reader.Resyncs;
                 state.Stats.ResyncBytes = reader.ResyncBytes;
                 state.Stats.SequenceGaps = reader.SequenceGaps;
+                sessionRecorder?.Record(SessionDirection.EngineToClient,
+                    SessionFrame.Encode(header, payload.AsSpan(0, length)));
                 if (!state.Apply(header, payload, length, reader.BytesRead, out string? error))
                 {
                     if (error is not null)

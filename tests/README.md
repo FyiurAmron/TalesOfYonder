@@ -1,6 +1,6 @@
 # Tests
 
-Eight checks pin the link and the client; seven cover the folder transport
+Nine checks pin the link and the client; eight cover the folder transport
 and the client, and `tests/link` covers the obsolete serial one (kept for fun).
 All are ordinary shell scripts; artifacts land under
 `build/runs/<kind>/<stamp>/`.
@@ -12,9 +12,9 @@ Offline and hermetic (no DOSBox-X, no game): replays the recordings in
 (`tools/stream/replay.py`, `--ppm` in both) and compares the final frames with
 `cmp`. Same framing, same palette expansion, same state, byte for byte. The
 recordings cover mode 13h raw, the VBE intro raw, both modes with the
-run-length row codec (codec 1), and the same twelve-picture camera pan encoded
-once as rows and once as `scroll` messages, and a small stream that interleaves AUDIO messages
-with video (`sample-audio.bin`).
+run-length row codec (codec 1), the same twelve-picture camera pan encoded
+once as rows and once as `scroll` messages, a small stream that interleaves AUDIO messages
+with video (`sample-audio.bin`), and the timed `.BIN` sample built from the raw fixture.
 
     sh tests/replay/run.sh [RECORDING]
 
@@ -31,6 +31,21 @@ recording, which catches the binding and the stream plumbing.
     sh tests/audio/run.sh
 
 Needs `dotnet` and SDL3 (the client already needs it for the window).
+
+## `tests/session/run.sh`
+
+Runs a small fake full-duplex server through the live client: optional YT2S
+capture must contain both directions on a monotonic nanosecond timeline;
+`--file` must pace both YT2S and the default timed `STREAM.BIN` format; the
+Python tools must unwrap timed records; replaying either YT2S or timed
+`INPUT.BIN` must write the key frame into a fresh timed input transport; and
+the input clock must keep one epoch when the first server frame arrives after
+the handshake. The sample `.BIN` is also checked against its deterministic
+generator. This pins the timed folder-link boundary without requiring DOSBox-X.
+
+    sh tests/session/run.sh
+
+Needs `dotnet` and Python 3.
 
 ## `tests/window/run.sh`
 
