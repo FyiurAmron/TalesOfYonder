@@ -17,7 +17,8 @@ read them in order:
 | `engine/asm/swreg/` | the working `SWREG.EXE` disassembly: source in `engine/asm/swreg/src/`, build/verify machinery in `engine/asm/swreg/tools/` (outputs land in `build/swreg/oracle/`) |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` disassembly (`src/`, `tools/`) and its DOSBox-X black-box harness (`test/`) |
 | `engine/c/` | (planned) the C core and platform layer |
-| `client/` | the C# companion client (SDL3), `client/server.sh` for the live link and `client/publish-win.sh` for the Windows bundle |
+| `client/` | the C# companion client (SDL3) and `client/server.sh` for the obsolete serial link |
+| `tools/publish-*.sh` | platform bundle publishers (client + selected server) |
 | `tools/dosbox/` | DOSBox-X profiles and headless runners: oracle baseline (`baseline.sh`), audio/OPL capture (`audio.sh`), X11 helpers (`keys.py`, `snap.py`), the client link profile (`dosbox-x-client.conf`); outputs under `build/runs/` |
 | `tools/stream/` | recording tooling: `replay.py` (the reference decoder), `compare_streams.py`, `dro.py`, `wav.py` |
 | `tests/` | gates: `replay/run.sh` (offline), `audio/run.sh` (synth), `link/run.sh` (live), `data/` fixtures |
@@ -100,7 +101,9 @@ Not started yet; the rules that will apply are in `docs/porting.md` §3 and `doc
 
 The live client (`client/`, `docs/client.md`) is a **development harness for the boundary**, not the
 M8/M9 deliverable: it decodes VIDEO v0, renders, and gives the seam something to talk to.
-`client/publish-win.sh` packages it as a self-contained Windows bundle for trials.
+`tools/publish-win.sh` packages the client and selected server as a self-contained
+Windows bundle for trials. `--server asm` is available; `--server c` is reserved
+for the future C server.
 The M8/M9 rules above still govern the product client.
 
 ## Testing & gates
@@ -111,7 +114,7 @@ The M8/M9 rules above still govern the product client.
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
 | `client/` | build, replay, timed session, audio and optional serial-link gates (see `tests/README.md`) |
-| Windows bundle | `publish-win.sh` -> `yt2-win-x64.zip`; target smoke test |
+| Windows bundle | `tools/publish-win.sh --server asm` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |
 

@@ -641,7 +641,7 @@ emulator-hook demo, not this port).
     `tests/link/run.sh` (tee build -> DOSBox-X -> client, verified byte-exact against the seam's
     own `STREAM.BIN`); `tools/repro/nullmodem-0xff/` records the 0xFF finding with measured
     numbers (224 discontinuities per 57,599 bytes by default, 0 with `transparent:1`);
-  - **Windows bundle**: `client/publish-win.sh` publishes a self-contained win-x64 single-file
+  - **Windows bundle**: `tools/publish-win.sh` publishes a self-contained win-x64 single-file
     `Yt2Client.exe`, pins SDL3 3.4.18 win32-x64 (archive *and* DLL sha256 verified, `--sdl3` for a
     local DLL), stages the game side (`server/game/<variant>`, `server/dosbox-x.conf`,
     `start-server.bat`), the sample recording and `smoke-test.bat`, and zips it to
@@ -945,7 +945,7 @@ emulator-hook demo, not this port).
   - **per-frame hook**: `fn_DelayTicks` gets the same size-preserving present hook as
     `fn_PollInput`/`fn_WaitKey`; animations that pace with delays now stream without waiting for
     the next input poll;
-  - **Linux bundle**: `client/publish-linux.sh` + `client/publish/linux/` publish a self-contained
+  - **Linux bundle**: `tools/publish-linux.sh` + `client/publish/linux/` publish a self-contained
     linux-x64 single-file client with `libSDL3.so.0`, the file-backend server, `start-server.sh`,
     `run-client.sh`, `play.sh` and a smoke test — the same shape as the Windows bundle;
   - **verified**: oracle `SWREG.EXE: OK` + `IDENTICAL`; layout `S1DEA prefix 7, EMMXXXX0 delta

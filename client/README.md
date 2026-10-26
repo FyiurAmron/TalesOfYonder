@@ -10,8 +10,10 @@ synth.
     dotnet run --project client -c Release -- \
         --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN
 
-Or one command from a bundle: `sh client/publish-linux.sh`, then
-`build/dist/yt2-linux-x64/play.sh`.
+Build the client + asm server bundle, then start it:
+
+    sh tools/publish-linux.sh --server asm
+    build/dist/yt2-linux-x64/play.sh
 
 Headless live check (the folder-link files are timed directly):
 
@@ -37,7 +39,7 @@ away, the window stays and the client reconnects when it comes back.
 
 Windows bundle (self-contained exe + SDL3 + the game side, ready to copy):
 
-    sh client/publish-win.sh          # -> build/dist/yt2-win-x64.zip
+    sh tools/publish-win.sh --server asm  # -> build/dist/yt2-win-x64.zip
 
 Details — the link, the nullmodem `0xFF` escape, verification numbers, debugging recipe — are in
 [`docs/client.md`](../docs/client.md).
