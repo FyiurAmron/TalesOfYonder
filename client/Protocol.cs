@@ -243,7 +243,7 @@ public sealed class FrameReader(Stream stream)
 /// engine polls, and a key that sits in a buffer until the next frame is a key
 /// the player notices.
 /// </remarks>
-public sealed class FrameWriter(Stream stream)
+public sealed class FrameWriter(Stream stream, Action<byte[]>? onWritten = null)
 {
     private uint _sequence;
 
@@ -256,7 +256,8 @@ public sealed class FrameWriter(Stream stream)
         {
             return;
         }
-        Span<byte> header = stackalloc byte[FrameReader.HeaderSize];
+        var frame = new byte[FrameReader.HeaderSize + payload.Length];
+        Span<byte> header = frame.AsSpan(0, FrameReader.HeaderSize);
         BinaryPrimitives.WriteUInt16LittleEndian(header, FrameReader.Magic);
         header[2] = 0;                     // protocol version
         header[3] = (byte)family;
@@ -264,10 +265,13 @@ public sealed class FrameWriter(Stream stream)
         header[5] = 0;                     // codec raw
         BinaryPrimitives.WriteUInt32LittleEndian(header[6..], _sequence++);
         BinaryPrimitives.WriteUInt32LittleEndian(header[10..], (uint)payload.Length);
+        payload.CopyTo(frame.AsSpan(FrameReader.HeaderSize));
         try
         {
-            stream.Write(header);
-            stream.Write(payload);
+            // The folder writer wraps one complete protocol frame per timed
+            // record, so keep the frame as one write. Socket streams accept
+            // the same single-frame buffer as they did the separate pieces.
+            stream.Write(frame);
             stream.Flush();
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException)
@@ -276,6 +280,11 @@ public sealed class FrameWriter(Stream stream)
             // there first; the reader reports the loss, and a windowed client
             // must survive it instead of dying in a callback.
             Dead = true;
+            return;
+        }
+        if (onWritten is not null)
+        {
+            onWritten(frame);
         }
     }
 

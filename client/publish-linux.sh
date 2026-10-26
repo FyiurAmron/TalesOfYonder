@@ -44,9 +44,13 @@ for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
         exit 1
     fi
 done
-SAMPLE=$ROOT/tests/data/sample-video.bin
+SAMPLE=$ROOT/tests/data/sample-timed-stream.bin
 if [ ! -f "$SAMPLE" ]; then
-    echo "publish-linux: $SAMPLE is missing (the recording for the smoke test)" >&2
+    echo "publish-linux: $SAMPLE is missing (the timed BIN smoke-test stream)" >&2
+    exit 1
+fi
+if ! python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(16); sys.exit(0 if len(d)==16 and struct.unpack("<4sHHIB3x",d)==(b"YT2B",1,16,1193182,0) else 1)' "$SAMPLE"; then
+    echo "publish-linux: $SAMPLE is not an engine-to-client timed BIN stream" >&2
     exit 1
 fi
 
@@ -85,7 +89,7 @@ cp -f "$ROOT/client/publish/linux/client-start.sh" "$BUNDLE/client-start.sh"
 cp -f "$ROOT/client/publish/linux/play.sh" "$BUNDLE/play.sh"
 cp -f "$ROOT/client/publish/linux/smoke-test.sh" "$BUNDLE/smoke-test.sh"
 cp -f "$ROOT/client/publish/linux/README.txt" "$BUNDLE/README.txt"
-cp -f "$SAMPLE" "$BUNDLE/sample/stream.bin"
+cp -f "$SAMPLE" "$BUNDLE/sample/STREAM.BIN"
 chmod +x "$BUNDLE/client-start.sh" "$BUNDLE/server-start.sh" \
          "$BUNDLE/play.sh" "$BUNDLE/smoke-test.sh"
 [ -f "$CLIENT/Yt2Client" ] && chmod +x "$CLIENT/Yt2Client"

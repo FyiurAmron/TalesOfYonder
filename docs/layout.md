@@ -21,8 +21,8 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
       dosbox/                    DOSBox-X profiles + headless runners (oracle, audio, stream, client)
       stream/                    recording tooling: replay.py (reference decoder), compare_streams.py, dro.py, wav.py
       repro/                     reproductions of wire-level behaviour (nullmodem 0xFF)
-    tests/                       committed gates: replay/ (offline), window/ (visible window),
-                                 link/ (live), data/ (fixtures)
+    tests/                       committed gates: replay/ (offline), session/ (timed full duplex),
+                                 window/ (visible window), link/ (obsolete serial), data/ (fixtures)
     docs/                        the plan and the specs
     _ref/                        read-only reference material (never edited)
     build/                       every output, gitignored
@@ -34,7 +34,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
 | `build/swreg/{oracle,serial,file,tee,log}/` | the seam variants, staged with the minimum game files so the directory runs as-is |
 | `build/sbfmdrv/`, `build/sbfmdrv/test/` | the driver build and its test COMs |
 | `build/client/{bin,obj}/` | the C# client (`client/Directory.Build.props` redirects MSBuild here) |
-| `build/runs/<kind>/<stamp>/` | one directory per run: `oracle` (the audio run is `oracle/<stamp>-audio`), `stream`, `link`, `replay`, `repro`, `sbfmdrv`, `server` |
+| `build/runs/<kind>/<stamp>/` | per-run artifacts: oracle, stream, link, replay, session, repro, sbfmdrv, server |
 | `build/dist/` | published bundles (the Windows zip, the Linux tar and their staging dirs) |
 | `build/tmp/` | scratch; never `/tmp` |
 

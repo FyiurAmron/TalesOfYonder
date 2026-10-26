@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Replay a YT2 VIDEO recording produced by the STREAM build (M1b spike).
+"""Replay a YT2 VIDEO recording or timed STREAM.BIN from the file seam.
 
     python3 tools/stream/replay.py STREAM.BIN --out frames/
 
-The recording is a bare sequence of protocol-v0 frames (docs/protocol.md):
-a 14-byte header followed by the payload (the first payload byte is the
-message type). The spike emits only VIDEO messages with the raw codec.
+Raw fixtures are a bare sequence of protocol-v0 frames. The file seam's YT2B
+container adds an engine PIT timestamp and length before each unchanged frame.
 """
 
 import argparse
@@ -20,6 +19,9 @@ HDR = struct.Struct("<HBBBBII")
 FAMILY_VIDEO = 1
 FAMILY_AUDIO = 2
 FAMILY_CONTROL = 5
+TIMED_HEADER = struct.Struct("<4sHHIB3x")
+TIMED_EVENT = struct.Struct("<II")
+PIT_RATE = 1_193_182
 
 SET_MODE, PALETTE, RECT, FRAME_END, RESET, SCROLL = range(6)
 
@@ -28,6 +30,35 @@ W, H = 320, 200
 
 def read_records(path):
     data = open(path, "rb").read()
+    timed = data[:4] == b"YT2B"
+    if timed:
+        if len(data) < TIMED_HEADER.size:
+            raise SystemExit("replay: short timed BIN header")
+        magic, version, header_size, timebase, direction = TIMED_HEADER.unpack_from(data)
+        if (magic, version, header_size, timebase, direction) != (
+                b"YT2B", 1, TIMED_HEADER.size, PIT_RATE, 0):
+            raise SystemExit("replay: unsupported timed BIN header")
+        off = TIMED_HEADER.size
+        records = []
+        last_stamp = None
+        while off < len(data):
+            if off + TIMED_EVENT.size > len(data):
+                print(f"replay: truncated timed event at {off}", file=sys.stderr)
+                break
+            stamp, size = TIMED_EVENT.unpack_from(data, off)
+            frame_at = off + TIMED_EVENT.size
+            end = frame_at + size
+            if size < HDR.size or end > len(data):
+                print(f"replay: truncated timed frame at {off}", file=sys.stderr)
+                break
+            if last_stamp is not None and ((stamp - last_stamp) & 0xFFFFFFFF) >= 0x80000000:
+                raise SystemExit(f"replay: timed BIN timestamp moved backwards at {off}")
+            last_stamp = stamp
+            off = frame_at
+            records.extend(read_frame_records(data[frame_at:end], frame_at))
+            off = end
+        return records, off, len(data)
+
     off = 0
     records = []
     while off + HDR.size <= len(data):
@@ -43,6 +74,15 @@ def read_records(path):
         records.append((family, codec, seq, data[off + HDR.size:end]))
         off = end
     return records, off, len(data)
+
+
+def read_frame_records(data, offset):
+    if len(data) < HDR.size:
+        raise SystemExit(f"replay: short v0 frame in timed BIN at {offset}")
+    magic, version, family, flags, codec, seq, length = HDR.unpack_from(data)
+    if magic != MAGIC or version != 0 or HDR.size + length != len(data):
+        raise SystemExit(f"replay: invalid v0 frame in timed BIN at {offset}")
+    return [(family, codec, seq, data[HDR.size:])]
 
 
 def decode_runs(data, width, height):

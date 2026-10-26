@@ -23,11 +23,37 @@ import sys
 MAGIC = b"\x54\x59"
 HEADER = struct.Struct("<HBBBBII")
 MAX_PAYLOAD = 2048          # v0 VIDEO messages are at most 14+786 bytes
+TIMED_HEADER = struct.Struct("<4sHHIB3x")
+TIMED_EVENT = struct.Struct("<II")
+PIT_RATE = 1_193_182
 
 
 def parse(path, resync=False):
     """Return (messages, bytes_consumed, bytes_skipped): messages are (seq, raw)."""
     data = open(path, "rb").read()
+    if not resync and data[:4] == b"YT2B":
+        if len(data) < TIMED_HEADER.size:
+            raise SystemExit(f"{path}: short timed BIN header")
+        magic, version, header_size, timebase, direction = TIMED_HEADER.unpack_from(data)
+        if (magic, version, header_size, timebase, direction) != (
+                b"YT2B", 1, TIMED_HEADER.size, PIT_RATE, 0):
+            raise SystemExit(f"{path}: unsupported timed STREAM.BIN header")
+        offset = TIMED_HEADER.size
+        messages = []
+        while offset + TIMED_EVENT.size <= len(data):
+            stamp, size = TIMED_EVENT.unpack_from(data, offset)
+            frame_at = offset + TIMED_EVENT.size
+            end = frame_at + size
+            if size < HEADER.size or end > len(data):
+                break
+            magic, version, family, flags, codec, seq, length = HEADER.unpack_from(data, frame_at)
+            if (magic != 0x5954 or version != 0 or length > MAX_PAYLOAD or
+                    HEADER.size + length != size):
+                raise SystemExit(f"{path}: invalid v0 frame in timed BIN at {offset}")
+            messages.append((seq, data[frame_at:end]))
+            offset = end
+        return messages, offset, 0
+
     offset = 0
     skipped = 0
     messages = []

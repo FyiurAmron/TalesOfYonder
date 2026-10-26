@@ -15,7 +15,7 @@
 ;                           shared directory carries the link across a
 ;                           machine boundary just as well, so the serial
 ;                           path is kept only for fun
-;   -DSEAM -DSEAM_FILE      file: the M1b spike, writes STREAM.BIN
+;   -DSEAM -DSEAM_FILE      file: timed YT2B records in STREAM.BIN and INPUT.BIN
 ;   + -DSEAM_FAST           file, with the presentation gate open: a pass
 ;                           runs on every hook call instead of once per
 ;                           BIOS tick.  Diagnostic only: it shows what the
@@ -153,6 +153,12 @@ seam_opl_adj    dd 0                    ; phase lost at music starts, added back
 seam_opl_vec    dw 80h                  ; IVT scan position for the driver
 seam_rxlen      dw 0                    ; bytes staged in seam_rx
 seam_rx         db 64 dup(0)            ; RX: 14-byte header + small payload
+IFDEF SEAM_FILE
+seam_inmode     dw 0                    ; 0 raw legacy bytes, 1 timed BIN records
+seam_inhdrlen   dw 0                    ; bytes staged in an INPUT.BIN event header
+seam_inleft     dw 0                    ; v0 frame bytes left in the current record
+seam_inhdr      db 8 dup(0)             ; PIT stamp + v0 frame length
+ENDIF
 seam_ring       db 32 dup(0)            ; RX bytes picked up while transmitting
 seam_ring_head  dw 0
 seam_ring_tail  dw 0
@@ -187,6 +193,9 @@ SEAM_INPUT_LIMIT equ 10000h              ; 64 KiB of input, then wrap
 seam_inh        dw 0FFFFh                ; INPUT.BIN handle (-1 = not open yet)
 seam_inpos      dd 0                     ; INPUT.BIN bytes consumed
 seam_written    dd 0                     ; STREAM.BIN bytes written
+seam_bin_header db 'YT2B',1,0,16,0
+                dd 1193182
+                db 0,0,0,0               ; engine-to-client direction, reserved
 ENDIF
 
 ; ---------------------------------------------------------------------------
@@ -229,8 +238,8 @@ IFDEF SEAM_FILE
     jc sinit_fail
     mov word ptr [seam_handle], ax
     mov word ptr [seam_backend], 2
-    mov word ptr [seam_written], 0
-    mov word ptr [seam_written+2], 0
+    call sub_SeamFileHeader
+    jc sinit_fail
     mov word ptr [seam_inpos], 0
     mov word ptr [seam_inpos+2], 0
     ; INPUT.BIN is created by the client, which may start after DOSBox; a
@@ -240,6 +249,15 @@ IFDEF SEAM_FILE
     int 21h
     jc sinit_noinput
     mov word ptr [seam_inh], ax
+    call sub_SeamInputDetect
+    mov bx, word ptr cs:[seam_inh]
+    xor cx, cx
+    xor dx, dx
+    mov ax, 4202h
+    int 21h                         ; ignore any records from an earlier run
+    jc sinit_noinput
+    mov word ptr cs:[seam_inpos], ax
+    mov word ptr cs:[seam_inpos+2], dx
 sinit_noinput:
 IFDEF SEAM_TEE
     call sub_SeamSerialInit
@@ -559,9 +577,10 @@ ssend_file:
     call sub_SeamSerialWrite
 ssend_notee:
     ENDIF
-    ; append the framed message to the TX buffer
+    ; append one timed BIN record (PIT stamp, frame length, v0 frame)
     mov ax, word ptr cs:[seam_txlen]
     add ax, cx
+    add ax, 8
     cmp ax, SEAM_TX_SIZE
     jbe ssend_room
     call sub_SeamFlush
@@ -570,9 +589,15 @@ ssend_room:
     push si
     push di
     push es
-    mov si, SEAM_BUF
     mov di, SEAM_TX
     add di, word ptr cs:[seam_txlen]
+    call sub_SeamStamp               ; DX:AX = engine PIT timeline
+    mov word ptr [di], ax
+    mov word ptr [di+2], dx
+    mov word ptr [di+4], cx          ; v0 frame length (fits in a word)
+    mov word ptr [di+6], 0
+    add di, 8
+    mov si, SEAM_BUF
     mov ax, ds
     mov es, ax
     cld
@@ -625,18 +650,58 @@ sub_SeamWrapVideo:
     pop ds
     jc swv_fail
     mov word ptr cs:[seam_handle], ax
-    mov word ptr cs:[seam_written], 0
-    mov word ptr cs:[seam_written+2], 0
     mov word ptr cs:[seam_fullframe], 1
     mov word ptr cs:[seam_forcepal], 1
     mov word ptr cs:[seam_holdframe], 0
     mov word ptr cs:[seam_biglast], 0
     mov word ptr cs:[seam_vmode], 3
     mov word ptr cs:[seam_forcepass], 1
+    call sub_SeamFileHeader
+    jc swv_fail
     jmp swv_done
 swv_fail:
     mov word ptr cs:[seam_backend], 0
 swv_done:
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+ENDIF
+
+IFDEF SEAM_FILE
+; ---------------------------------------------------------------------------
+; sub_SeamFileHeader - start a fresh timed STREAM.BIN pseudo-ring.
+; in:  -
+; out: CF set on a short/failed header write; preserves registers and DS.
+; ---------------------------------------------------------------------------
+sub_SeamFileHeader:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    push cs
+    pop ds
+    mov dx, offset seam_bin_header
+    mov cx, 16
+    mov bx, word ptr cs:[seam_handle]
+    mov ah, 40h
+    int 21h
+    jc sfh_fail
+    cmp ax, 16
+    jne sfh_fail
+    mov bx, word ptr cs:[seam_handle]
+    mov ah, 68h
+    int 21h                         ; publish the header before a follower opens
+    mov word ptr cs:[seam_written], 16
+    mov word ptr cs:[seam_written+2], 0
+    clc
+    jmp short sfh_done
+sfh_fail:
+    stc
+sfh_done:
+    pop ds
     pop dx
     pop cx
     pop bx
@@ -908,6 +973,64 @@ ENDIF
 
 IFDEF SEAM_FILE
 ; ---------------------------------------------------------------------------
+; sub_SeamInputDetect - identify the timed INPUT.BIN header, if present.
+; in:  -
+; out: seam_inmode = 1 for YT2B input, otherwise 0; file position is after
+;      the header when it matched. Preserves registers and DS.
+; ---------------------------------------------------------------------------
+sub_SeamInputDetect:
+    push ax
+    push bx
+    push cx
+    push dx
+    push ds
+    mov word ptr cs:[seam_inmode], 0
+    mov word ptr cs:[seam_inhdrlen], 0
+    mov word ptr cs:[seam_inleft], 0
+    mov bx, word ptr cs:[seam_inh]
+    xor cx, cx
+    xor dx, dx
+    mov ax, 4200h
+    int 21h                         ; inspect from offset zero
+    jc sid_done
+    mov ax, word ptr cs:[seam_blk]
+    mov ds, ax
+    mov dx, SEAM_BUF+14
+    mov cx, 16
+    mov ah, 3Fh
+    int 21h
+    cmp ax, 16
+    jne sid_done
+    cmp word ptr [SEAM_BUF+14], 5459h ; 'YT'
+    jne sid_done
+    cmp word ptr [SEAM_BUF+16], 4232h ; '2B'
+    jne sid_done
+    cmp word ptr [SEAM_BUF+18], 1
+    jne sid_done
+    cmp word ptr [SEAM_BUF+20], 16
+    jne sid_done
+    cmp word ptr [SEAM_BUF+22], 34DEh ; PIT rate 001234DEh
+    jne sid_done
+    cmp word ptr [SEAM_BUF+24], 0012h
+    jne sid_done
+    cmp byte ptr [SEAM_BUF+26], 1  ; client-to-engine direction
+    jne sid_done
+    cmp byte ptr [SEAM_BUF+27], 0
+    jne sid_done
+    cmp byte ptr [SEAM_BUF+28], 0
+    jne sid_done
+    cmp byte ptr [SEAM_BUF+29], 0
+    jne sid_done
+    mov word ptr cs:[seam_inmode], 1
+sid_done:
+    pop ds
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+
+; ---------------------------------------------------------------------------
 ; sub_SeamPollRxFile - read the next INPUT.BIN chunk and dispatch its bytes.
 ; in:  DS = CS
 ; out: -
@@ -932,6 +1055,7 @@ sub_SeamPollRxFile:
     int 21h
     jc sprf_done
     mov word ptr cs:[seam_inh], ax
+    call sub_SeamInputDetect
     ; A fresh session starts at the current end: INPUT.BIN is a log the
     ; client truncates when *it* starts, so a server-only run after a client
     ; run would otherwise replay the previous session's keys and clicks.
@@ -954,6 +1078,27 @@ sprf_have:
     mov ax, 4202h
     int 21h                         ; DX:AX = current length
     jc sprf_close
+    ; If the server opened the client's not-yet-created file while it was
+    ; empty, recognize the header when the first timed records arrive.
+    cmp word ptr cs:[seam_inmode], 0
+    jne sprf_checkpos
+    cmp word ptr cs:[seam_inpos], 0
+    jne sprf_checkpos
+    cmp dx, 0
+    jne sprf_probe
+    cmp ax, 16
+    jb sprf_checkpos
+sprf_probe:
+    push ax
+    push dx
+    call sub_SeamInputDetect
+    pop dx
+    pop ax
+    cmp word ptr cs:[seam_inmode], 1
+    jne sprf_checkpos
+    mov word ptr cs:[seam_inpos], 16
+    mov word ptr cs:[seam_inpos+2], 0
+sprf_checkpos:
     cmp dx, word ptr cs:[seam_inpos+2]
     ja sprf_read
     jb sprf_wrap
@@ -962,9 +1107,20 @@ sprf_have:
     jb sprf_wrap
     jmp sprf_done                   ; caught up
 sprf_wrap:
-    mov word ptr cs:[seam_inpos], 0
+    ; A new run may replace a legacy raw INPUT.BIN with the timed one (or
+    ; the other way round), so identify the format again after the shrink.
+    ; A header that is still being written is retried by sprf_probe.
+    call sub_SeamInputDetect
+    mov ax, 0
+    cmp word ptr cs:[seam_inmode], 1
+    jne sprf_wrap_raw
+    mov ax, 16
+sprf_wrap_raw:
+    mov word ptr cs:[seam_inpos], ax
     mov word ptr cs:[seam_inpos+2], 0
     mov word ptr cs:[seam_rxlen], 0 ; drop a half-received message
+    mov word ptr cs:[seam_inhdrlen], 0
+    mov word ptr cs:[seam_inleft], 0
 sprf_read:
     mov bx, word ptr cs:[seam_inh]
     mov cx, word ptr cs:[seam_inpos+2]
@@ -991,7 +1147,7 @@ sprf_read:
 sprf_bytes:
     mov al, byte ptr es:[si]
     inc si
-    call sub_SeamRxByte
+    call sub_SeamInputByte
     loop sprf_bytes
     jmp sprf_done
 sprf_close:
@@ -1007,6 +1163,45 @@ sprf_done:
     pop cx
     pop bx
     pop ax
+    ret
+
+; ---------------------------------------------------------------------------
+; sub_SeamInputByte - unwrap one timed INPUT.BIN byte when its header is used.
+; in:  AL = file byte, DS = CS
+; out: -
+; The timestamp is retained in INPUT.BIN for replay; the guest parser needs
+; only the enclosed v0 frame. Legacy raw input streams pass through unchanged.
+; ---------------------------------------------------------------------------
+sub_SeamInputByte:
+    cmp word ptr cs:[seam_inmode], 1
+    jne sib_raw
+    cmp word ptr cs:[seam_inleft], 0
+    jne sib_frame
+    push bx
+    mov bx, word ptr cs:[seam_inhdrlen]
+    mov byte ptr cs:[seam_inhdr+bx], al
+    inc bx
+    mov word ptr cs:[seam_inhdrlen], bx
+    cmp bx, 8
+    jb sib_header_done
+    mov word ptr cs:[seam_inhdrlen], 0
+    cmp word ptr cs:[seam_inhdr+6], 0 ; v0 frames fit in one word here
+    jne sib_header_done
+    mov bx, word ptr cs:[seam_inhdr+4]
+    cmp bx, 14
+    jb sib_header_done
+    cmp bx, 46
+    ja sib_header_done
+    mov word ptr cs:[seam_inleft], bx
+sib_header_done:
+    pop bx
+    ret
+sib_frame:
+    call sub_SeamRxByte
+    dec word ptr cs:[seam_inleft]
+    ret
+sib_raw:
+    call sub_SeamRxByte
     ret
 ENDIF
 

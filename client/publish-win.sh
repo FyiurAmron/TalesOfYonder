@@ -51,9 +51,13 @@ for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
         exit 1
     fi
 done
-SAMPLE=$ROOT/tests/data/sample-video.bin
+SAMPLE=$ROOT/tests/data/sample-timed-stream.bin
 if [ ! -f "$SAMPLE" ]; then
-    echo "publish-win: $SAMPLE is missing (the recording for the smoke test)" >&2
+    echo "publish-win: $SAMPLE is missing (the timed BIN smoke-test stream)" >&2
+    exit 1
+fi
+if ! python3 -c 'import struct,sys; d=open(sys.argv[1],"rb").read(16); sys.exit(0 if len(d)==16 and struct.unpack("<4sHHIB3x",d)==(b"YT2B",1,16,1193182,0) else 1)' "$SAMPLE"; then
+    echo "publish-win: $SAMPLE is not an engine-to-client timed BIN stream" >&2
     exit 1
 fi
 
@@ -104,7 +108,7 @@ cp "$SCRIPT_DIR/publish/win/client-start.bat" "$BUNDLE/"
 cp "$SCRIPT_DIR/publish/win/server-start.bat" "$BUNDLE/"
 cp "$SCRIPT_DIR/publish/win/play.bat" "$BUNDLE/"
 cp "$SCRIPT_DIR/publish/win/smoke-test.bat" "$BUNDLE/"
-cp "$SAMPLE" "$BUNDLE/sample/stream.bin"
+cp "$SAMPLE" "$BUNDLE/sample/STREAM.BIN"
 for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
     cp "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
 done

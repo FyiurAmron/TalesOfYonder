@@ -1,12 +1,13 @@
 # Companion client (live display link)
 
 The point of the seam work: run the real game, stream the display and sound
-out of it, and drive a client that is a first sketch of the C# host.  Status
-as of 2026-10-24: **working end-to-end** for the VIDEO and AUDIO families and
+out of it, and drive a client that is a first sketch of the C# host. Status as
+of 2026-10-26: **working end-to-end** for the VIDEO and AUDIO families and
 input (protocol v0; raw and run-length row codecs, 320x200x8 for the game,
 640x480x8 for the VBE intro, OPL register writes synthesised in the client)
 over the folder link (`STREAM.BIN`/`INPUT.BIN`; the serial link is kept for
-fun).
+fun). The `.BIN` transport records each v0 frame with a PIT timestamp, so the
+normal server output file is directly replayable at its recorded pace.
 
 The seam build is not byte-identical by design; the oracle build stays byte-perfect
 (`sh engine/asm/swreg/tools/verify.sh` -> `SWREG.EXE: OK` + `IDENTICAL`). The seam itself is described in
@@ -19,7 +20,7 @@ The seam build is not byte-identical by design; the oracle build stays byte-perf
 | engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant file` | the integration surface: hooks in the game source, present/keyframe/palette logic, `STREAM.BIN`/`INPUT.BIN` backend |
 | bridge | the game's working directory | the engine appends `STREAM.BIN` and reads `INPUT.BIN`; a local or shared folder |
 | client | `client/` (C#, `net11.0`) | SDL3 window via P/Invoke (no NuGet), decoder, renderer, stats, recorder/replay |
-| gates | `tests/replay`, `tests/audio`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode, OPL synthesis, codecs/pacing, filter and window |
+| gates | `tests/replay`, `tests/audio`, `tests/session`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode, OPL synthesis, timed transport, codecs/pacing, filter and window |
 
 The window and taskbar icon is the game's own 32x32 `YENDOR2.BMP`: a byte-identical copy lives in
 `client/Assets/yendor2.bmp`, is embedded in the assembly and set with `SDL_SetWindowIcon` right
@@ -38,7 +39,8 @@ Without the bundle (same engine build, client from the tree):
         --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN
 
 The client waits for `STREAM.BIN`, so the start order does not matter; on a video ring wrap the
-engine follows with a keyframe, so a client that starts late resynchronises.
+engine follows with a keyframe, so a client that starts late resynchronises. Both `.BIN` files carry
+timestamps; no separate recording is needed for normal live playback.
 
 Headless (no window; useful over ssh or for checks):
 
@@ -46,9 +48,37 @@ Headless (no window; useful over ssh or for checks):
         --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN --headless \
         --stats 5 --ppm build/tmp/client.ppm
 
-Replay a recording made by the file backend (`sh tools/dosbox/stream.sh 45`):
+Replay the bundled timed `.BIN` sample at its captured pace:
 
-    dotnet build/client/bin/Release/net11.0/Yt2Client.dll --file STREAM.BIN --headless --ppm out.ppm
+    dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
+        --file build/dist/yt2-linux-x64/sample/STREAM.BIN --headless --ppm out.ppm
+
+`--file` detects timed `YT2B` and optional `YT2S` files automatically and paces
+playback. Raw v0 fixtures remain immediate. `--session` is a compatibility alias
+for YT2S playback.
+
+To request an additional full-duplex YT2S capture explicitly:
+
+    dotnet run --project client -c Release -- \
+        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN \
+        --record-session build/runs/session/game.yt2s
+    dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
+        --session build/runs/session/game.yt2s --world build/swreg/file/WORLD.DAT
+
+The `.yt2s` file timestamps both directions with the same client monotonic
+clock. By default, the folder transport itself is the capture: `STREAM.BIN`
+holds timed engine output, and `INPUT.BIN` holds timed client input.
+`--replay-input` can feed either a saved `INPUT.BIN` or a YT2S capture into a
+fresh live folder-link server while the client follows its new output:
+
+    cp build/swreg/file/INPUT.BIN build/runs/session/INPUT.BIN
+    dotnet run --project client -c Release -- \
+        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN \
+        --replay-input build/runs/session/INPUT.BIN
+
+Keep the replay source separate from the live `--input` file: starting the
+client truncates the live input log, so replaying it in place would erase the
+records before they are sent.
 
 The obsolete serial link (kept for fun):
 
@@ -63,7 +93,7 @@ The obsolete serial link (kept for fun):
 Publishes a self-contained win-x64 single-file `client/Yt2Client.exe` (no .NET install needed on
 the target), puts the pinned SDL3 runtime next to it (SDL 3.4.18 win32-x64; the archive and the
 DLL are both sha256-checked, `--sdl3 PATH` uses a local DLL instead), and stages the game side:
-`server/game` (the seam build) and `server/dosbox-x.conf`, plus `sample/stream.bin`,
+`server/game` (the seam build) and `server/dosbox-x.conf`, plus `sample/STREAM.BIN`,
 `smoke-test.bat`, `client-start.bat`, `server-start.bat` and `play.bat`.  The launchers live in
 the bundle root; `play.bat` starts the server in its own window, then the client, and stops the
 server when the client exits.  `--server-dir` selects another seam build (default
@@ -80,7 +110,7 @@ smoke test is the first thing to run on the Windows side.
 
 Same bundle shape as the Windows one: a self-contained linux-x64 single-file `client/Yt2Client`
 with `libSDL3.so.0` next to it, `server/game` (the file-backend seam build) and
-`server/dosbox-x.conf`, plus `sample/stream.bin`, `smoke-test.sh`, `client-start.sh`,
+`server/dosbox-x.conf`, plus `sample/STREAM.BIN`, `smoke-test.sh`, `client-start.sh`,
 `server-start.sh` and `play.sh` (starts the server, then the client, and stops it again).
 `--framework` publishes framework-dependent (needs .NET 11 on the target),
 `--server-dir`/`--out`/`--no-tar` behave as on Windows.
@@ -133,20 +163,26 @@ Windows bundle).
 | video/control/audio | `STREAM.BIN` | engine (INT 21h append) | client `--follow` |
 | input | `INPUT.BIN` | client (append, flushed per message) | engine (present poll) |
 
-Both files are pseudo-rings.  At a size limit the writer truncates the file to zero and continues
-from offset 0 (8 MiB for video, 64 KiB for input); the reader notices the shrink and rewinds.  On a
-video wrap the engine immediately follows with `set_mode`, a full palette and a full frame, so a
-client that restarts at offset 0 is back in sync.  The client checks both the read position against
-the length and a length decrease between polls, so it catches the wrap even when new data has
-already regrown the file past its old length.
+Both files use the timed `YT2B` container: a 16-byte header identifies the
+direction and PIT rate, and every record carries a `u32` PIT timestamp, a `u32`
+frame length and one unchanged v0 frame. The engine stamps `STREAM.BIN` on its
+monotonic PIT timeline; the client stamps input on its own monotonic PIT clock,
+seeded from the first server frame only when no input has been written yet.
+Each file is a pseudo-ring; at a size limit the writer truncates it and rewrites the
+header (64 MiB for video, 64 KiB for input). The reader notices the shrink and
+rewinds past the header. On a video wrap the engine immediately follows with
+`set_mode`, a full palette and a full frame, so a client that restarts is back
+in sync. `--file STREAM.BIN` unwraps and paces the recorded output, and
+`--replay-input INPUT.BIN` schedules its saved INPUT events.
 
     sh engine/asm/swreg/tools/build.sh --variant file      # build/swreg/file, the folder build
     build/client/bin/Release/net11.0/Yt2Client --follow build/swreg/file/STREAM.BIN \
         --input build/swreg/file/INPUT.BIN
 
-The engine opens `INPUT.BIN` lazily (the client may start later) and seeks to its own read position
-before every chunk, which also clears the DOS EOF flag that a growing file would otherwise leave
-set.  `--input` defaults to `INPUT.BIN` next to the followed file.  Losing the link still works:
+The engine opens `INPUT.BIN` lazily (the client may start later), seeks to its own read position
+before every chunk, and unwraps the timed event header before dispatching the v0 frame. This also
+clears the DOS EOF flag that a growing file would otherwise leave set. `--input` defaults to
+`INPUT.BIN` next to the followed file. Losing the link still works:
 the client keeps following the file and the engine rewrites it when DOSBox restarts.
 
 The directory can be local or shared, so the folder link crosses a machine boundary as well - a
@@ -263,8 +299,9 @@ DOSBox-X profile (shipped as `tools/dosbox/dosbox-x-client.conf`):
   behaviour, switchable with `transparent:1` in the `serial1` line — the value must be numeric
   (`transparent:true` is *silently ignored*). The shipped profile keeps the escaping default so
   the client works out of the box against any stock nullmodem line; with `transparent:1` the link
-  is raw and the client needs `--raw` (both combinations are verified byte-exact). Recordings from
-  the file backend are raw.
+  is raw and the client needs `--raw` (both combinations are verified byte-exact). The obsolete
+  serial mirror carries raw protocol frames; the default folder-link files wrap each frame in timed
+  `YT2B` records.
 - The seam polls THRE and writes in 16-byte FIFO bursts, with a bounded wait: a dead link makes it
   drop the rest of that message instead of freezing the game.
 
@@ -369,7 +406,11 @@ PCM device.
 | option | meaning |
 |---|---|
 | `--tcp [host:]port` | connect to the nullmodem socket (default 127.0.0.1:2324); **obsolete**, kept for fun |
-| `--file PATH` | replay a recording instead of connecting |
+| `--file PATH` | replay; timed `.BIN`/`.yt2s` is paced automatically, raw streams are untimed |
+| `--session PATH` | compatibility alias for paced `.yt2s` playback |
+| `--record-session PATH` | also save an optional full-duplex YT2S capture |
+| `--no-record-session` | disable the default TCP YT2S capture |
+| `--replay-input PATH` | replay timed INPUT.BIN or YT2S input into a live `--follow` server |
 | `--follow PATH` | follow the engine's growing `STREAM.BIN` (folder link) |
 | `--input PATH` | input file for `--follow` (default: `INPUT.BIN` next to it) |
 | `--world PATH` | WORLD.DAT for the VOC effects (default: next to `--follow`/`--file`, then `server/game/WORLD.DAT` next to the client) |
@@ -383,7 +424,7 @@ PCM device.
 | `--hold` | keep the window open after a recording ends |
 | `--no-audio` | do not open an audio device |
 | `--dro PATH` | render a DOSBox-X raw OPL capture (offline test) |
-| `--wav PATH` | with `--dro` or `--file`: render the audio to this WAV instead of opening a device |
+| `--wav PATH` | with `--dro`, `--file` or `--session`, render audio to WAV |
 | `--ppm PATH` | write the last frame to a PPM file |
 | `--dump PATH` | record every byte the decoder saw to PATH |
 | `--raw` | do not unescape the nullmodem `0xFF` doubling (obsolete) |

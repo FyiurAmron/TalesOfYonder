@@ -38,9 +38,9 @@ code fails the gate:
 |---|---|---|---|
 | `engine/asm/swreg/tools/build.sh` | — | none | `build/swreg/oracle/` (the oracle build; byte-identical) |
 | `engine/asm/swreg/tools/build.sh --variant serial` | `-DSEAM` | COM1, 115200 8N1 (obsolete, kept for fun) | `build/swreg/serial/` |
-| `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | `STREAM.BIN` in the game directory | `build/swreg/file/` |
-| `engine/asm/swreg/tools/build.sh --variant tee` | `+ -DSEAM_TEE` | both at once (file is the ground truth) | `build/swreg/tee/` |
-| `engine/asm/swreg/tools/build.sh --variant log` | `+ -DSEAM_LOG` | file + `SEAMLOG.TXT` records | `build/swreg/log/` |
+| `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | timed `YT2B` records in `STREAM.BIN`/`INPUT.BIN` | `build/swreg/file/` |
+| `engine/asm/swreg/tools/build.sh --variant tee` | `+ -DSEAM_TEE` | timed file plus raw COM1 mirror | `build/swreg/tee/` |
+| `engine/asm/swreg/tools/build.sh --variant log` | `+ -DSEAM_LOG` | timed file + `SEAMLOG.TXT` records | `build/swreg/log/` |
 | `engine/asm/swreg/tools/build.sh --variant fast` | `+ -DSEAM_FAST` | file, no presentation gate | `build/swreg/fast/` |
 
 All of them run `fixhdr.py` and `check_mz_layout.py` (S1DEA prefix 7, `EMMXXXX0` delta `0C99h`)
@@ -60,8 +60,8 @@ input script); the replay also counts `sample` messages when the recording
 carries sound effects.
 
 The product link is the file backend's folder transport (`STREAM.BIN`/`INPUT.BIN`, the C# client
-with `--follow`); it is documented in `docs/client.md`, together with the obsolete COM1/nullmodem
-link.
+with `--follow`); the `.BIN` files carry timestamps around unchanged v0 frames and are directly
+replayable. It is documented in `docs/client.md`, together with the obsolete COM1/nullmodem link.
 
 `fast` is a diagnostic: it drops the presentation budget in `fn_SeamPresent`, so a pass runs on
 every hook call instead of at most three times per BIOS tick.  The budget exists because a poll or
@@ -108,8 +108,9 @@ VBE screens (publisher logo, title)
   at least 160 changed rows in mode 13h, gets one grace pass before `frame_end`. For the near-full
   repaint, the frame remains open for one bounded extra present pass, allowing a rapid palette
   sequence to reach its intended colors before presentation.
-- **Keyframe.** A received `'K'` (0x4B) asks for one: `set_mode`, the full palette, then a pass
-  that treats every row as changed. It makes client/server start order irrelevant.
+- **Keyframe.** A received CONTROL `keyframe_request` (or the obsolete serial `'K'`) asks for one:
+  `set_mode`, the full palette, then a pass that treats every row as changed. It makes
+  client/server start order irrelevant.
 
 - **RX.** The link is polled from every present call, and inside the row scans (every 64 rows) so
   a long pass cannot starve input; while the transmitter is busy the UART's receive side is
@@ -206,3 +207,21 @@ over about hourly and clients must use modular differences), and the seam
 build is slower than the original.  The file backend reads input from
 `INPUT.BIN` (the folder link); the obsolete serial backend has no input
 channel.
+
+## Timed folder records (2026-10-26)
+
+The folder transport now stores each unchanged v0 frame inside a `YT2B` record:
+an engine-PIT timestamp (`u32`), frame length (`u32`) and the complete frame.
+Both files have a 16-byte header with version, PIT rate and direction. The ASM
+file writer stamps `STREAM.BIN` with the same monotonic PIT timeline used by
+AUDIO; its input reader validates the `INPUT.BIN` header and unwraps frames
+before the existing protocol parser. The client writes timestamped input by
+default, follows timed output without changing the live display path, and
+`--file STREAM.BIN` replays output at its recorded pace. `--replay-input` also
+accepts `INPUT.BIN`. Raw v0 fixtures and optional YT2S captures remain
+compatible.
+
+Validation: a 15 s DOSBox-X file run produced 1,849 timed records in 282,337
+bytes; the first and last PIT stamps span 14.897 s, every frame decoded, and the
+Python replay saved 291 frames. The deterministic bundled sample is checked by
+`tests/session/make_sample.py --check`.
