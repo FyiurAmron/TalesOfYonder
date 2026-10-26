@@ -1,9 +1,10 @@
-YT2 companion client - Windows build
-====================================
+YT2 client + asm server bundle - Windows
+========================================
 
 What it is
 ----------
-A development client for the instrumented SWREG.EXE ("seam" build): the game
+A development client for the instrumented SWREG.EXE ("seam" build), bundled
+with the asm server: the game
 streams its screen (the 640x480 VBE intro and the mode-13h game) and palette
 into STREAM.BIN in its working directory, and the client sends keyboard and
 mouse input back through INPUT.BIN next to it.  Both files are pseudo-rings:
@@ -146,5 +147,5 @@ Notes
   input) that wrap and resynchronise.  The client still speaks the old
   TCP/nullmodem link with --tcp when it is built against the serial engine.
 * Provenance: SDL3.dll comes from the pinned SDL3 win32-x64 release listed in
-  client/publish-win.sh (the script verifies its sha256); Yt2Client.exe is
+  tools/publish-win.sh (the script verifies its sha256); Yt2Client.exe is
   built from client/ with that script.

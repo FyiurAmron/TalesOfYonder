@@ -1,9 +1,10 @@
-YT2 companion client - Linux build
-==================================
+YT2 client + asm server bundle - Linux
+======================================
 
 What it is
 ----------
-A development client for the instrumented SWREG.EXE ("seam" build): the game
+A development client for the instrumented SWREG.EXE ("seam" build), bundled
+with the asm server: the game
 streams its screen (the 640x480 VBE intro and the mode-13h game) and palette
 into STREAM.BIN in its working directory, and the client sends keyboard and
 mouse input back through INPUT.BIN next to it.  Both files are pseudo-rings:
