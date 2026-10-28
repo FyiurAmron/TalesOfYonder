@@ -5,7 +5,7 @@ out of it, and drive a client that is a first sketch of the C# host. Status as
 of 2026-10-26: **working end-to-end** for the VIDEO and AUDIO families and
 input (protocol v0; raw and run-length row codecs, 320x200x8 for the game,
 640x480x8 for the VBE intro, OPL register writes synthesised in the client)
-over the folder link (`STREAM.BIN`/`INPUT.BIN`; the serial link is kept for
+over the folder link (`OUTPUT.BIN`/`INPUT.BIN`; the serial link is kept for
 fun). The `.BIN` transport records each v0 frame with a PIT timestamp, so the
 normal server output file is directly replayable at its recorded pace.
 
@@ -17,8 +17,8 @@ The seam build is not byte-identical by design; the oracle build stays byte-perf
 
 | piece | path | what it is |
 |---|---|---|
-| engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant file` | the integration surface: hooks in the game source, present/keyframe/palette logic, `STREAM.BIN`/`INPUT.BIN` backend |
-| bridge | the game's working directory | the engine appends `STREAM.BIN` and reads `INPUT.BIN`; a local or shared folder |
+| engine side | `engine/asm/swreg/src/seam.asm`, built by `engine/asm/swreg/tools/build.sh --variant file` | the integration surface: hooks in the game source, present/keyframe/palette logic, `OUTPUT.BIN`/`INPUT.BIN` backend |
+| bridge | the game's working directory | the engine appends `OUTPUT.BIN` and reads `INPUT.BIN`; a local or shared folder |
 | client | `client/` (C#, `net11.0`) | SDL3 window via P/Invoke (no NuGet), decoder, renderer, stats, recorder/replay |
 | gates | `tests/replay`, `tests/audio`, `tests/session`, `tests/seam-*`, `tests/xbrz`, `tests/window` | decode, OPL synthesis, timed transport, codecs/pacing, filter and window |
 
@@ -36,22 +36,22 @@ after the window is created.  The Windows executable carries the same pixels as
 Without the bundle (same engine build, client from the tree):
 
     dotnet run --project client -c Release -- \
-        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN
+        --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN
 
-The client waits for `STREAM.BIN`, so the start order does not matter; on a video ring wrap the
+The client waits for `OUTPUT.BIN`, so the start order does not matter; on a video ring wrap the
 engine follows with a keyframe, so a client that starts late resynchronises. Both `.BIN` files carry
 timestamps; no separate recording is needed for normal live playback.
 
 Headless (no window; useful over ssh or for checks):
 
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
-        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN --headless \
+        --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN --headless \
         --stats 5 --ppm build/tmp/client.ppm
 
 Replay the bundled timed `.BIN` sample at its captured pace:
 
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
-        --file build/dist/yt2-linux-x64/sample/STREAM.BIN --headless --ppm out.ppm
+        --file build/dist/yt2-linux-x64/sample/OUTPUT.BIN --headless --ppm out.ppm
 
 `--file` detects timed `YT2B` and optional `YT2S` files automatically and paces
 playback. Raw v0 fixtures remain immediate. `--session` is a compatibility alias
@@ -60,20 +60,20 @@ for YT2S playback.
 To request an additional full-duplex YT2S capture explicitly:
 
     dotnet run --project client -c Release -- \
-        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN \
+        --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN \
         --record-session build/runs/session/game.yt2s
     dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
         --session build/runs/session/game.yt2s --world build/swreg/file/WORLD.DAT
 
 The `.yt2s` file timestamps both directions with the same client monotonic
-clock. By default, the folder transport itself is the capture: `STREAM.BIN`
+clock. By default, the folder transport itself is the capture: `OUTPUT.BIN`
 holds timed engine output, and `INPUT.BIN` holds timed client input.
 `--replay-input` can feed either a saved `INPUT.BIN` or a YT2S capture into a
 fresh live folder-link server while the client follows its new output:
 
     cp build/swreg/file/INPUT.BIN build/runs/session/INPUT.BIN
     dotnet run --project client -c Release -- \
-        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN \
+        --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN \
         --replay-input build/runs/session/INPUT.BIN
 
 Keep the replay source separate from the live `--input` file: starting the
@@ -94,7 +94,7 @@ Publishes a client + asm server bundle. It contains a self-contained win-x64
 single-file `client/Yt2Client.exe` (no .NET install needed on the target), and
 the pinned SDL3 runtime (SDL 3.4.18 win32-x64; the archive and DLL are both
 sha256-checked; `--sdl3 PATH` uses a local DLL). The server side includes
-`server/game`, `server/dosbox-x.conf`, the timed `sample/STREAM.BIN`, and the launchers.
+`server/game`, `server/dosbox-x.conf`, the timed `sample/OUTPUT.BIN`, and the launchers.
 `play.bat` starts the server in its own window, then the client, and stops the
 server when the client exits.
 
@@ -157,7 +157,7 @@ window". Every offline gate renders offscreen and stays green. `tests/window/run
 client on a private X server and requires `Map State: IsViewable` plus the first presented
 frame; it is the guard for this class of bug.
 
-## Folder link (`STREAM.BIN` + `INPUT.BIN`)
+## Folder link (`OUTPUT.BIN` + `INPUT.BIN`)
 
 The serial/UART path tops out at ~180 KiB/s in DOSBox-X, so the bundle uses a shared folder
 instead: two files, one per direction, in the engine's working directory (`server\game` in the
@@ -165,23 +165,23 @@ Windows bundle).
 
 | direction | file | writer | reader |
 |---|---|---|---|
-| video/control/audio | `STREAM.BIN` | engine (INT 21h append) | client `--follow` |
+| video/control/audio | `OUTPUT.BIN` | engine (INT 21h append) | client `--follow` |
 | input | `INPUT.BIN` | client (append, flushed per message) | engine (present poll) |
 
 Both files use the timed `YT2B` container: a 16-byte header identifies the
 direction and PIT rate, and every record carries a `u32` PIT timestamp, a `u32`
-frame length and one unchanged v0 frame. The engine stamps `STREAM.BIN` on its
+frame length and one unchanged v0 frame. The engine stamps `OUTPUT.BIN` on its
 monotonic PIT timeline; the client stamps input on its own monotonic PIT clock,
 seeded from the first server frame only when no input has been written yet.
 Each file is a pseudo-ring; at a size limit the writer truncates it and rewrites the
 header (64 MiB for video, 64 KiB for input). The reader notices the shrink and
 rewinds past the header. On a video wrap the engine immediately follows with
 `set_mode`, a full palette and a full frame, so a client that restarts is back
-in sync. `--file STREAM.BIN` unwraps and paces the recorded output, and
+in sync. `--file OUTPUT.BIN` unwraps and paces the recorded output, and
 `--replay-input INPUT.BIN` schedules its saved INPUT events.
 
     sh engine/asm/swreg/tools/build.sh --variant file      # build/swreg/file, the folder build
-    build/client/bin/Release/net11.0/Yt2Client --follow build/swreg/file/STREAM.BIN \
+    build/client/bin/Release/net11.0/Yt2Client --follow build/swreg/file/OUTPUT.BIN \
         --input build/swreg/file/INPUT.BIN
 
 The engine opens `INPUT.BIN` lazily (the client may start later), seeks to its own read position
@@ -276,7 +276,7 @@ for fun.
   snapshot per frame keeps the client at a few percent CPU and every shown frame consistent.
   Window resize and expose events re-present the last frame: the renderer's back buffer is
   invalid after them, and a static game would otherwise leave a black window.
-- The engine commits `STREAM.BIN` after every flush (`INT 21h` AH=68h): DOSBox buffers the
+- The engine commits `OUTPUT.BIN` after every flush (`INT 21h` AH=68h): DOSBox buffers the
   host-side file, so without it the reader sees the stream in 4 KB bursts and the last frame of
   a burst never arrives.  Measured with `--keyframe-every 0.05` (a full 320x200 frame each time),
   the link sustains 19-20 frames/s, so the commit costs nothing.
@@ -386,7 +386,7 @@ by the game's SFX pointer table at `DS:0CF51h` (`v_5160` = 80 entries).  The
 seam reports every `fn_PlaySFX` call instead: it replaces the first six-byte
 `TEST` with a far call plus nop, sends `AUDIO sample(id,offset,pit)` (type 5),
 and the client
-reads the VOC record at `offset` from the WORLD.DAT next to `STREAM.BIN`
+reads the VOC record at `offset` from the WORLD.DAT next to `OUTPUT.BIN`
 (`--world` overrides the lookup).  The client resamples the record onto the
 same PIT timeline as the FM writes and mixes it with the OPL output, so the
 samples and music stay in step.  Up to eight records mix at once; a ninth
@@ -416,7 +416,7 @@ PCM device.
 | `--record-session PATH` | also save an optional full-duplex YT2S capture |
 | `--no-record-session` | disable the default TCP YT2S capture |
 | `--replay-input PATH` | replay timed INPUT.BIN or YT2S input into a live `--follow` server |
-| `--follow PATH` | follow the engine's growing `STREAM.BIN` (folder link) |
+| `--follow PATH` | follow the engine's growing `OUTPUT.BIN` (folder link) |
 | `--input PATH` | input file for `--follow` (default: `INPUT.BIN` next to it) |
 | `--world PATH` | WORLD.DAT for the VOC effects (default: next to `--follow`/`--file`, then `server/game/WORLD.DAT` next to the client) |
 | `--headless` | no window: decode, report, `--ppm`/`--dump` only |
@@ -473,14 +473,14 @@ button or `Ctrl+Q`.
 
 ## Verification (2026-10-20)
 
-- File backend, no input: 483 messages / 150,360 bytes in `STREAM.BIN` (the first is the engine
+- File backend, no input: 483 messages / 150,360 bytes in `OUTPUT.BIN` (the first is the engine
   `hello`); the Python replay sees 41 frames, 402 rects, 38 palette messages, 1 control message.
 - Live link, tee build (one session, both backends): the client received 685 messages /
   219,873 bytes (after a scripted Return at 20 s) and `tools/stream/compare_streams.py` reports
   **every received message byte-identical**
-  to the seam's own `STREAM.BIN`; the four missing messages were sent before it connected. The
+  to the seam's own `OUTPUT.BIN`; the four missing messages were sent before it connected. The
   client's final frame is pixel-identical (0 differing index or palette bytes) to an independent
-  decode of that same `STREAM.BIN`.
+  decode of that same `OUTPUT.BIN`.
 - Replay of an earlier recording: the C# render is byte-identical to the Python decoder's PPM
   (`cmp`).
 - Window gate (`tests/window/run.sh`): with the released flags the client's window is mapped at
@@ -504,9 +504,9 @@ button or `Ctrl+Q`.
 - `--dump PATH` gives the bytes the decoder saw (after the unescape). Compare with an expected
   stream:
 
-      python3 tools/stream/compare_streams.py build/tmp/e2e7/game/STREAM.BIN client.dump
+      python3 tools/stream/compare_streams.py build/tmp/e2e7/game/OUTPUT.BIN client.dump
 
-- Tee build — the seam writes `STREAM.BIN` *and* mirrors every message to COM1, so one run
+- Tee build — the seam writes `OUTPUT.BIN` *and* mirrors every message to COM1, so one run
   produces both sides:
 
       sh engine/asm/swreg/tools/build.sh --variant tee

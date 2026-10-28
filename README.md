@@ -7,7 +7,7 @@ documented engine ↔ client protocol (`docs/protocol.md`).
 
 **Status.** M1 is done: the disassembly is annotated, byte-exact and pinned, and the integration
 seam (`engine/asm/swreg/src/seam.asm`) streams the live display through two files in a shared
-folder (`STREAM.BIN`/`INPUT.BIN`) and takes keyboard input back. The C# client (`client/`)
+folder (`OUTPUT.BIN`/`INPUT.BIN`) and takes keyboard input back. The C# client (`client/`)
 mirrors the screen in a window and forwards keys, and the Linux/Windows bundles are one script
 away. The C stage (`engine/c/`) has not started. `docs/porting.md` §9 is the live progress log.
 
@@ -25,7 +25,7 @@ The live link (folder transport):
 Without the bundle (same engine build, client from the tree):
 
     dotnet run --project client -c Release -- \
-        --follow build/swreg/file/STREAM.BIN --input build/swreg/file/INPUT.BIN
+        --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN
 
 The old COM1/nullmodem link (`--variant serial`, `client/server.sh`, `--tcp`) is obsolete and kept
 for fun; `docs/client.md` has both.

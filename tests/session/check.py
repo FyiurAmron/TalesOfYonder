@@ -226,7 +226,7 @@ def main() -> int:
 
     # The folder transport is the default timed recording: a .BIN file itself
     # must auto-detect and preserve a visible output gap without a YT2S wrapper.
-    timed_bin = work / "STREAM.BIN"
+    timed_bin = work / "OUTPUT.BIN"
     timed_frames = [
         frame(5, 0, bytes([0, 0, 0])),
         frame(1, 1, bytes([0]) + struct.pack("<HHB", 320, 200, 8)),
@@ -283,7 +283,7 @@ def main() -> int:
     print(f"session: paced timed BIN replay in {timed_elapsed:.3f} s")
 
     # Feed the recorded INPUT family back into a fresh live folder-link client.
-    stream = work / "STREAM.BIN"
+    stream = work / "OUTPUT.BIN"
     stream.write_bytes((pathlib.Path(__file__).resolve().parents[1] / "data" / "sample-video.bin")
                        .read_bytes())
     input_path = work / "INPUT.BIN"
@@ -366,6 +366,9 @@ def main() -> int:
                     if timed_input_elapsed < 0.25:
                         raise AssertionError(
                             f"timed INPUT.BIN replay arrived too early: {timed_input_elapsed:.3f}s")
+                    # The frame write lands before the replay thread prints its
+                    # completion line; give it a moment before terminating.
+                    time.sleep(0.1)
                     break
             if timed_follower.poll() is not None:
                 raise AssertionError(
@@ -388,7 +391,7 @@ def main() -> int:
     # Its clock must not jump when that frame later anchors the server PIT
     # timeline: that would turn a sub-second input gap into a many-second one
     # when INPUT.BIN is replayed.
-    late_stream = work / "late-STREAM.BIN"
+    late_stream = work / "late-OUTPUT.BIN"
     late_stream.write_bytes(BIN_HEADER.pack(
         b"YT2B", 1, BIN_HEADER.size, PIT_RATE, ENGINE_TO_CLIENT))
     late_input = work / "late-INPUT.BIN"
@@ -431,6 +434,9 @@ def main() -> int:
                 if gap < PIT_RATE // 2:
                     raise AssertionError(
                         f"scripted key arrived too early: {gap / PIT_RATE:.3f} s")
+                # The key write lands before the client logs the scripted step;
+                # let the log line flush before terminating.
+                time.sleep(0.1)
                 break
             if late_client.poll() is not None:
                 raise AssertionError(

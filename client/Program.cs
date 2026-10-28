@@ -252,7 +252,7 @@ public sealed class Options
               --no-record-session
                                   disable the default TCP YT2S capture
               --replay-input PATH replay timed input from YT2S or INPUT.BIN
-              --follow PATH       follow the server's STREAM.BIN in place
+              --follow PATH       follow the server's OUTPUT.BIN in place
                                   (the folder link; the product transport)
               --input PATH        send input to the server's INPUT.BIN
               --world PATH        WORLD.DAT for the VOC sound effects
@@ -296,7 +296,7 @@ internal static class Program
 {
     /// <summary>
     /// Finds the WORLD.DAT that carries the VOC effect bank.  The live folder
-    /// link always has it next to STREAM.BIN; the bundle's offline smoke test
+    /// link always has it next to OUTPUT.BIN; the bundle's offline smoke test
     /// finds it under server/game; --world overrides both.
     /// </summary>
     private static string? ResolveWorldPath(Options options)

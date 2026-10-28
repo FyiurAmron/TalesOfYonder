@@ -1,7 +1,7 @@
 #!/bin/sh
 # Starts the instrumented SWREG.EXE (seam build) under DOSBox-X.
 #
-# The link is the folder in server/game: the engine writes STREAM.BIN and
+# The link is the folder in server/game: the engine writes OUTPUT.BIN and
 # reads INPUT.BIN, and client-start.sh follows them.  The script steps into
 # server/ first: the bundled profile mounts "game" relative to it.
 set -e

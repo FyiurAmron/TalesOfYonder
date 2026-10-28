@@ -14,7 +14,7 @@ cd "$(dirname "$0")"
 SERVER=$!
 trap 'kill "$SERVER" 2>/dev/null || true' EXIT INT TERM
 
-# give DOSBox-X time to create STREAM.BIN; the client waits for it anyway
+# give DOSBox-X time to create OUTPUT.BIN; the client waits for it anyway
 sleep 2
 
 ./client-start.sh "$@"

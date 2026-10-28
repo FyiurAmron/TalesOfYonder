@@ -3,7 +3,7 @@
 ## `sample-video.bin`
 
 A bare protocol-v0 VIDEO stream (raw codec, 320x200x8), 150,360 bytes: one no-input run of the
-game with the *file* backend of the seam build (`-DSEAM -DSEAM_FILE`, `STREAM.BIN`), taken from
+game with the *file* backend of the seam build (`-DSEAM -DSEAM_FILE`, `OUTPUT.BIN`), taken from
 the same pipeline as `sh tools/dosbox/stream.sh 45`. The run is deterministic and the game idles
 on the fading logo, so capture windows from 20 s to 45 s all produce this exact recording.  Since the CONTROL
 layer it starts with the engine's `hello` message.

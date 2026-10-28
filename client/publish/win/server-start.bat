@@ -1,6 +1,6 @@
 @echo off
 rem Runs the instrumented SWREG.EXE (seam build) under DOSBox-X.  The link is
-rem the folder in server\game: the engine writes STREAM.BIN and reads
+rem the folder in server\game: the engine writes OUTPUT.BIN and reads
 rem INPUT.BIN, and client-start.bat follows them.  Needs dosbox-x.exe on PATH
 rem or in server\ (https://dosbox-x.com/).
 rem

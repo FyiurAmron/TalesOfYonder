@@ -2,7 +2,7 @@
 # Run the seam build (serial backend) under DOSBox-X with COM1 bridged to TCP.
 #
 # OBSOLETE: the folder link (build/swreg/file) is the transport the product
-# uses - the client follows STREAM.BIN and writes INPUT.BIN, and a shared
+# uses - the client follows OUTPUT.BIN and writes INPUT.BIN, and a shared
 # directory carries that across a machine boundary just as well.  This script
 # drives the serial link, which is kept only for fun.
 #
