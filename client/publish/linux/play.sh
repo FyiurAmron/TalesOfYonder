@@ -1,5 +1,6 @@
 #!/bin/sh
-# Starts the server (DOSBox-X) and then the client, for a one-command test.
+# Starts the engine server (DOSBox-X for the asm build, yt2game for the C
+# build) and then the client, for a one-command test.
 #
 #   ./play.sh            normal window
 #   ./play.sh --scale 4  four host pixels per game pixel (default 3)
@@ -14,7 +15,7 @@ cd "$(dirname "$0")"
 SERVER=$!
 trap 'kill "$SERVER" 2>/dev/null || true' EXIT INT TERM
 
-# give DOSBox-X time to create OUTPUT.BIN; the client waits for it anyway
+# give the server time to create OUTPUT.BIN; the client waits for it anyway
 sleep 2
 
 ./client-start.sh "$@"

@@ -100,8 +100,12 @@ M3 first light is done (2026-10-28): the emitted C reaches the Webfoot logo, bot
 and the attract vignettes, and `tests/c/run.sh` matches seven settled scene hashes and the settled
 globals against the oracle. M2 is done: `engine/c/` has the flat-memory/ALU core, v0
 protocol/service boundary, `null`/stream/folder backends and a deterministic headless stub;
-`tests/c/run.sh` pins it to the asm fixture byte-for-byte. Next: M4 subsystem migration. The SDL3
-host stays the existing C# client; a direct host can follow behind the same service interface.
+`tests/c/run.sh` pins it to the asm fixture byte-for-byte. The C port is playable (2026-10-28):
+`yt2game --live` runs the game at the oracle's 30,000 cycles/ms and speaks the live folder link
+with keyboard/mouse input, and `sh tools/publish-linux.sh --server c` builds a bundle that runs
+without DOSBox-X (`sh tools/play-c.sh` plays from the tree). It currently presents mode 13h only
+(VBE is M4, audio M6). Next: M4 subsystem migration. The SDL3 host stays the existing C# client;
+a direct host can follow behind the same service interface.
 The driver work is closed: real `WORLD.DAT`
 blocks play against the static walk (`test/run.sh music`, with `MUSIC_CAP=wav|dro|both`
 recordings), the game-level audio run is `tools/dosbox/audio.sh`, and `/U` refusing to

@@ -12,6 +12,9 @@ normal server output file is directly replayable at its recorded pace.
 The seam build is not byte-identical by design; the oracle build stays byte-perfect
 (`sh engine/asm/swreg/tools/verify.sh` -> `SWREG.EXE: OK` + `IDENTICAL`). The seam itself is described in
 `docs/stream.md`; the boundary contract is `docs/protocol.md`.
+The transliterated C engine speaks the same `OUTPUT.BIN`/`INPUT.BIN` link (`--live`) and
+is playable from the bundle with `--server c`; it currently streams mode 13h only
+(VBE presentation is M4, OPL/speaker audio M6).
 
 ## Pieces
 
@@ -37,6 +40,16 @@ Without the bundle (same engine build, client from the tree):
 
     dotnet run --project client -c Release -- \
         --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN
+
+The transliterated C engine speaks the same link and needs no DOSBox-X:
+
+    sh engine/c/tools/build.sh
+    sh tools/publish-linux.sh --server c
+    sh build/dist/yt2-linux-x64/play.sh
+
+or, from the tree, `build/c/yt2game --game DIR --live` next to a client following
+`DIR/OUTPUT.BIN`. The C server presents mode 13h only for now (VBE waits for M4, audio for
+M6); see `engine/c/README.md`.
 
 The client waits for `OUTPUT.BIN`, so the start order does not matter; on a video ring wrap the
 engine follows with a keyframe, so a client that starts late resynchronises. Both `.BIN` files carry
@@ -98,10 +111,12 @@ sha256-checked; `--sdl3 PATH` uses a local DLL). The server side includes
 `play.bat` starts the server in its own window, then the client, and stops the
 server when the client exits.
 
-`--server asm` selects the current assembly server (the default). `--server c`
-is reserved until the C server exists. `--server-dir` selects another asm seam
-build (default `build/swreg/file`); `--out` sets the output root, and `-n` or
-`--no-zip` skips the archive.
+`--server asm` selects the assembly server (the default). `--server c` stages the
+transliterated C engine (`build/c/yt2game`) with the original game data and a C
+`server-start.sh`, so the same bundle shape runs without DOSBox-X. `--server-dir` selects
+another build (asm: default `build/swreg/file`; c: default `build/c`); `--out` sets the
+output root, and `-n` or `--no-zip` skips the archive. The Windows C bundle waits for a
+Windows `yt2game.exe` build.
 
 `client/Sdl.cs` loads `SDL3.dll` on Windows, `libSDL3.so.0`/`libSDL3.so` on Linux and
 `libSDL3.dylib` on macOS, so the same sources run on every platform; only the runtime has to be
@@ -115,10 +130,11 @@ smoke test is the first thing to run on the Windows side.
 Same client + asm server bundle shape as Windows: a self-contained linux-x64
 single-file `client/Yt2Client` with `libSDL3.so.0` next to it, `server/game`
 (the file-backend seam build), and the launchers. `play.sh` starts the server,
-then the client, and stops the server when the client exits. `--framework`
-publishes framework-dependent (needs .NET 11 on the target); `-n` or
-`--no-zip` skips the tarball (`--no-tar` remains an alias). `--server-dir` and
-`--out` behave as on Windows.
+then the client, and stops the server when the client exits. With `--server c`
+the staged server is `yt2game` and its game data instead, and `server-start.sh`
+runs it directly. `--framework` publishes framework-dependent (needs .NET 11 on
+the target); `-n` or `--no-zip` skips the tarball (`--no-tar` remains an alias).
+`--server-dir` and `--out` behave as on Windows.
 
 ## The window
 
