@@ -16,7 +16,7 @@ read them in order:
 | `_ref/` | **read-only reference** — original distribution, the frozen disassembly generation pipeline (incl. the historic MASM source), and the vendored mining project. Copy from it, never edit it. |
 | `engine/asm/swreg/` | the working `SWREG.EXE` disassembly: source in `engine/asm/swreg/src/`, build/verify machinery in `engine/asm/swreg/tools/` (outputs land in `build/swreg/oracle/`) |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` disassembly (`src/`, `tools/`) and its DOSBox-X black-box harness (`test/`) |
-| `engine/c/` | (planned) the C core and platform layer |
+| `engine/c/` | the C core and platform service layer: `build.sh`/`build.bat`, `yt2stub`, unit tests under `tests/` |
 | `client/` | the C# companion client (SDL3) and `client/server.sh` for the obsolete serial link |
 | `tools/publish-*.sh` | platform bundle publishers (client + selected server) |
 | `tools/dosbox/` | DOSBox-X profiles and headless runners: oracle baseline (`baseline.sh`), audio/OPL capture (`audio.sh`), X11 helpers (`keys.py`, `snap.py`), the client link profile (`dosbox-x-client.conf`); outputs under `build/runs/` |
@@ -90,14 +90,22 @@ paragraph prefix 7, `EMMXXXX0` delta `0C99h`) and stages the minimum game files.
   `_ref/disasm/tools/` — it is the provenance of the frozen baseline; don't edit it.
 - Follow the existing style: stdlib + capstone, compact, no third-party dependencies.
 
-## Working on the C port / C# front-end (planned)
+## Working on the C port / C# front-end
 
-Not started yet; the rules that will apply are in `docs/porting.md` §3 and `docs/protocol.md`:
+The M2 C core and service layer are in `engine/c/`; the rules are in `docs/porting.md` §3 and
+`docs/protocol.md`:
 
 - faithful first: exact 16-bit semantics, no UB, explicit widths;
 - platform access only through the service layer; the client/host boundary is `docs/protocol.md`;
 - C stays in a subset that transliterates cleanly to C#;
 - every module lands with tests before it is refactored.
+
+`engine/c/tools/build.sh` (or `build.bat` on Windows) writes `yt2stub`, `yt2core-tests` and the
+objects under `build/c/`. The committed gate is `sh tests/c/run.sh`: it runs the unit tests,
+re-emits the asm fixture byte-for-byte through the C folder backend, renders the stub output with
+the C# client and the Python decoder, and drives the folder input (keyframe, key, quit, live
+append), stream and null backends. The stub is not the game yet; M3/M4 grow it from the
+transliterated routines.
 
 The live client (`client/`, `docs/client.md`) is a **development harness for the boundary**, not the
 M8/M9 deliverable: it decodes VIDEO v0, renders, and gives the seam something to talk to.
@@ -114,6 +122,7 @@ The M8/M9 rules above still govern the product client.
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
 | `client/` | build, replay, timed session, audio and optional serial-link gates (see `tests/README.md`) |
+| `engine/c/` | `sh tests/c/run.sh`: unit tests, asm-fixture parity, client/Python render match, scripted/live input, stream + null backends |
 | Windows bundle | `tools/publish-win.sh --server asm` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
 | C / C# (future) | unit tests + replay/checkpoint harness green |

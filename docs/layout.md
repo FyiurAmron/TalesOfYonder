@@ -11,7 +11,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
           src/                   sbfmdrv.asm
           tools/                 build.sh, verify.sh, generate.py, verify.py
           test/                  DOSBox-X black-box harness (api / uninstall / music)
-      c/                         stage 2 (planned): the C core and platform layer
+      c/                         stage 2: the C core, protocol/service boundary and headless stub
     client/                      the C# companion client (SDL3)
       publish/win/               static files that go into the Windows bundle
       publish/linux/             static files that go into the Linux bundle
@@ -21,8 +21,9 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
       dosbox/                    DOSBox-X profiles + headless runners (oracle, audio, stream, client)
       stream/                    recording tooling: replay.py (reference decoder), compare_streams.py, dro.py, wav.py
       repro/                     reproductions of wire-level behaviour (nullmodem 0xFF)
-    tests/                       committed gates: replay/ (offline), session/ (timed full duplex),
-                                 window/ (visible window), link/ (obsolete serial), data/ (fixtures)
+    tests/                       committed gates: replay/ (offline), c/ (C core + C seam),
+                                 session/ (timed full duplex), window/ (visible window), link/
+                                 (obsolete serial), data/ (fixtures)
     docs/                        the plan and the specs
     _ref/                        read-only reference material (never edited)
     build/                       every output, gitignored
@@ -33,6 +34,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
 |---|---|
 | `build/swreg/{oracle,serial,file,tee,log}/` | the seam variants, staged with the minimum game files so the directory runs as-is |
 | `build/sbfmdrv/`, `build/sbfmdrv/test/` | the driver build and its test COMs |
+| `build/c/` | the C core, `yt2stub` and `yt2core-tests` |
 | `build/client/{bin,obj}/` | the C# client (`client/Directory.Build.props` redirects MSBuild here) |
 | `build/runs/<kind>/<stamp>/` | per-run artifacts: oracle, stream, link, replay, session, repro, sbfmdrv, server |
 | `build/dist/` | published bundles (the Windows zip, the Linux tar and their staging dirs) |
@@ -58,6 +60,7 @@ Rules:
 |---|---|
 | game/disassembly work | `engine/asm/swreg/src/` (comments and names only; the bytes are gated) |
 | seam work (protocol, backends, hooks) | `engine/asm/swreg/src/seam.asm` |
+| C core, protocol/service boundary, backends, stub | `engine/c/` (`src/`, `include/yt2/`, `tests/`) |
 | FM driver disassembly | `engine/asm/sbfmdrv/src/` |
 | client behaviour (decode, render, options) | `client/*.cs` |
 | bundle packaging | `tools/publish-*.sh` + `client/publish/{win,linux}/` |
