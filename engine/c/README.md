@@ -48,6 +48,7 @@ C compiler; the M2-only targets need just the compiler.
     sh engine/c/tools/build.sh
     build/c/yt2core-tests
     sh tests/c/run.sh
+    sh tests/c/game.sh       # game run + M3 checkpoints (builds if stale)
 
 The gate builds both binaries under `build/c/`, runs the unit tests, re-emits
 `tests/data/sample-video.bin` through the C folder backend and requires the unwrapped C
