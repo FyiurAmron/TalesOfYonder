@@ -55,11 +55,52 @@ backend and requires every unwrapped v0 frame to match the asm recording byte fo
 frames, 150,360 bytes). The deterministic stub scene must render identically through the C#
 client and `tools/stream/replay.py`; scripted timed `INPUT.BIN` files exercise the keyframe
 path, a partial key-driven row delta, quit handling and a live append after start; the raw
-stream and null backends are checked as well.
+stream and null backends are checked as well. It also runs `tests/c/link-resync.sh`.
 
     sh tests/c/run.sh [--no-build]
 
+## `tests/c/link-resync.sh`
+
+The live-file recovery check: a followed `INPUT.BIN` can be recreated under the engine (a new
+client session truncates it, a pseudo-ring wraps), so a read offset taken from the old size can
+land inside a record. The engine must scan to the next plausible record and keep presenting
+instead of dropping the link and freezing the client on its last frame. The first phase appends
+junk plus a valid key record to a header+record input file and requires the resync line, the key
+event, no `link lost` and at least 50 frames. The second phase joins a header-only `OUTPUT.BIN`,
+appends junk plus a `set_mode`/`frame_end`, and requires the client to recover and decode one
+320x200 frame.
+
+    sh tests/c/link-resync.sh [--no-build] [--ticks N]
+
+## `tests/c/game.sh`
+
+The M3 game check: runs the transliterated intro headless and compares seven
+checkpoint frames and the settled globals with the original's recording.
+
+    sh tests/c/game.sh [--no-build] [--ticks N]
+
+## `tests/c/intro.sh`
+
+The intro presentation check: the logo fades must be ramps (one palette step
+per DAC write), the title star must twinkle through the DAC, and the story
+text must keep the full palette instead of a stale `4124h` block. Without
+those presents the logos cut and the story picture goes mostly black.
+
+    sh tests/c/intro.sh [--no-build]
+
 Needs a C11 compiler and `dotnet`; artifacts land in `build/runs/c/<stamp>/`.
+
+## `tests/c/live.sh`
+
+The live presentation check: the C engine runs the intro to the title star
+(320 ticks, about 18 s), the C# client follows `OUTPUT.BIN` headless, and the
+final stats must show `shown >= frames`, `dropped=0` and at least 100 frames.
+The engine writes several complete frames inside one BIOS tick during the
+fades and the star twinkle; a client with only one pending present flag
+collapses that burst into its last frame and fails this gate. The queue keeps
+every frame and the windowed path spreads them over display slots.
+
+    sh tests/c/live.sh [--no-build] [--ticks N]
 
 ## `tests/window/run.sh`
 

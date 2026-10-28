@@ -294,6 +294,9 @@ public readonly record struct ScriptedClick(double At, byte Button, bool Down);
 
 internal static class Program
 {
+    // One display slot, so a burst of queued frames is spread over refreshes
+    // instead of being presented inside a single one.
+    private const int DisplayFrameMs = 16;
     /// <summary>
     /// Finds the WORLD.DAT that carries the VOC effect bank.  The live folder
     /// link always has it next to OUTPUT.BIN; the bundle's offline smoke test
@@ -729,6 +732,16 @@ internal static class Program
                             state.Stats.PresentMs += screen.PresentMilliseconds;
                             screen.NeedsRepaint = false;
                         }
+                        if (present && screen is not null && state.NeedsPresent())
+                        {
+                            // A DAC-paced fade can deliver several complete
+                            // frames inside one BIOS tick.  Presented back to
+                            // back they land inside one display refresh and
+                            // only the last is seen; hold each queued frame
+                            // for a display slot so a single-tick step is
+                            // actually visible.
+                            Sdl.Delay(DisplayFrameMs);
+                        }
                         if (screen is null && options.File is null && !present)
                         {
                             Sdl.Delay(4);
@@ -838,7 +851,7 @@ internal static class Program
             // one last snapshot: the reader may have applied messages after
             // the render loop's final pass.  The PPM is the engine's frame,
             // not the filtered one, so it does not go through the filter.
-            byte[] frame = finalState.SnapshotFrame();
+            byte[] frame = finalState.SnapshotCurrent();
             WritePpm(options.Ppm, finalState.Width, finalState.Height, frame);
             Console.WriteLine($"client: wrote {options.Ppm}");
         }
@@ -851,7 +864,7 @@ internal static class Program
             // reading filter.Last: the reader can reach end of stream before
             // the render loop's first pass, and the dump must not depend on
             // that race.
-            byte[] lastFrame = finalState.SnapshotFrame();
+            byte[] lastFrame = finalState.SnapshotCurrent();
             uint[] scaled = filter.Apply(lastFrame, finalState.Width, finalState.Height, [], true);
             byte[] frame = new byte[scaled.Length * 4];
             Buffer.BlockCopy(scaled, 0, frame, 0, frame.Length);

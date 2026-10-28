@@ -210,7 +210,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md`; **live client link since 2026-10-20**, see `docs/client.md` |
 | M1c | Timed asm session trace | **done 2026-10-25** - capture/replay both directions with paced output and input |
 | M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them — **done 2026-10-28**, see `engine/c/README.md` |
-| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path - **done 2026-10-28**, see the progress log |
+| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path - **done 2026-10-28**, see the progress log; the same engine is playable through the live folder link (`yt2game --live`, mode 13h) |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
 | M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
@@ -1629,3 +1629,234 @@ emulator-hook demo, not this port).
     iteration than on the original (the settled frames agree), the RNG seed
     and DOS heap layout differ, and SBFMDRV is not resident yet (M6).
     These do not affect the gated scenes.
+- 2026-10-28 - live folder link: the C port is playable:
+  - **link**: `src/game/game_link.c` connects the M2 seam to the machine.
+    Every present pass polls `INPUT.BIN` through `yt2_service` first, then
+    copies the mode-13h framebuffer and DAC into `yt2_video`, which sends
+    `set_mode`, changed 1-line rects, the changed palette span and
+    `frame_end`. A client keyframe request forces mode + full palette + every
+    row; the 64 MiB pseudo-ring wrap forces the same. The folder transport
+    now batches one present and is committed by `yt2_service_flush` instead
+    of flushing every record;
+  - **keyboard**: INPUT key events go into a DOS type-ahead queue. INT 21h
+    06h returns the ASCII byte, or zero followed by the scancode on the next
+    call for an extended key; 0Ch flushes the queue. This is the exact
+    contract `fn_PollInput`/`fn_WaitKey` already used;
+  - **mouse**: INT 21h 3533h reports a sentinel vector so `fn_MouseInit`
+    probes successfully; the INT 33h shim handles 00h/03h/04h/0Bh/0Ch/0Fh and
+    delivers motion/button events to the game's own `fn_MouseHandler` through
+    a guest far call (`YT2_SENTINEL_SEG:0001`, balanced stack). Absolute
+    pointer events mirror the counters against `v_MouseNewX/Y` so the game's
+    clamp stays authoritative;
+  - **pacing**: `--live` enables the link and throttles the guest to the
+    oracle's 30,000 cycles/ms in ~2 ms slices against the platform PIT clock;
+    `--link` keeps the link without pacing for tests; `--transfers 0` is now
+    unlimited (the default) so a session is not cut off at 20 M dispatches;
+  - **diagnostics**: `--trace-input` logs received keys, delivered DOS keys,
+    mouse-handler installation and mouse events;
+  - **verification**: `tests/c/run.sh` adds a live game link section: a fast
+    800-tick run consumes an appended key + mouse move, requires the
+    `--trace-input` lines and inspects `OUTPUT.BIN` (single 320x200x8 mode,
+    40,521 rows, 289 frames, palette traffic). The M3 checkpoint run and the
+    asm gates are unchanged. A scripted Enter + Down at the title menu
+    reached "Assemble a Party", so the input path drives the real UI; the
+    intro/attract before the menu is the original's ~5.5 minutes;
+  - **limits**: VBE presentation and FM/PC-speaker audio still wait for
+    M4/M6; the cycle model stays flat, and input timestamps are applied when
+    polled (the live client writes them in real time).
+- 2026-10-28 - fix: string instructions moved the wrong pointer:
+  - the shared step helper advanced **both** SI and DI for every string op,
+    so a `lodsb` inside a sprite loop also walked the destination. The
+    intro's gate scene draws its waving flags and other masked sprites with
+    `lodsb`/`stosb`, so every pixel landed two bytes apart and each row
+    drifted right: the flags smeared across the row while the settled M3
+    scenes (drawn with `rep movsw`) stayed correct, which is why the byte
+    gate did not see it;
+  - the helper now takes the pointers that actually move: MOVS/CMPS both,
+    LODS/OUTS source, STOS/SCAS destination; DF still reverses the step and
+    the 8/16-bit sizes are unchanged;
+  - regression: `engine/c/tests/test_game_main.c` builds as
+    `build/c/yt2game-tests` (run by `tests/c/run.sh`) and checks the pointer,
+    flag, DF, word and REP behaviour of all six operations;
+  - visual check against the original's recording: the gate scene now shows
+    solid flags attached to the poles plus the guard, portcullis and banner
+    text (oracle frames around 710), and the hands/mirror scene matches; the
+    seven M3 checkpoints and the asm gate are unchanged.
+- 2026-10-29 - fix: present at the seam's DAC and delay points (intro fades):
+  - the C presented only at input-poll and tick-ISR entry. `fn_PaletteFade`
+    writes the DAC many times inside one tick, so every intermediate step was
+    overwritten before the next pass: the logo fades cut instead of fading and
+    DAC-paced effects (the twinkling starfield) lost their animation. The
+    original's seam presents at each palette write, at each palette block and
+    at `fn_DelayTicks` entry, which is what makes those steps frames;
+  - `yt2_port_out8(3C8h)` now runs a pass before the DAC index changes (a
+    completed write is already in `machine->palette`), INT 10h 1017h presents
+    after staging its block, and `yt2_game_run` presents when it dispatches
+    `fn_DelayTicks` (S084D:0004 at runtime `YT2_LOAD_SEG + 084Dh`, i.e.
+    `184Dh`; the first version compared the unrelocated `084Dh` and never
+    fired), mirroring `fn_SeamPalette`, `fn_SeamSetDACBlockStub` and
+    `fn_SeamDelayStub`. `yt2_game_present` also
+    mirrors the seam's `SEAM_PASSES_PER_TICK` budget (three passes per BIOS
+    tick); a keyframe pass bypasses it, as `seam_forcepass` does;
+  - every DAC byte (3C9h) and every 1017h entry now also updates
+    `v_PalCurrent` (DGROUP:4124h), the table the scene code re-shows with a
+    block call. `fn_PaletteFade` modes 1/5 write through the 4D56h/4754h
+    staging buffer and leave 4124h alone, so a later full block write used to
+    put a stale (mostly black) palette over the story picture; the block write
+    at the story text now keeps the 246-entry palette the fade left on the
+    DAC;
+  - keyboard, traced end to end under Xvfb: ESC skips the intro, the mouse
+    reaches the menu and the party screen, and `--trace-input` shows every key
+    arriving at the DOS type-ahead queue. The main menu is mouse-driven in the
+    original as well: Down and Enter do nothing there under DOSBox-X (only
+    Ctrl+Q/M/S are listed), so the port matches the original; in-game keys
+    use the same `fn_PollInput` queue;
+  - verification: the Webfoot/Sierra fades now show ~14 steps each against the
+    recording, the title star at (206,5) ramps 0 -> 156 over frames 94-107
+    like the oracle's 130 -> 158, and the story text at frames 376+ no longer
+    dips to black. `tests/c/run.sh` (seven M3 checkpoints) and
+    `tests/c/game.sh` pass, and `tests/c/intro.sh` pins the three presentation
+    symptoms (logo ramp, star ramp, story palette); the Linux C bundle is
+    republished and smoke-tested.
+- 2026-10-29 - fix: keep every `frame_end`, not only the latest:
+  - the engine can write several complete frames inside one BIOS tick (the
+    intro fades, the title star and the orb's palette-cycled objects). The
+    client kept one `_presentPending` flag, so when the reader thread decoded
+    a burst before the render loop ran, the intermediate states were already
+    gone: the orb's single-tick objects and the star's twinkle were barely
+    visible even though the engine's present log had every step;
+  - `ClientState` now queues complete frame replicas (bounded to eight; the
+    oldest is dropped and counted as `dropped=` only if the display falls
+    behind) and `SnapshotFrame` returns one per call. Dirty rows travel with
+    the frame so xBRZ still scales the right rows; `--ppm` and `--dump-frame`
+    use `SnapshotCurrent`, which is the latest replica, not a queued one;
+  - the render loop holds a queued frame for one display slot (16 ms when a
+    window is open), so a three-frame burst is spread over refreshes instead
+    of being presented inside one; the headless path drains immediately;
+  - `tests/c/live.sh` runs the engine live to the title star (320 ticks),
+    follows `OUTPUT.BIN` headless, and requires `shown >= frames`,
+    `dropped=0` and at least 100 frames. The old single-flag client fails it;
+    `tests/c/intro.sh`, `tests/replay/run.sh`, `tests/window/run.sh` and the
+    C bundle smoke test stay green.
+- 2026-10-30 - fix: present after the full-screen work-buffer flush (attract
+  shooting star):
+  - the attract gate's shooting star is not a sprite in the scene list.  At
+    `sub_052BF` the game starts at `(10Ch,8)` with colour `1Fh`, restores the
+    previous pixel with `sub_060A5`, draws the next one with `sub_060B6`, and
+    flushes the whole work buffer to A000 with `fn_1A6B5` for every step;
+    the path is `x + y = 276`, two pixels left and two down per step.  All 32
+    steps run inside one BIOS tick, so the C port's present points (input
+    poll, tick ISR, DAC write, delay tick) sampled the scene before and after
+    the streak and never inside it;
+  - `yt2_string_movs` now presents when a REP MOVSW copies the full `7D00h`
+    words to `A000h`, i.e. immediately after the game's frame flush.  The
+    three-pass-per-tick budget still applies, so the burst becomes three
+    frames like the original's 60 fps display, not 32 link frames;
+  - verified against a 60 fps DOSBox-X capture of the original: the star is
+    visible for three samples at 9.83-9.87 s (frames 590-592) on the same
+    `x + y = 276` line, moving two pixels per sample.  The C run now presents
+    the first three positions `(268,8)`, `(266,10)`, `(264,12)` at tick 296;
+    the capture's phase lands later on the line, but both are the same
+    transient and it is no longer dropped.  The 20 fps stream recording never
+    caught it;
+  - `tests/c/star.sh` stages the game, runs 400 ticks with a frame dump and
+    requires at least two distinct single-pixel hits on the gate path, two
+    pixels apart; `tests/c/run.sh` includes it.  The seven M3 checkpoints,
+    `tests/c/intro.sh` and `tests/c/live.sh` stay green, and the asm gate is
+    untouched (no assembly changed).
+- 2026-10-30 - fix: a live input record can no longer freeze the picture:
+  - report: the window stopped updating at the attract gate's shooting star
+    and the server log said `yt2: link lost; continuing without the client`.
+    The last recorded frame was 361 of the 52-step streak, so the engine had
+    stopped presenting, not the client reading;
+  - cause: the live folder link follows files that are recreated under it.
+    The client truncates `INPUT.BIN` for every session, and either side wraps
+    a pseudo-ring; the engine's read offset is a raw chunk offset, and if the
+    new file grows past the old size between two polls the offset lands
+    inside a record.  `yt2_folder_read_timed` treated the resulting bad event
+    header as `YT2_ERR`, `yt2_service_poll` marked the service failed, and
+    `yt2_link_poll` disabled the link - including the video path - so the
+    client kept its last frame forever.  A stale 112-byte `INPUT.BIN` plus
+    mouse motion reproduced it;
+  - fix: the timed reader now scans to the next plausible record (length in
+    range and the v0 frame magic), keeps the tail of a split header, retries
+    a short read instead of failing, and logs
+    `yt2: input resynchronised after N byte(s)`; `yt2_service_poll` no longer
+    poisons the write side on a read error, and `yt2_link_poll` keeps the
+    display link alive.  The client's `FollowStream` does the same scan when
+    a followed timed record is implausible and logs
+    `follow: resynchronised at byte N` instead of throwing away the reader
+    thread;
+  - verification: new `tests/c/link-resync.sh` (wired into `tests/c/run.sh`)
+    opens a header+record `INPUT.BIN`, appends ten junk bytes and a valid key
+    record, and requires the resync line, the key, no `link lost` and at
+    least 50 frames; its second phase joins a header-only `OUTPUT.BIN`, adds
+    junk plus a `set_mode`/`frame_end`, and requires the client to recover
+    and decode one 320x200 frame.  The original 112-byte stale-file repro now
+    logs `input resynchronised after 6 byte(s)` and keeps presenting
+    (188 frames at 40 s) instead of freezing; the interactive `play-c.sh`
+    and the published bundle with the same stale file and continuous mouse
+    motion resynchronise by 4 and 2,953 bytes and keep presenting
+    (270-312 frames through 45 s) with no `link lost`.  The full
+    `tests/c/run.sh` stays green (7 checkpoints, star, VBE, link render),
+    `tests/c/live.sh`, `tests/c/intro.sh` and `tests/replay/run.sh` are
+    green, and no assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-02 - fix: a mouse callback can no longer corrupt a draw in flight:
+  - report: the intro's gate/guard animation turned into a garbled picture and
+    the stream then stopped changing for about 29 s;
+  - cause: the INT 33h shim enters the game's mouse handler from a present
+    hook and wrote the event arguments into the live register file (AX=mask,
+    BX=buttons, CX=x, DX=y); `yt2_machine_call` restored only SP/CS/IP.  When
+    the event arrived between two rows of the mode-1 sprite copy in
+    `fn_19E12`, the handler preserved that entry BX (the button mask, 0) and
+    returned it to the draw: `mov cx, bx` made the row count 0, so each
+    `loop` wrapped to 65535 pixels.  The copy ran past the 64,000-byte work
+    buffer at `v_WorkSeg` (0x4118) into the scene list at `v_50B6` (0x50B9)
+    and kept writing for about 10.2M iterations (about 28.7 s at 3,000
+    cycles/ms);
+  - fix: the mouse wrapper saves the interrupted `yt2_registers` before it
+    loads the event arguments and restores the whole set when the handler
+    returns, as the real driver's ISR does; `yt2_machine_call` also runs the
+    callback with DF clear and restores the interrupted flags (an interrupt
+    restores FLAGS even though a retf handler does not push it);
+  - verification: a new `yt2game-tests` case plants a register set, enters
+    the game's handler through `yt2_mouse_abs`, and requires AX/BX/CX/DX,
+    SI/DI/BP/DS/ES, SP and FLAGS back; it fails on the old path with the four
+    event registers changed.  The captured wall-clock input that produced the
+    garble now runs the gate animation through tick 1270: the old run's last
+    normal present was tick 1234 (hash `82D26253EE6C3A51`) and its next
+    present was the garbled frame at tick 1756 (`41DB3A87506AC501`), while the
+    fixed run keeps presenting every 5 ticks and all 446 present ticks up to
+    the old divergence are byte-identical.  The full `tests/c/run.sh` (unit
+    tests, 7 checkpoints, star, VBE, link render), `tests/c/live.sh`,
+    `tests/c/intro.sh`, `tests/c/link-resync.sh` and `tests/replay/run.sh`
+    stay green.  No assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-02 - fix: mouse clicks are no longer lost when the link poll lands
+  inside a guest callback:
+  - report: after the register fix, some physical clicks needed two or three
+    presses before the game saw one;
+  - cause: `yt2_game_present` polls the link before it presents, and the
+    per-instruction cycle hook can present from inside a nested guest
+    callback (it fired while the INT 33h handler was drawing the cursor).
+    `yt2_mouse_event` refuses to re-enter the game while `machine->nested`,
+    so the queued press was consumed and discarded; its release still
+    arrived on a later, safe pass.  The captured session lost the presses
+    for 3 of 14 clicks (ticks 3608, 3690, 3714), which is the 2-3 clicks the
+    report describes;
+  - fix: `yt2_link_poll` returns before it reads the transport when
+    `yt2_machine_call_safe` is false.  The records stay queued in the folder
+    transport and the next present outside guest callbacks delivers them in
+    order; absolute motion needs no coalescing;
+  - verification: a new `yt2game-tests` case queues one mouse-button frame,
+    sets `nested`, and requires the transport not to be read; it then clears
+    the flag and requires the button callback once.  It fails without the
+    guard.  A 25 s wall-clock wiggle probe (49 clicks) went from 9 lost
+    presses and 2 lost releases to 49/49 delivered in order, and the full
+    captured input now delivers all 14 presses and 14 releases (the old run
+    delivered 11 and 14).  The same captured run still produces 2,416
+    frames.  `tests/c/run.sh` (unit tests, 7 checkpoints, star, VBE, link
+    render, link resync), `tests/c/live.sh`, `tests/c/intro.sh` and
+    `tests/replay/run.sh` are green.  No assembly changed; `SWREG.EXE`
+    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.

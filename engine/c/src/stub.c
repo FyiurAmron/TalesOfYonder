@@ -286,7 +286,8 @@ static int yt2_stub_run_demo(yt2_stub *stub, uint32_t frames, uint32_t fps,
             yt2_video_force_keyframe(&stub->video);
         }
         yt2_stub_animate_palette(stub);
-        if (yt2_video_present(&stub->video, &stub->service) != YT2_OK) {
+        if (yt2_video_present(&stub->video, &stub->service) != YT2_OK ||
+            yt2_service_flush(&stub->service) != YT2_OK) {
             return YT2_ERR;
         }
         stub->frame++;
