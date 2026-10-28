@@ -98,7 +98,7 @@ def check_sequence(rows, checkpoints, min_hold):
     return matched
 
 
-def check_dump(directory, last, matched):
+def check_dump(directory, last):
     with open(f"{directory}/video.bin", "rb") as stream:
         video = fnv1a64(stream.read())
     with open(f"{directory}/palette.bin", "rb") as stream:
@@ -106,7 +106,11 @@ def check_dump(directory, last, matched):
     if (f"{video:016x}", f"{palette:016x}") != (last[2], last[3]):
         raise SystemExit(
             f"game: end dump is {video:016x}/{palette:016x}, expected "
-            f"{last[2]}/{last[3]} ({matched[-1][0]})")
+            f"{last[2]}/{last[3]} (last presented frame)")
+    return video, palette
+
+
+def check_globals(directory):
     with open(f"{directory}/dgroup.bin", "rb") as stream:
         dgroup = stream.read()
     for name, offset, expected in GLOBALS:
@@ -133,7 +137,13 @@ def main():
         print(f"game: {name:<14} frame {row[0]:>4} tick {row[1]:>4} "
               f"({held})")
     if args.dump:
-        check_dump(args.dump, matched[-1][1], matched)
+        check_dump(args.dump, rows[-1])
+        if (rows[-1][2], rows[-1][3]) == (checkpoints[-1][1],
+                                          checkpoints[-1][2]):
+            check_globals(args.dump)
+        else:
+            print("game: run ends past the last checkpoint; "
+                  "globals not checked")
     print(f"game: {len(matched)} checkpoints match the original")
     return 0
 
