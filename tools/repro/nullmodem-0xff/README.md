@@ -41,7 +41,7 @@ one.  The absolute counts move a little with timing; the rate does not.
   *numeric* form: `transparent:true` parses as 0 and is silently ignored.
 - The repo's own profile (`tools/dosbox/dosbox-x-client.conf`) keeps the default escaping and
   the client undoes it (`client/NullModemStream.cs`, `--raw` to turn that off).
-  Both variants were verified byte-exact against the seam's `STREAM.BIN`; see
+  Both variants were verified byte-exact against the seam's `OUTPUT.BIN`; see
   `docs/client.md`.
 - The counter starts at 0 and wraps `FF -> 00`; the checker starts comparing at
   the second byte, so connecting mid-stream is fine.

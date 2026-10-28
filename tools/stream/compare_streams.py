@@ -2,14 +2,14 @@
 """Compare a received v0 message stream against the one the seam recorded.
 
 The serial seam build (-DSEAM) sends the same messages the file seam build
-(-DSEAM_FILE) writes to STREAM.BIN; the tee build (-DSEAM_TEE) does both in
+(-DSEAM_FILE) writes to OUTPUT.BIN; the tee build (-DSEAM_TEE) does both in
 one run.  This tool answers the link-fidelity question directly: is what the
 client received a byte-exact, contiguous run of what the engine sent?
 
 Usage:
     compare_streams.py SENT RECEIVED [--quiet]
 
-SENT is normally the run's STREAM.BIN; RECEIVED is a client --dump file (raw
+SENT is normally the run's OUTPUT.BIN; RECEIVED is a client --dump file (raw
 bytes after the nullmodem unescape, see client/NullModemStream.cs).
 
 Exit status: 0 when every received message matches SENT byte for byte (the
@@ -37,7 +37,7 @@ def parse(path, resync=False):
         magic, version, header_size, timebase, direction = TIMED_HEADER.unpack_from(data)
         if (magic, version, header_size, timebase, direction) != (
                 b"YT2B", 1, TIMED_HEADER.size, PIT_RATE, 0):
-            raise SystemExit(f"{path}: unsupported timed STREAM.BIN header")
+            raise SystemExit(f"{path}: unsupported timed OUTPUT.BIN header")
         offset = TIMED_HEADER.size
         messages = []
         while offset + TIMED_EVENT.size <= len(data):

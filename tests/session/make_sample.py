@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build/check the timed STREAM.BIN sample from the raw video fixture."""
+"""Build/check the timed OUTPUT.BIN sample from the raw video fixture."""
 
 from __future__ import annotations
 

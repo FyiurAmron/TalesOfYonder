@@ -4,7 +4,7 @@
 #   sh tools/dosbox/stream.sh [duration_seconds]     (default 25)
 #
 # Unlike baseline.sh this runs the instrumented build from build/swreg/file/,
-# records VIDEO messages to STREAM.BIN and renders them to PNG frames under
+# records VIDEO messages to OUTPUT.BIN and renders them to PNG frames under
 # build/runs/stream/<timestamp>/frames/.
 #
 # STREAM_KEYS optionally injects XTEST keys after start-up, as a
@@ -83,17 +83,17 @@ if [ -n "$KEYPID" ]; then
 fi
 kill "$SNAP" 2>/dev/null || true
 
-if [ -f "$RUN/game/STREAM.BIN" ]; then
-    mv "$RUN/game/STREAM.BIN" "$RUN/STREAM.BIN"
+if [ -f "$RUN/game/OUTPUT.BIN" ]; then
+    mv "$RUN/game/OUTPUT.BIN" "$RUN/OUTPUT.BIN"
 fi
-if [ ! -f "$RUN/STREAM.BIN" ]; then
+if [ ! -f "$RUN/OUTPUT.BIN" ]; then
     echo "stream: no recording produced (allocation or create failed?)" >&2
     echo "run dir: $RUN"
     exit 1
 fi
 
-python3 "$ROOT/tools/stream/replay.py" "$RUN/STREAM.BIN" --out "$RUN/frames"
+python3 "$ROOT/tools/stream/replay.py" "$RUN/OUTPUT.BIN" --out "$RUN/frames"
 
 echo "run dir:  $RUN"
-echo "recording: $(wc -c <"$RUN/STREAM.BIN") bytes"
+echo "recording: $(wc -c <"$RUN/OUTPUT.BIN") bytes"
 echo "frames:   $(ls "$RUN/frames" 2>/dev/null | wc -l)"

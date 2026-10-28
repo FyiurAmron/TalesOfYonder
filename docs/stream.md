@@ -38,7 +38,7 @@ code fails the gate:
 |---|---|---|---|
 | `engine/asm/swreg/tools/build.sh` | — | none | `build/swreg/oracle/` (the oracle build; byte-identical) |
 | `engine/asm/swreg/tools/build.sh --variant serial` | `-DSEAM` | COM1, 115200 8N1 (obsolete, kept for fun) | `build/swreg/serial/` |
-| `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | timed `YT2B` records in `STREAM.BIN`/`INPUT.BIN` | `build/swreg/file/` |
+| `engine/asm/swreg/tools/build.sh --variant file` | `-DSEAM -DSEAM_FILE` | timed `YT2B` records in `OUTPUT.BIN`/`INPUT.BIN` | `build/swreg/file/` |
 | `engine/asm/swreg/tools/build.sh --variant tee` | `+ -DSEAM_TEE` | timed file plus raw COM1 mirror | `build/swreg/tee/` |
 | `engine/asm/swreg/tools/build.sh --variant log` | `+ -DSEAM_LOG` | timed file + `SEAMLOG.TXT` records | `build/swreg/log/` |
 | `engine/asm/swreg/tools/build.sh --variant fast` | `+ -DSEAM_FAST` | file, no presentation gate | `build/swreg/fast/` |
@@ -48,7 +48,7 @@ and stage the minimum game files, so the output directory runs as-is.
 
     sh engine/asm/swreg/tools/build.sh --variant file
     sh tools/dosbox/stream.sh 45                      # run + replay, artifacts in build/runs/stream/…
-    python3 tools/stream/replay.py STREAM.BIN --out frames/
+    python3 tools/stream/replay.py OUTPUT.BIN --out frames/
 
 `STREAM_KEYS` injects XTEST keys at second marks relative to the DOSBox-X
 launch, which is how the intro is skipped for a gameplay capture:
@@ -59,7 +59,7 @@ launch, which is how the intro is skipped for a gameplay capture:
 input script); the replay also counts `sample` messages when the recording
 carries sound effects.
 
-The product link is the file backend's folder transport (`STREAM.BIN`/`INPUT.BIN`, the C# client
+The product link is the file backend's folder transport (`OUTPUT.BIN`/`INPUT.BIN`, the C# client
 with `--follow`); the `.BIN` files carry timestamps around unchanged v0 frames and are directly
 replayable. It is documented in `docs/client.md`, together with the obsolete COM1/nullmodem link.
 
@@ -162,7 +162,7 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
   spacing.
   A present pass, and the `fn_SeamPresentMusic` poll hook, drain one buffer into
   `opl_batch_timed` messages (1..128 writes per message, port from the driver's `0114h`) while
-  `seam_inpresent` keeps the tick ISR out; the writes ride the same `STREAM.BIN` batch as the
+  `seam_inpresent` keeps the tick ISR out; the writes ride the same `OUTPUT.BIN` batch as the
   video and are flushed even when no frame closes.  The log is drained at the poll rate, so a
   batch can carry several driver ticks; the stamps keep their order and their ~10.4 ms spacing.
   `audio_ctrl(44100, 0, on)` mirrors the driver's `[02F2h]` state.  The
@@ -195,7 +195,7 @@ If the allocation fails, `seam_blk` stays 0 and every hook is a no-op (the game 
   frames, 402 rects, 38 palette messages, 1 control message.
 - Live link (tee build, one session): the client received 478 of 482 messages (the first four
   predate its connection) and `tools/stream/compare_streams.py` reports them **byte-identical** to the
-  seam's `STREAM.BIN`; the rendered final frame is pixel-identical to an independent decode of the
+  seam's `OUTPUT.BIN`; the rendered final frame is pixel-identical to an independent decode of the
   same stream.
 - Oracle build re-verified after every batch: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings; the pin
   gate is green.
@@ -213,11 +213,11 @@ channel.
 The folder transport now stores each unchanged v0 frame inside a `YT2B` record:
 an engine-PIT timestamp (`u32`), frame length (`u32`) and the complete frame.
 Both files have a 16-byte header with version, PIT rate and direction. The ASM
-file writer stamps `STREAM.BIN` with the same monotonic PIT timeline used by
+file writer stamps `OUTPUT.BIN` with the same monotonic PIT timeline used by
 AUDIO; its input reader validates the `INPUT.BIN` header and unwraps frames
 before the existing protocol parser. The client writes timestamped input by
 default, follows timed output without changing the live display path, and
-`--file STREAM.BIN` replays output at its recorded pace. `--replay-input` also
+`--file OUTPUT.BIN` replays output at its recorded pace. `--replay-input` also
 accepts `INPUT.BIN`. Raw v0 fixtures and optional YT2S captures remain
 compatible.
 

@@ -5,5 +5,5 @@
 set -e
 cd "$(dirname "$0")"
 
-client/Yt2Client --file sample/STREAM.BIN --ppm sample/smoke.ppm
+client/Yt2Client --file sample/OUTPUT.BIN --ppm sample/smoke.ppm
 echo "smoke-test: OK, last frame in sample/smoke.ppm"

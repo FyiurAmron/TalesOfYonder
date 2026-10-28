@@ -5,7 +5,7 @@
 
 The DRO's millisecond timestamps become the AUDIO family's per-write PIT
 stamps (`ms * 1193182 / 1000`, the 8253 clock), so the recording drives the
-client's timed path exactly like a live STREAM.BIN does.  `tests/audio/run.sh`
+client's timed path exactly like a live OUTPUT.BIN does.  `tests/audio/run.sh`
 renders the DRO and the recording and compares the two WAVs; that pins the
 stamp layout, the client's scheduler and the synth to one timeline.
 """

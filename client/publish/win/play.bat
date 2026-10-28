@@ -12,7 +12,7 @@ setlocal
 cd /d "%~dp0"
 
 start "YT2 server" "%~dp0server-start.bat"
-rem give DOSBox-X time to create STREAM.BIN; the client waits for it anyway
+rem give DOSBox-X time to create OUTPUT.BIN; the client waits for it anyway
 timeout /t 2 /nobreak >nul
 
 call "%~dp0client-start.bat" %*

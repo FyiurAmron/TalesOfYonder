@@ -1,4 +1,4 @@
-// Timed records used by the folder link. STREAM.BIN and INPUT.BIN keep the
+// Timed records used by the folder link. OUTPUT.BIN and INPUT.BIN keep the
 // v0 protocol frame intact, with a PIT timestamp and frame length per record.
 
 using System.Buffers.Binary;

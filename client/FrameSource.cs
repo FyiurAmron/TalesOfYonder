@@ -76,7 +76,7 @@ public abstract class FrameSource : IDisposable
 
         /// <summary>
         /// Waits for enough of a new link file to tell a timed stream from a
-        /// legacy one.  DOS creates STREAM.BIN before the header is written,
+        /// legacy one.  DOS creates OUTPUT.BIN before the header is written,
         /// and the engine recreates it on a wrap, so an empty or partial file
         /// must not be mistaken for a raw stream: a follower that did would
         /// decode the header and record lengths as protocol bytes.
@@ -146,14 +146,14 @@ public abstract class FrameSource : IDisposable
                 {
                     try
                     {
-                        // The engine owns STREAM.BIN and creates it at start-up.
+                        // The engine owns OUTPUT.BIN and creates it at start-up.
                         // Never create it here: a reader that did could keep
                         // DOSBox from opening the file on Windows, which used
                         // to leave the client black with no link at all.
                         _file = file = new FileStream(path, FileMode.Open,
                             FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1);
                         _timed = DetectFormat(file);
-                        // STREAM.BIN is a live pseudo-ring. Ignore old records
+                        // OUTPUT.BIN is a live pseudo-ring. Ignore old records
                         // and join at the live edge; the handshake asks for a
                         // fresh keyframe. Timed records start after the header.
                         file.Seek(0, SeekOrigin.End);
@@ -227,7 +227,7 @@ public abstract class FrameSource : IDisposable
                             .ReadUInt32LittleEndian(eventHeader[4..]);
                         if (size < FrameReader.HeaderSize || size > TimedBinFormat.MaxFrame)
                         {
-                            throw new InvalidDataException("invalid timed STREAM.BIN frame length");
+                            throw new InvalidDataException("invalid timed OUTPUT.BIN frame length");
                         }
                         if (length - start < TimedBinFormat.EventHeaderSize + size)
                         {

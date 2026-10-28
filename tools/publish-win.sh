@@ -125,7 +125,7 @@ cp "$PUBLISH_DIR/client-start.bat" "$BUNDLE/"
 cp "$PUBLISH_DIR/server-start.bat" "$BUNDLE/"
 cp "$PUBLISH_DIR/play.bat" "$BUNDLE/"
 cp "$PUBLISH_DIR/smoke-test.bat" "$BUNDLE/"
-cp "$SAMPLE" "$BUNDLE/sample/STREAM.BIN"
+cp "$SAMPLE" "$BUNDLE/sample/OUTPUT.BIN"
 for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
     cp "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
 done
