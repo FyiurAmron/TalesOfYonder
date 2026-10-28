@@ -1,5 +1,5 @@
 #!/bin/sh
-# Follows the running server's STREAM.BIN and sends input through INPUT.BIN.
+# Follows the running server's OUTPUT.BIN and sends input through INPUT.BIN.
 # The client asks for a keyframe when it connects, so the start order does not
 # matter; if the server is not up yet the client waits for the file.
 set -e
@@ -14,5 +14,5 @@ if [ ! -f server/game/SWREG.EXE ]; then
     exit 1
 fi
 
-exec client/Yt2Client --follow server/game/STREAM.BIN \
+exec client/Yt2Client --follow server/game/OUTPUT.BIN \
                       --input server/game/INPUT.BIN "$@"

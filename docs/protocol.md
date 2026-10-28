@@ -4,7 +4,7 @@ The engine core and the client/host speak one message protocol. The same message
 in-process clients, IPC clients and **recordings**; the transport is a detail. Tests target this
 boundary.
 
-There is one transport left: the engine writes `STREAM.BIN` and reads `INPUT.BIN` in its working
+There is one transport left: the engine writes `OUTPUT.BIN` and reads `INPUT.BIN` in its working
 directory, and the client follows those two files. The directory can be local or shared, so the
 link crosses a machine boundary without a network protocol of its own. The earlier serial
 transport (protocol-v0 over COM1 and a nullmodem) is **obsolete** and kept only for fun.
@@ -241,7 +241,7 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   pointer table (`DS:0CF51h`); the record is a Creative Voice File (8-bit
   unsigned PCM in every shipped record).  Only the id, offset and stamp
   travel: the samples are up to 35 KiB, and the client reads the file next to
-  `STREAM.BIN`.  The stamp uses the same timeline as the OPL writes.  `id` 3
+  `OUTPUT.BIN`.  The stamp uses the same timeline as the OPL writes.  `id` 3
   is the effect whose immediately following PC-speaker fallback pair the
   client drops when it has the sample.
 
@@ -249,7 +249,7 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
 - Compared with the M1b spike (one full 256-entry palette per fade step), the
   palette message is now a diff span and `frame_end` closes every pass. The v0
   frames remain unchanged; the folder transport wraps each complete frame in a
-  timed `YT2B` record (`STREAM.BIN` engine output, `INPUT.BIN` client input).
+  timed `YT2B` record (`OUTPUT.BIN` engine output, `INPUT.BIN` client input).
   VIDEO uses `h=1` rects (one message per changed row, at most 640 wide), in
   320x200x8 for the game and 640x480x8 for the VBE intro. Raw v0 files remain
   supported for protocol fixtures.
@@ -318,7 +318,7 @@ INPUT (family 3), keys and mouse implemented in the seam build:
 ## Recordings / replay
 
 - The v0 frame remains unchanged. The default folder-link files are timed
-  `YT2B` streams, so `STREAM.BIN` itself replays at its recorded pace; no
+  `YT2B` streams, so `OUTPUT.BIN` itself replays at its recorded pace; no
   sidecar or `YT2S` conversion is needed. The older `YT2S` session format is
   still accepted; folder links can request one explicitly with
   `--record-session` (TCP clients still capture it by default).
@@ -329,7 +329,7 @@ INPUT (family 3), keys and mouse implemented in the seam build:
   complete v0 frame including its 14-byte header. Records are appended in
   order; the 32-bit PIT stamp wraps modulo 2^32 (about hourly), so readers use
   modular differences. Playback anchors the first event at time zero.
-- `STREAM.BIN` stamps are taken by the asm server on its monotonic PIT timeline
+- `OUTPUT.BIN` stamps are taken by the asm server on its monotonic PIT timeline
   (the same timeline used by AUDIO; without the resident timer driver it falls
   back to BIOS-tick resolution). `INPUT.BIN` stamps use the client's monotonic
   PIT clock. When the first server frame arrives before any client input has
@@ -354,7 +354,7 @@ INPUT (family 3), keys and mouse implemented in the seam build:
   complete v0 frame including its 14-byte header. Events are appended in
   capture order; timestamps are nondecreasing. EOF ends the file.
 - Folder-link clients write the timed `INPUT.BIN` by default. `--file` detects
-  and paces a timed `STREAM.BIN`, `--replay-input` accepts a timed INPUT.BIN or
+  and paces a timed `OUTPUT.BIN`, `--replay-input` accepts a timed INPUT.BIN or
   YT2S session and schedules game INPUT frames into a fresh live link, and
   `--session` remains an alias for YT2S playback. Raw v0 fixtures are decoded
   immediately with no recoverable timing.
@@ -403,11 +403,11 @@ Out-of-band detail for this transport only:
 ## Transport: the folder pseudo-ring
 
 The folder link is the default transport (including the Windows bundle). The
-engine appends one timed record per v0 frame to `STREAM.BIN` with INT 21h
+engine appends one timed record per v0 frame to `OUTPUT.BIN` with INT 21h
 writes; the client follows the file and unwraps the records. The client appends
 timed records to `INPUT.BIN`; the engine unwraps and reads them from the present
 hook. The 16-byte YT2B header is rewritten on a ring wrap, followed by a fresh
-keyframe on the output side. `--file STREAM.BIN` replays at the recorded pace;
+keyframe on the output side. `--file OUTPUT.BIN` replays at the recorded pace;
 `--replay-input INPUT.BIN` schedules the saved game inputs. The optional YT2S
 full-duplex session remains available for TCP capture and compatibility.
 

@@ -36,7 +36,7 @@ Needs `dotnet` and SDL3 (the client already needs it for the window).
 
 Runs a small fake full-duplex server through the live client: optional YT2S
 capture must contain both directions on a monotonic nanosecond timeline;
-`--file` must pace both YT2S and the default timed `STREAM.BIN` format; the
+`--file` must pace both YT2S and the default timed `OUTPUT.BIN` format; the
 Python tools must unwrap timed records; replaying either YT2S or timed
 `INPUT.BIN` must write the key frame into a fresh timed input transport; and
 the input clock must keep one epoch when the first server frame arrives after
@@ -129,10 +129,10 @@ Needs `dotnet` only.
 **Obsolete** - the folder link is the product transport; this drives the COM1/nullmodem link,
 kept for fun (and because it is the only socket-level live check). Live: builds the tee variant
 of the engine (`-DSEAM -DSEAM_FILE -DSEAM_TEE`,
-which writes `STREAM.BIN` *and* mirrors every message to COM1), runs it under
+which writes `OUTPUT.BIN` *and* mirrors every message to COM1), runs it under
 DOSBox-X on a private Xvfb display with COM1 bridged to TCP, connects the C#
 client with `--dump`, and verifies with `tools/stream/compare_streams.py` that
-every received message is byte-identical to the seam's own `STREAM.BIN` from
+every received message is byte-identical to the seam's own `OUTPUT.BIN` from
 the same session. Messages sent before the client connected are expected and
 reported, not failures: the client asks for a keyframe and resynchronises.
 

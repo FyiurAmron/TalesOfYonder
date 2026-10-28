@@ -15,7 +15,7 @@
 ;                           shared directory carries the link across a
 ;                           machine boundary just as well, so the serial
 ;                           path is kept only for fun
-;   -DSEAM -DSEAM_FILE      file: timed YT2B records in STREAM.BIN and INPUT.BIN
+;   -DSEAM -DSEAM_FILE      file: timed YT2B records in OUTPUT.BIN and INPUT.BIN
 ;   + -DSEAM_FAST           file, with the presentation gate open: a pass
 ;                           runs on every hook call instead of once per
 ;                           BIOS tick.  Diagnostic only: it shows what the
@@ -182,7 +182,7 @@ seam_mfrac      dw 0                    ; pixels left over by the ratio scaling
 seam_mfracy     dw 0
 seam_mon        dw 0                    ; shim installed
 IFDEF SEAM_FILE
-seam_name       db 'STREAM.BIN',0
+seam_name       db 'OUTPUT.BIN',0
 seam_inname     db 'INPUT.BIN',0
 ; Both link files are pseudo-rings: at the limit the writer truncates the
 ; file to zero and restarts from offset 0.  The reader notices the shrink
@@ -192,7 +192,7 @@ SEAM_VIDEO_LIMIT equ 4000000h            ; 64 MiB of video, then wrap
 SEAM_INPUT_LIMIT equ 10000h              ; 64 KiB of input, then wrap
 seam_inh        dw 0FFFFh                ; INPUT.BIN handle (-1 = not open yet)
 seam_inpos      dd 0                     ; INPUT.BIN bytes consumed
-seam_written    dd 0                     ; STREAM.BIN bytes written
+seam_written    dd 0                     ; OUTPUT.BIN bytes written
 seam_bin_header db 'YT2B',1,0,16,0
                 dd 1193182
                 db 0,0,0,0               ; engine-to-client direction, reserved
@@ -626,7 +626,7 @@ ssend_done:
 
 IFDEF SEAM_FILE
 ; ---------------------------------------------------------------------------
-; sub_SeamWrapVideo - restart STREAM.BIN at offset 0 (pseudo-ring wrap).
+; sub_SeamWrapVideo - restart OUTPUT.BIN at offset 0 (pseudo-ring wrap).
 ; in:  DS = block
 ; out: -
 ; The next present sends set_mode, the whole palette and every row, so a
@@ -671,7 +671,7 @@ ENDIF
 
 IFDEF SEAM_FILE
 ; ---------------------------------------------------------------------------
-; sub_SeamFileHeader - start a fresh timed STREAM.BIN pseudo-ring.
+; sub_SeamFileHeader - start a fresh timed OUTPUT.BIN pseudo-ring.
 ; in:  -
 ; out: CF set on a short/failed header write; preserves registers and DS.
 ; ---------------------------------------------------------------------------
@@ -739,7 +739,7 @@ sub_SeamFlush:
     ; would send into the same buffer: block that, or the file copy and the
     ; mirrored wire copy would carry different bytes
     mov word ptr cs:[seam_flushing], 1
-    ; write the batch to STREAM.BIN.  A short write (AX below the count) would
+    ; write the batch to OUTPUT.BIN.  A short write (AX below the count) would
     ; leave the file short of the batch and the next batch would land in the
     ; wrong place, so the remainder is written as well.
     mov ax, word ptr cs:[seam_txlen]
@@ -3481,7 +3481,7 @@ ssoff_done:
 ; the client owns a copy of the file and plays the record at the offset from
 ; the game's own pointer table (DS:0CF51h), on the same PIT timeline as the
 ; FM writes.  Only the id, the file offset and the stamp travel: the samples
-; are up to 35 KiB, and the client can read WORLD.DAT next to STREAM.BIN.
+; are up to 35 KiB, and the client can read WORLD.DAT next to OUTPUT.BIN.
 ;
 ; All registers, DS, ES and flags are preserved; the displaced TEST runs last
 ; so the caller's `jne` still sees its flags.  retf returns to the nop after

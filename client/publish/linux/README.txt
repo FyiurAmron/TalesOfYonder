@@ -6,7 +6,7 @@ What it is
 A development client for the instrumented SWREG.EXE ("seam" build), bundled
 with the asm server: the game
 streams its screen (the 640x480 VBE intro and the mode-13h game) and palette
-into STREAM.BIN in its working directory, and the client sends keyboard and
+into OUTPUT.BIN in its working directory, and the client sends keyboard and
 mouse input back through INPUT.BIN next to it.  Both files are pseudo-rings:
 at a size limit the writer truncates them to zero and restarts from offset 0,
 and the other side notices the shrink and rewinds.  This bundle runs the
@@ -29,10 +29,10 @@ Contents
   client-start.sh          follows the live timed BIN transport
   server-start.sh          starts DOSBox-X with the folder-link profile
   play.sh                  starts the server, then the client
-  smoke-test.sh            replays sample/STREAM.BIN, no DOSBox-X needed
-  sample/STREAM.BIN        a timed engine-to-client stream
+  smoke-test.sh            replays sample/OUTPUT.BIN, no DOSBox-X needed
+  sample/OUTPUT.BIN        a timed engine-to-client stream
   server/                  the game side:
-    dosbox-x.conf            no serial port; the link is STREAM.BIN/INPUT.BIN
+    dosbox-x.conf            no serial port; the link is OUTPUT.BIN/INPUT.BIN
     game/                    the seam build + game files + the link files
     capture/                 DOSBox-X screenshots and optional YT2S captures
 
@@ -45,18 +45,18 @@ or, in two terminals:
 
 The client asks the engine for a keyframe when it connects, so the start
 order does not matter; if it connects late it resynchronises by itself. Both
-`STREAM.BIN` and `INPUT.BIN` carry timestamps around their unchanged v0 frames.
+`OUTPUT.BIN` and `INPUT.BIN` carry timestamps around their unchanged v0 frames.
 The client follows the server's output file and appends timed input records,
 so each transport file is directly usable for replay.
 
 Replay the last run at its captured pace with:
 
-  ./client/Yt2Client --file server/game/STREAM.BIN
+  ./client/Yt2Client --file server/game/OUTPUT.BIN
 
 Replay saved input into a fresh server run with:
 
   cp server/game/INPUT.BIN server/capture/INPUT.BIN
-  ./client/Yt2Client --follow server/game/STREAM.BIN \
+  ./client/Yt2Client --follow server/game/OUTPUT.BIN \
       --input server/game/INPUT.BIN --replay-input server/capture/INPUT.BIN
 
 An additional full-duplex YT2S capture is optional (`--record-session PATH`).

@@ -172,7 +172,7 @@ service seam as §3 — a client is just another service backend. Message detail
   OPL register writes; input events (client -> engine); tick/pacing; tiny control ops.
 - **Transports**: in-process/direct (default), shared memory, TCP/Unix sockets. No hardware or
   baud constraints — the protocol is transport-independent; anything else is a trivial tunnel.
-  The asm seam ships on a shared folder (`STREAM.BIN`/`INPUT.BIN`, `docs/client.md`); the earlier
+  The asm seam ships on a shared folder (`OUTPUT.BIN`/`INPUT.BIN`, `docs/client.md`); the earlier
   COM1/nullmodem link is obsolete and kept only for fun.
 - **Why it earns its keep beyond the showcase**: (a) the record/replay backend is the test harness
   from day one; (b) streams from instrumented original builds diff against C-port streams —
@@ -331,7 +331,7 @@ emulator-hook demo, not this port).
 - 2026-10-19 — M1b video/palette boundary spike (STREAM build + replay client):
   - all instrumentation is under `IFDEF STREAM` (`-DSTREAM`); the oracle build is untouched:
     `fn_StreamInit` allocates one 65,024-byte DOS block (64,000-byte shadow + message buffer +
-    writer state) and creates `STREAM.BIN`; `fn_StreamPresent` is called from the two input-poll
+    writer state) and creates `OUTPUT.BIN`; `fn_StreamPresent` is called from the two input-poll
     routines (`fn_PollInput`, `fn_WaitKey`), rate-limited to one frame per 2 BIOS ticks, only in mode
     13h, and emits one 1-line `rect` per changed row plus `frame_end`; palette updates are hooked
     at `fn_WriteDAC` (`DS:SI`), `sub_SetDACBlock` (`ES:DX`) and `sub_WriteDAC768`;
@@ -594,7 +594,7 @@ emulator-hook demo, not this port).
     stranded. A received `'K'` (0x4B) requests a keyframe (`set_mode` + full palette + full-frame
     pass), which makes client/server start order irrelevant;
   - **builds**: `build.sh --variant serial` (`-DSEAM`, COM1 115200 8N1), `--variant file`
-    (`-DSEAM -DSEAM_FILE`, raw `STREAM.BIN`), `--variant tee` (`+ -DSEAM_TEE`, file *and* serial in
+    (`-DSEAM -DSEAM_FILE`, raw `OUTPUT.BIN`), `--variant tee` (`+ -DSEAM_TEE`, file *and* serial in
     one run — the file stream is the ground truth for link checks), `--variant log`
     (`+ -DSEAM_LOG`, `SEAMLOG.TXT` packed records); all run `fixhdr.py` + `check_mz_layout.py`;
   - **client**: `client/` is C# (`net11.0`, SDL3 via P/Invoke, no NuGet) — reader thread, display
@@ -609,11 +609,11 @@ emulator-hook demo, not this port).
     `NullModemStream`.  It is deliberate and switchable: `transparent:1` (the value must be
     numeric — `transparent:true` is *silently ignored*) turns escaping and telnet handling off,
     which makes the link raw and needs the client's `--raw`; both combinations verified
-    byte-exact against the tee build's `STREAM.BIN`;
+    byte-exact against the tee build's `OUTPUT.BIN`;
   - **verification**: file backend 45 s no-input -> 482 messages / 150,316 bytes (42 frames, 402
     rects, 38 palette messages); live link with the tee build -> the client received 478 messages
     / 149,482 bytes and `tools/stream/compare_streams.py` reports them **byte-identical** to the seam's
-    own `STREAM.BIN` (the four missing ones predate its connection), with the rendered final frame
+    own `OUTPUT.BIN` (the four missing ones predate its connection), with the rendered final frame
     pixel-identical (0 differing index/palette bytes) to an independent decode of that stream; a
     replayed recording renders byte-identically to the Python decoder's PPM; A/B against the
     pre-refactor stream build is pixel-identical on final frames (mid-fade differs only by the
@@ -639,7 +639,7 @@ emulator-hook demo, not this port).
   - **committed gates**: `tests/replay/run.sh` (the client's render must equal the Python
     decoder's, `cmp` on the PPM; hermetic, uses `tests/data/sample-video.bin`) and
     `tests/link/run.sh` (tee build -> DOSBox-X -> client, verified byte-exact against the seam's
-    own `STREAM.BIN`); `tools/repro/nullmodem-0xff/` records the 0xFF finding with measured
+    own `OUTPUT.BIN`); `tools/repro/nullmodem-0xff/` records the 0xFF finding with measured
     numbers (224 discontinuities per 57,599 bytes by default, 0 with `transparent:1`);
   - **Windows bundle**: `tools/publish-win.sh` publishes a self-contained win-x64 single-file
     `Yt2Client.exe`, pins SDL3 3.4.18 win32-x64 (archive *and* DLL sha256 verified, `--sdl3` for a
@@ -674,7 +674,7 @@ emulator-hook demo, not this port).
     `docs/protocol.md`);
   - **verification**: link test with a scripted Return at 20 s — 690 messages / 220,724 bytes sent,
     the client received 685 / 219,873 (5 predate its connection) and every message is byte-identical
-    to the seam's `STREAM.BIN`; the engine hello arrives and is printed; the key changes the game
+    to the seam's `OUTPUT.BIN`; the engine hello arrives and is printed; the key changes the game
     (the stream jumps from 482 to 688 messages), taking the logo to the next screen, which happens to
     be VBE and therefore black client-side until VBE streaming lands.
 - 2026-10-20 — VBE intro streaming (both gates green):
@@ -760,7 +760,7 @@ emulator-hook demo, not this port).
     green;
   - **verification**: asm untouched (`SWREG.EXE: OK` / `IDENTICAL` unaffected); `tests/replay/run.sh`
     green on both fixtures; `tests/link/run.sh` (25 s, tee build) received 678 messages /
-    218,546 bytes, every message byte-identical to `STREAM.BIN`; the window gate is green with the
+    218,546 bytes, every message byte-identical to `OUTPUT.BIN`; the window gate is green with the
     fix and red with the old flags.  The Windows `.exe` itself still needs the user's machine.
 - 2026-10-20 — late client resync + VBE 0x100 (done, stall open):
   - **symptom**: a client that connected while the VBE logo was playing stayed at 320x200 and
@@ -795,7 +795,7 @@ emulator-hook demo, not this port).
     (appending 3,369 bytes to the original changes nothing).  What is left is the image layout:
     the seam segment sits between `S1DEA` and the stack, which moves `SS` from 0x2d66 to 0x2e38.
     Moving the include after `STK` keeps `SS` but makes DOSBox abort at load with
-    `Corrupt MCB chain` (the seam then has no `STREAM.BIN` either), so that placement is not usable
+    `Corrupt MCB chain` (the seam then has no `OUTPUT.BIN` either), so that placement is not usable
     as is.  Next: find which segment the game depends on and place the seam
     code/data where it keeps every game segment address, or prove the
     dependency is not layout at all (both suspects were tested and ruled out;
@@ -837,11 +837,11 @@ emulator-hook demo, not this port).
     outrun it;
   - **shared directory**: the same writer doing 32 KiB INT 21h writes into the
     mounted directory reaches 7.8 MiB/s at stock cycles.  A file-backed video
-    link (client tails the growing `STREAM.BIN`) is the way to MB/s; input can
+    link (client tails the growing `OUTPUT.BIN`) is the way to MB/s; input can
     stay on the UART, which carries a few hundred bytes per second.
 - 2026-10-20 — folder link, and the stall explained:
   - **folder transport**: files per direction, as the link the bundle uses.
-    The engine appends to `STREAM.BIN` (file backend) and reads `INPUT.BIN`
+    The engine appends to `OUTPUT.BIN` (file backend) and reads `INPUT.BIN`
     from the present poll; the client gains `--follow PATH` (blocks at EOF,
     rewinds when the file shrinks) and `--input PATH` (appends framed input,
     flushes per message).  Both files are pseudo-rings: at 8 MiB / 64 KiB the
@@ -882,7 +882,7 @@ emulator-hook demo, not this port).
     focused window into game-relative motion (scale-divided, remainder kept)
     and forgets that position on leave/focus loss, so the desktop keeps the
     pointer outside the window.  `Ctrl+M` is gone; `Ctrl+Q` stays;
-  - **start order**: the client no longer creates `STREAM.BIN`; it opens an
+  - **start order**: the client no longer creates `OUTPUT.BIN`; it opens an
     existing file, prints `follow: waiting for ...`, and retries on a sharing
     violation.  The engine owns the file, so a client started first cannot
     hold a handle DOSBox has to create.  Verified client-first end to end: no
@@ -928,7 +928,7 @@ emulator-hook demo, not this port).
     row could therefore poison the diff, which is the "subtle" palette mismatch: reads and writes
     of the sent copy disagreed.  The checksum pass rescans all 200 rows every present and sends
     rows whose checksum changed (no shadow at all);
-  - **delivery**: the engine commits `STREAM.BIN` after every flush (`INT 21h` AH=68h).  Without
+  - **delivery**: the engine commits `OUTPUT.BIN` after every flush (`INT 21h` AH=68h).  Without
     it DOSBox keeps the host-side buffer, so the reader receives the stream in bursts and the last
     frame of each burst is never seen; the bundle test went from a stale frame to pixel-identical;
   - **palette**: a present pass now always reads the DAC and sends the diff (the `seam_flushpal`
@@ -1006,7 +1006,7 @@ emulator-hook demo, not this port).
     frame.  Live run: the intro still streams ~15 frames/s and the client renders at ~2 ms/frame.
 - 2026-10-21 — bundle packaging aligned:
   - both bundles now share one shape: `client/` (the binary plus its SDL3), `server/` (the DOSBox-X
-    profile, `game/`, `capture/`), `sample/stream.bin`, a root `README.txt`, and the launchers in
+    profile, `game/`, `capture/`), `sample/OUTPUT.BIN`, a root `README.txt`, and the launchers in
     the root — `client-start.sh|bat`, `server-start.sh|bat`, `play.sh|bat`, `smoke-test.sh|bat`;
   - Windows is no longer the odd one out: `Yt2Client.exe` and `SDL3.dll` moved from the bundle root
     into `client/`, `server/README.txt` is gone (the root README covers both sides), the leftover
@@ -1040,7 +1040,7 @@ emulator-hook demo, not this port).
     for one grace pass, and a held frame takes the next staged palette immediately (bypassing the
     quiet-jump hold), so the title blit with the default palette is replaced by the fade-out's
     black before it is presented;
-  - verified by reconstructing every frame from `STREAM.BIN` in four 75 s runs: no frame pairs the
+  - verified by reconstructing every frame from `OUTPUT.BIN` in four 75 s runs: no frame pairs the
     title rows with a bright palette, the logos still fade in and out on their own pixels, and the
     story screen and the gated story text appear in colour; oracle `SWREG.EXE: OK` + `IDENTICAL`,
     seam pin OK, replay OK, link OK (2958 messages byte-identical).
@@ -1081,7 +1081,7 @@ emulator-hook demo, not this port).
   - gates: `SWREG.EXE: OK` + `IDENTICAL` (seam pin OK), the four seam variants assemble with
     0 warnings, `tests/replay/run.sh` OK, `tests/window/run.sh` OK, `tests/link/run.sh` OK.
 - 2026-10-22 — the serial transport is marked obsolete:
-  - the folder link is the transport the product uses: the engine writes `STREAM.BIN` and reads
+  - the folder link is the transport the product uses: the engine writes `OUTPUT.BIN` and reads
     `INPUT.BIN` in its working directory, the client follows them, and a shared or mounted
     directory carries the link across a machine boundary just as well - the UART adds nothing
     there;
@@ -1125,7 +1125,7 @@ emulator-hook demo, not this port).
     filter (5 to 13 frames per second in DOSBox-X, depending on the scene), and the filter
     takes 3 to 4 ms of a frame that arrives every 80 to 200 ms.
 - 2026-10-22 — the serial seam variant assembles again:
-  - `sub_SeamFlush` - the file backend's batched write, with the `STREAM.BIN` pseudo-ring
+  - `sub_SeamFlush` - the file backend's batched write, with the `OUTPUT.BIN` pseudo-ring
     wrap - is now inside `IFDEF SEAM_FILE`, and so is its call in `sub_SeamFrameEnd`.  A
     `-DSEAM` (serial) build used to fail to assemble: `seam_written` and
     `sub_SeamWrapVideo` are declared in the file-only block, but the flush body was not
@@ -1145,7 +1145,7 @@ emulator-hook demo, not this port).
     the same decoder so the offline gate compares two independent implementations of the format;
   - sizing: a frame of the 320x200 game was ~64 KB of raw rows and is now 1 to 4 KB in flat art
     and up to ~65 KB only for full-screen noise; the live link writes ~20 KiB/s where the raw
-    rows cost ~1 MB/s over the wrap (`STREAM.BIN` used to wrap 8 MiB in 15 s);
+    rows cost ~1 MB/s over the wrap (`OUTPUT.BIN` used to wrap 8 MiB in 15 s);
   - the encoder's return value and destination pointer had three bugs that only showed up as a
     frozen game (a wrong length made `sub_SeamSend` copy a huge payload into the TX buffer, and
     the literal flusher restored the output pointer); they were found with a standalone COM
@@ -1183,7 +1183,7 @@ emulator-hook demo, not this port).
   is gone at its cause:
   - **the symptom, measured**: the client was choppy exactly when the game pans the camera past the
     gate in the opening scene — the one place where the whole screen changes from picture to
-    picture.  A live tap of `STREAM.BIN` during that pan: 168 changed rows and 22 KB per presented
+    picture.  A live tap of `OUTPUT.BIN` during that pan: 168 changed rows and 22 KB per presented
     picture, 11 pictures a second, against 50+ a second when the screen stands still.  Opening the
     tick gate (`-DSEAM_FAST`) did not help, and this is why: the cost was the row work, not the
     gate.  The server was sending a whole screen of row messages for what is a pure shift;
@@ -1270,7 +1270,7 @@ emulator-hook demo, not this port).
     unobservable in the shipped content (jumps/`FC`/percussion have crafted coverage, and the
     digitized-SFX far calls are no-ops), so M2 is the next milestone.
 - 2026-10-22 — housekeeping: the folder link leads every document, and the plan's numbering is fixed:
-  - **serial path decision**: the folder transport (`STREAM.BIN`/`INPUT.BIN`) is the product link.
+  - **serial path decision**: the folder transport (`OUTPUT.BIN`/`INPUT.BIN`) is the product link.
     The COM1/nullmodem path stays in the tree - the `serial`/`tee` builds, `client/NullModemStream.cs`,
     `client/server.sh` and `tests/link/` - but every one of them is now marked obsolete, and the
     README quick start, `docs/client.md` (pieces, quick start, section order), `client/README.md`,
@@ -1335,7 +1335,7 @@ emulator-hook demo, not this port).
     messages in 15 s).  The driver byte changes only on play/stop (4 messages in 45 s);
   - **segments**: `sp_finish` can reach the end of a present pass with `DS` still on the seam
     segment, and a batch flushed with the game's `DS` wrote game code/`EXE` image into
-    `STREAM.BIN`.  `sub_SeamSend` and `sub_SeamFlush` now load the block segment themselves (and
+    `OUTPUT.BIN`.  `sub_SeamSend` and `sub_SeamFlush` now load the block segment themselves (and
     the pass re-establishes it at `sp_off`), so no caller context can corrupt a batch;
   - **run**: 45 s file backend, 8,828 records / 1,200,758 bytes, 853 frames, 6,823 rects, 165
     scrolls, 625 palette messages, 353 `opl_batch` / 2,361 register writes / 4 `audio_ctrl`; the
@@ -1493,7 +1493,7 @@ emulator-hook demo, not this port).
     and timed INPUT replay. `dotnet build client -c Release` and the existing
     stream decoder gates remain green. With M1c closed, M2 is next.
 - 2026-10-26 - timed folder-link playback (`YT2B`):
-  - **transport**: `STREAM.BIN` and `INPUT.BIN` now wrap each unchanged v0
+  - **transport**: `OUTPUT.BIN` and `INPUT.BIN` now wrap each unchanged v0
     frame with a PIT timestamp and length. The ASM server timestamps output on
     its monotonic PIT timeline and unwraps client input; the client stamps
     input on its own monotonic PIT clock (seeded from the first server frame
@@ -1501,7 +1501,7 @@ emulator-hook demo, not this port).
     retains raw fixture plus YT2S compatibility;
   - **sample/bundles**: added a deterministic timed engine-output fixture from
     `sample-video.bin`; Linux and Windows publishers stage it as
-    `sample/STREAM.BIN`, and smoke-test launchers play that file. Live folder
+    `sample/OUTPUT.BIN`, and smoke-test launchers play that file. Live folder
     launchers no longer require a separate `.yt2s` capture;
   - **first-frame clock fix**: replaying a captured `INPUT.BIN` exposed that
     the client re-anchored its input clock when the first server frame arrived
@@ -1517,3 +1517,19 @@ emulator-hook demo, not this port).
     282,337 bytes spanning 14.897 s; a separate live run consumed a timed
     `INPUT.BIN` keyframe request (set_mode 1 -> 3) and produced 934 records in
     8.923 s.
+- 2026-10-28 - transport rename (`STREAM.BIN` -> `OUTPUT.BIN`):
+  - the asm seam now creates `OUTPUT.BIN`; the client help, bundle launchers,
+    publishers, DOSBox profiles, session tests and all current docs use the new
+    name. `INPUT.BIN` is unchanged. Existing bundles and recordings that still
+    use the old name are not auto-detected; republish or rename the file;
+  - `seam_name` keeps the same 8.3 width, so the seam block layout and size are
+    unchanged and the oracle build stays byte-identical;
+  - **verification**: `verify.sh` `seam_pin: OK`, `SWREG.EXE: OK`, `IDENTICAL`;
+    the file build assembles with 0 warnings (`S1DEA prefix 7`, `EMMXXXX0`
+    delta `0C99h`); `tests/session/run.sh` passed three consecutive runs;
+    `tests/replay` and `tests/audio` are green; `tests/link/run.sh --seconds
+    10` reports every received message byte-identical; `tools/dosbox/stream.sh
+    10` produced 1,068 records / 164,337 bytes and 150 PNG frames; both
+    publishers stage `sample/OUTPUT.BIN`, and the Linux bundle replay decodes
+    41 frames. The session gate now waits for its replay/log completion line
+    before terminating the client, removing a termination race.

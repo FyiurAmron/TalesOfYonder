@@ -107,7 +107,7 @@ cp -f "$PUBLISH_DIR/client-start.sh" "$BUNDLE/client-start.sh"
 cp -f "$PUBLISH_DIR/play.sh" "$BUNDLE/play.sh"
 cp -f "$PUBLISH_DIR/smoke-test.sh" "$BUNDLE/smoke-test.sh"
 cp -f "$PUBLISH_DIR/README.txt" "$BUNDLE/README.txt"
-cp -f "$SAMPLE" "$BUNDLE/sample/STREAM.BIN"
+cp -f "$SAMPLE" "$BUNDLE/sample/OUTPUT.BIN"
 chmod +x "$BUNDLE/client-start.sh" "$BUNDLE/server-start.sh" \
          "$BUNDLE/play.sh" "$BUNDLE/smoke-test.sh"
 [ -f "$CLIENT/Yt2Client" ] && chmod +x "$CLIENT/Yt2Client"

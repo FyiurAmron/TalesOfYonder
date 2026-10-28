@@ -82,7 +82,7 @@ Check `docs/porting.md` §9 before acting. As of the last update: M1 is done —
 picture cache, the DOS file service, the palette service and the video boundary (draw segment,
 mode sets, VBE bank switch) are annotated; `docs/asm-style.md` is in place and the byte gate is
 green after each batch. The optional M1b boundary spike is done as well: a `-DSTREAM` build
-streams mode-13h dirty rows and palette writes to `STREAM.BIN`, and `tools/stream/replay.py`
+streams mode-13h dirty rows and palette writes to `OUTPUT.BIN`, and `tools/stream/replay.py`
 replays them (see `docs/stream.md`). The M1 input wrappers are annotated too: keyboard
 poll/wait (`fn_PollInput`/`fn_WaitKey`, DOS int 21h 06h/0Ch) and the INT 33h mouse driver with
 its software cursor (`fn_MouseInit`/`fn_MouseHandler`, S13A0). The sound and tick wrappers are

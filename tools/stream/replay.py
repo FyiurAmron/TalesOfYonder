@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Replay a YT2 VIDEO recording or timed STREAM.BIN from the file seam.
+"""Replay a YT2 VIDEO recording or timed OUTPUT.BIN from the file seam.
 
-    python3 tools/stream/replay.py STREAM.BIN --out frames/
+    python3 tools/stream/replay.py OUTPUT.BIN --out frames/
 
 Raw fixtures are a bare sequence of protocol-v0 frames. The file seam's YT2B
 container adds an engine PIT timestamp and length before each unchanged frame.

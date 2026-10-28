@@ -10,10 +10,10 @@
 #                        [--mouse SECONDS:DX:DY ...] [--click SECONDS:BUTTON:0|1 ...]
 #
 # Builds the tee variant (-DSEAM -DSEAM_FILE -DSEAM_TEE: the seam writes
-# STREAM.BIN *and* mirrors every message to COM1), starts DOSBox-X headless on
+# OUTPUT.BIN *and* mirrors every message to COM1), starts DOSBox-X headless on
 # a private Xvfb display with COM1 bridged to TCP, runs the C# client with
 # --dump, then verifies with tools/stream/compare_streams.py that every message the
-# client received is byte-identical to the seam's own STREAM.BIN from the same
+# client received is byte-identical to the seam's own OUTPUT.BIN from the same
 # session.  The messages sent before the client connected are reported but are
 # not failures (the client asks for a keyframe and resynchronises).
 #
@@ -59,7 +59,7 @@ done
 dotnet build "$ROOT/client" -c Release >/dev/null
 
 # One session: the engine under DOSBox-X, the client against it, and the
-# comparison of what the client received with the engine's own STREAM.BIN.
+# comparison of what the client received with the engine's own OUTPUT.BIN.
 #
 # The emulated serial link is lossy: when the host's TCP thread stalls, the
 # emulator's nullmodem buffer overflows and a chunk of the stream is lost.
@@ -103,7 +103,7 @@ while [ "$attempt" -le "$ATTEMPTS" ]; do
         echo "link: FAIL - the client received nothing (see $WORK/dosbox.log)" >&2
         exit 1
     fi
-    if python3 "$ROOT/tools/stream/compare_streams.py" "$WORK/game/STREAM.BIN" "$WORK/client.dump"; then
+    if python3 "$ROOT/tools/stream/compare_streams.py" "$WORK/game/OUTPUT.BIN" "$WORK/client.dump"; then
         echo "link: artifacts in $WORK"
         exit 0
     fi

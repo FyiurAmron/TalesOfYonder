@@ -6,7 +6,7 @@ What it is
 A development client for the instrumented SWREG.EXE ("seam" build), bundled
 with the asm server: the game
 streams its screen (the 640x480 VBE intro and the mode-13h game) and palette
-into STREAM.BIN in its working directory, and the client sends keyboard and
+into OUTPUT.BIN in its working directory, and the client sends keyboard and
 mouse input back through INPUT.BIN next to it.  Both files are pseudo-rings:
 at a size limit the writer truncates them to zero and restarts from offset 0,
 and the other side notices the shrink and rewinds.  This bundle runs the
@@ -29,10 +29,10 @@ Contents
   client-start.bat         follows the live timed BIN transport
   server-start.bat         starts DOSBox-X with the folder-link profile
   play.bat                 starts the server, then the client
-  smoke-test.bat           replays sample\STREAM.BIN, no DOSBox-X needed
-  sample\STREAM.BIN        a timed engine-to-client stream
+  smoke-test.bat           replays sample\OUTPUT.BIN, no DOSBox-X needed
+  sample\OUTPUT.BIN        a timed engine-to-client stream
   server\                  the game side:
-    dosbox-x.conf            no serial port; the link is STREAM.BIN/INPUT.BIN
+    dosbox-x.conf            no serial port; the link is OUTPUT.BIN/INPUT.BIN
     game\                    the seam build + game files + the link files
     capture\                 DOSBox-X screenshots and optional YT2S captures
 
@@ -45,18 +45,18 @@ or, in two windows:
 
 The client asks the engine for a keyframe when it connects, so the start
 order does not matter; if it connects late it resynchronises by itself. Both
-`STREAM.BIN` and `INPUT.BIN` carry timestamps around their unchanged v0 frames.
+`OUTPUT.BIN` and `INPUT.BIN` carry timestamps around their unchanged v0 frames.
 The client follows the server's output file and appends timed input records,
 so each transport file is directly usable for replay.
 
 Replay the last run at its captured pace with:
 
-  client\Yt2Client.exe --file server\game\STREAM.BIN
+  client\Yt2Client.exe --file server\game\OUTPUT.BIN
 
 Replay saved input into a fresh server run with:
 
   copy server\game\INPUT.BIN server\capture\INPUT.BIN
-  client\Yt2Client.exe --follow server\game\STREAM.BIN --input server\game\INPUT.BIN --replay-input server\capture\INPUT.BIN
+  client\Yt2Client.exe --follow server\game\OUTPUT.BIN --input server\game\INPUT.BIN --replay-input server\capture\INPUT.BIN
 
 An additional full-duplex YT2S capture is optional (`--record-session PATH`).
 
@@ -113,7 +113,7 @@ Troubleshooting
   "SDL_CreateWindow failed" or a DllNotFound message all mean SDL could not
   start; the commonest cause is client\SDL3.dll missing (it ships there - do
   not move the exe out of the bundle).
-* "follow: waiting for ...STREAM.BIN" means the engine has not created the
+* "follow: waiting for ...OUTPUT.BIN" means the engine has not created the
   file yet.  Start server-start.bat; the client may also start first and waits
   for the file.  If it never appears, the game side is not running (see the
   next point).
@@ -143,7 +143,7 @@ Notes
 * Mouse input goes through an INT 33h shim in the engine, so the game's own
   software cursor follows the client.
 * The folder link is the bundle's transport: the engine appends to
-  STREAM.BIN and reads INPUT.BIN, both pseudo-rings (8 MiB video, 64 KiB
+  OUTPUT.BIN and reads INPUT.BIN, both pseudo-rings (8 MiB video, 64 KiB
   input) that wrap and resynchronise.  The client still speaks the old
   TCP/nullmodem link with --tcp when it is built against the serial engine.
 * Provenance: SDL3.dll comes from the pinned SDL3 win32-x64 release listed in
