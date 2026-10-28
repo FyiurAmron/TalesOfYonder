@@ -1,10 +1,11 @@
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILD ?= $(abspath $(ROOT)/../../build/c)
+GENERATED ?= $(BUILD)/generated
 
 CC ?= cc
 CFLAGS ?= -std=c11 -O2 -g
 WARNINGS := -Wall -Wextra -Wpedantic -Werror
-CPPFLAGS += -I$(ROOT)/include
+CPPFLAGS += -I$(ROOT)/include -I$(GENERATED)
 COMPILE := $(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -MMD -MP
 
 LIB_SOURCES := \
@@ -18,6 +19,13 @@ LIB_SOURCES := \
 	src/transport_stream.c \
 	src/video.c
 
+GAME_SOURCES := \
+	src/game/game_machine.c \
+	src/game/game_services.c \
+	src/game/game_main.c
+
+GAME_GENERATED := $(sort $(wildcard $(GENERATED)/game_*.c))
+
 TEST_SOURCES := \
 	tests/test_main.c \
 	tests/test_memory.c \
@@ -27,17 +35,24 @@ TEST_SOURCES := \
 	tests/test_video.c
 
 LIB_OBJECTS := $(LIB_SOURCES:src/%.c=$(BUILD)/obj/src/%.o)
+GAME_OBJECTS := $(GAME_SOURCES:src/%.c=$(BUILD)/obj/src/%.o) \
+	$(GAME_GENERATED:$(GENERATED)/%.c=$(BUILD)/obj/generated/%.o)
 TEST_OBJECTS := $(TEST_SOURCES:tests/%.c=$(BUILD)/obj/tests/%.o)
 STUB_OBJECT := $(BUILD)/obj/stub.o
 
 STUB := $(BUILD)/yt2stub
+GAME := $(BUILD)/yt2game
 TESTS := $(BUILD)/yt2core-tests
 
 .PHONY: all test clean
 
-all: $(STUB) $(TESTS)
+all: $(STUB) $(GAME) $(TESTS)
 
 $(BUILD)/obj/src/%.o: $(ROOT)/src/%.c
+	@mkdir -p $(dir $@)
+	$(COMPILE) -c $< -o $@
+
+$(BUILD)/obj/generated/%.o: $(GENERATED)/%.c
 	@mkdir -p $(dir $@)
 	$(COMPILE) -c $< -o $@
 
@@ -53,6 +68,10 @@ $(STUB): $(LIB_OBJECTS) $(STUB_OBJECT)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 
+$(GAME): $(LIB_OBJECTS) $(GAME_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
 $(TESTS): $(LIB_OBJECTS) $(TEST_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
@@ -63,4 +82,4 @@ test: all
 clean:
 	rm -rf $(BUILD)
 
--include $(LIB_OBJECTS:.o=.d) $(TEST_OBJECTS:.o=.d) $(STUB_OBJECT:.o=.d)
+-include $(LIB_OBJECTS:.o=.d) $(GAME_OBJECTS:.o=.d) $(TEST_OBJECTS:.o=.d) $(STUB_OBJECT:.o=.d)

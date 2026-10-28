@@ -50,6 +50,11 @@ and stage the minimum game files, so the output directory runs as-is.
     sh tools/dosbox/stream.sh 45                      # run + replay, artifacts in build/runs/stream/…
     python3 tools/stream/replay.py OUTPUT.BIN --out frames/
 
+`tools/stream/frames.py extract OUTPUT.BIN` decodes the same recording but prints one
+line per distinct frame (PIT stamp, index-buffer hash, palette hash); `match` compares
+that list with an engine `--present-log`. The M3 gate pins the settled intro frames of a
+recording as checkpoints instead (see `engine/c/README.md`).
+
 `STREAM_KEYS` injects XTEST keys at second marks relative to the DOSBox-X
 launch, which is how the intro is skipped for a gameplay capture:
 

@@ -1,5 +1,6 @@
 @echo off
 rem Build the C core, the stub and the unit tests with MSVC (C11).
+rem The M3 yt2game runner needs UASM and Python; use tools/build.sh for it.
 setlocal
 set ROOT=%~dp0..\..
 set BUILD=%ROOT%\build\c
