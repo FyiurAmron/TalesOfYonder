@@ -48,7 +48,10 @@ SERVER=${SERVER:-asm}
 case "$SERVER" in
     asm) SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file} ;;
     c)
-        echo "publish-win: the C server bundle is not available yet" >&2
+        echo "publish-win: the C server bundle needs a Windows yt2game.exe" >&2
+        echo "  build it on Windows first:  engine\\c\\tools\\build.bat (MSVC)" >&2
+        echo "  then pass --server-dir with a directory containing yt2game.exe;" >&2
+        echo "  the Windows launchers for the C engine are not wired yet" >&2
         exit 2
         ;;
     *)
