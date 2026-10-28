@@ -210,7 +210,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md`; **live client link since 2026-10-20**, see `docs/client.md` |
 | M1c | Timed asm session trace | **done 2026-10-25** - capture/replay both directions with paced output and input |
 | M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them — **done 2026-10-28**, see `engine/c/README.md` |
-| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
+| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path - **done 2026-10-28**, see the progress log |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
 | M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
@@ -1585,3 +1585,47 @@ emulator-hook demo, not this port).
   - **deliberate limits**: codec 0 only (row runs/scroll detection arrive with
     the video subsystem), AUDIO payload encoders exist but no engine emitter
     uses them yet, the stub is not game content, and VBE modes wait for M3/M4.
+- 2026-10-28 - M3 first light: the emitted C reaches the title and attract:
+  - **emission**: `tools/port/program.py` joins the UASM listing with the
+    original `SWREG.EXE` image (133 segments, `0x2D652` bytes, zero
+    label/frame mismatches) and `tools/port/emit_c.py` transliterates all
+    36,285 instructions of the 132 code segments into 11 C files, one
+    dispatch unit per `(segment, offset)`. `engine/c/tools/build.sh` now runs
+    UASM, the emitter and make in one pass; the generated sources land in
+    `build/c/generated/` and are never committed. DOS relocation sites keep
+    their linked values and are rebased to `YT2_LOAD_SEG` (`0x1000`);
+  - **machine boundary**: `include/yt2/game.h` plus `src/game/` hold the
+    relocated image, guest stack, register plumbing, the segment dispatcher
+    and the DOS/BIOS/EMS/mouse/clock services. The guest runs on its own
+    stack, far calls use the guest stack, the INT 1Ch handler runs nested
+    through the `F000:0000` IRET sentinel and the BIOS tick word at `0x46C`
+    advances from the emitted cycle clock;
+  - **boot and display**: the PSP carries the `CH2.BAT` command line
+    (` /W /B`), EMS hands out the `0x20`-page work arena plus `0x180` cache
+    pages, mode 13h is set through INT 10h, the tick ISR installs at
+    `1FBA:019E`, and the intro settles on the Webfoot logo at tick 75 with
+    the attract scenes following. `yt2game` takes `--game DIR`, `--ticks N`,
+    `--transfers N`, `--dump DIR`, `--ppm FILE`, `--present-log FILE` and
+    `--present-dir DIR`;
+  - **timing**: a provisional cycle model charges 2 cycles per emitted
+    instruction against the oracle profile's 30,000 cycles/ms and models
+    the VGA retrace window on port 3DAh, so palette fades and frame waits
+    no longer run free; the BIOS tick stays at 1,647,765 cycles;
+  - **checkpoints**: `tests/c/game_checkpoints.txt` pins seven settled
+    scenes of the no-input intro (Webfoot logo, both story screens and the
+    four attract vignettes) by framebuffer and DAC hash. They come from the
+    staged stream recording and agree with the DOSBox-X save states. At the
+    aligned save scene the settled globals also match (`v_94F1=0x1E0`,
+    `v_94D7=5`, `v_50F6=0x8000`); the remaining DGROUP deltas are BSS fill,
+    DOS heap segments, the absent SBFMDRV strings and timing counters;
+  - **verification**: `tests/c/run.sh` now runs `yt2game` for 2,500 ticks
+    (about 13 s, 18.1 M dispatches), requires the seven checkpoint pairs in
+    order with at least 60 ticks of hold each, and re-hashes the end
+    framebuffer, palette and globals from the dump. All seven match; the
+    asm sources were not touched, so `verify.sh` remains `SWREG.EXE: OK` /
+    `IDENTICAL`;
+  - **known deltas**: the cycle model is still flat, so the early
+    Webfoot-to-title palette cross-fade lands at a different loop
+    iteration than on the original (the settled frames agree), the RNG seed
+    and DOS heap layout differ, and SBFMDRV is not resident yet (M6).
+    These do not affect the gated scenes.
