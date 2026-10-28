@@ -9,7 +9,9 @@ documented engine ↔ client protocol (`docs/protocol.md`).
 seam (`engine/asm/swreg/src/seam.asm`) streams the live display through two files in a shared
 folder (`OUTPUT.BIN`/`INPUT.BIN`) and takes keyboard input back. The C# client (`client/`)
 mirrors the screen in a window and forwards keys, and the Linux/Windows bundles are one script
-away. The C stage (`engine/c/`) has not started. `docs/porting.md` §9 is the live progress log.
+away. The C stage (`engine/c/`) has not started: M2 begins with the headless C core and
+platform service layer, while the existing client remains the SDL3 host. `docs/porting.md` §9 is
+the live progress log.
 
 ## Quick start
 
