@@ -93,7 +93,13 @@ static void yt2_usage(const char *program)
 {
     fprintf(stderr,
             "usage: %s [--game DIR] [--transfers N] [--ticks N] [--trace-api] [--dump DIR]\n"
-            "          [--ppm FILE] [--present-log FILE] [--present-dir DIR]\n",
+            "          [--ppm FILE] [--present-log FILE] [--present-dir DIR]\n"
+            "          [--live|--link] [--no-pace] [--trace-input]\n"
+            "\n"
+            "  --live     play: folder link (OUTPUT.BIN/INPUT.BIN) and real-time pacing\n"
+            "  --link     folder link only, as fast as the host runs\n"
+            "  --no-pace  with --live, run the link without the 30,000 cycles/ms clock\n"
+            "  --transfers N  dispatch cap (default 0 = unlimited)\n",
             program);
 }
 
@@ -104,9 +110,13 @@ int main(int argc, char **argv)
     const char *ppm = NULL;
     const char *present_log = NULL;
     const char *present_dir = NULL;
-    unsigned long transfers = 20000000ul;
+    unsigned long transfers = 0;
     unsigned long limit_ticks = 0;
     int trace = 0;
+    int trace_input = 0;
+    int link = 0;
+    int pace = 0;
+    int no_pace = 0;
     int index;
 
     for (index = 1; index < argc; index++) {
@@ -124,8 +134,17 @@ int main(int argc, char **argv)
             present_log = argv[++index];
         } else if (strcmp(argv[index], "--present-dir") == 0 && index + 1 < argc) {
             present_dir = argv[++index];
+        } else if (strcmp(argv[index], "--live") == 0) {
+            link = 1;
+            pace = 1;
+        } else if (strcmp(argv[index], "--link") == 0) {
+            link = 1;
+        } else if (strcmp(argv[index], "--no-pace") == 0) {
+            no_pace = 1;
         } else if (strcmp(argv[index], "--trace-api") == 0) {
             trace = 1;
+        } else if (strcmp(argv[index], "--trace-input") == 0) {
+            trace_input = 1;
         } else if (strcmp(argv[index], "--help") == 0) {
             yt2_usage(argv[0]);
             return 0;
@@ -136,6 +155,10 @@ int main(int argc, char **argv)
     }
 
     yt2_game_init(&g_m, game);
+    if (link && yt2_link_open(&g_m) != YT2_OK) {
+        return 2;
+    }
+    g_m.pace = no_pace ? 0 : pace;
     if (present_log != NULL) {
         g_m.present_log = fopen(present_log, "w");
         if (g_m.present_log == NULL) {
@@ -147,6 +170,7 @@ int main(int argc, char **argv)
         snprintf(g_m.present_dir, sizeof(g_m.present_dir), "%s", present_dir);
     }
     g_m.trace_api = trace;
+    g_m.trace_input = trace_input;
     g_m.limit_ticks = (uint32_t)limit_ticks;
     yt2_game_load(&g_m);
 

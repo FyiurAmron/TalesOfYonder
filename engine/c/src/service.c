@@ -242,7 +242,10 @@ int yt2_service_poll(yt2_service *service)
 
         if (yt2_transport_read(service->transport, bytes, sizeof(bytes), &got) !=
             YT2_OK) {
-            service->failed = 1;
+            /* A live input file can change under the reader (the client
+               truncates INPUT.BIN for a new session, a pseudo-ring wraps).
+               The transport resynchronises on the next pass, so a read error
+               must not poison the write side of the link. */
             return YT2_ERR;
         }
         if (got == 0u) {

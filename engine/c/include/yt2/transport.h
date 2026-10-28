@@ -82,6 +82,7 @@ typedef struct yt2_folder_transport {
     uint32_t output_wrapped;
 
     uint32_t input_frames;
+    uint32_t input_resyncs;
     int input_from_start;
     int input_opened;
     int input_fresh;

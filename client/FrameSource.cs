@@ -128,6 +128,7 @@ public abstract class FrameSource : IDisposable
                 return 0;
             }
             Span<byte> eventHeader = stackalloc byte[TimedBinFormat.EventHeaderSize];
+            Span<byte> magic = stackalloc byte[2];
             while (true)
             {
                 if (_frame is not null)
@@ -225,9 +226,81 @@ public abstract class FrameSource : IDisposable
                             .ReadUInt32LittleEndian(eventHeader);
                         uint size = System.Buffers.Binary.BinaryPrimitives
                             .ReadUInt32LittleEndian(eventHeader[4..]);
-                        if (size < FrameReader.HeaderSize || size > TimedBinFormat.MaxFrame)
+                        bool plausible = size >= FrameReader.HeaderSize &&
+                                         size <= TimedBinFormat.MaxFrame;
+                        if (plausible && length - start >=
+                            TimedBinFormat.EventHeaderSize + 2)
                         {
-                            throw new InvalidDataException("invalid timed OUTPUT.BIN frame length");
+                            // The stream is just past the 8-byte record
+                            // header, so the frame's first two bytes are next.
+                            if (!TimedBinReader.TryReadTail(file, magic) ||
+                                magic[0] != 0x54 || magic[1] != 0x59)
+                            {
+                                plausible = false;
+                            }
+                            file.Seek(start + TimedBinFormat.EventHeaderSize,
+                                      SeekOrigin.Begin);
+                        }
+                        if (!plausible)
+                        {
+                            // A live file can be joined in the middle of a
+                            // record (the writer appended while we read the
+                            // end).  Scan forward for the next record whose
+                            // length and frame magic both fit instead of
+                            // killing the reader thread.
+                            long scan = start + 1;
+                            long limit = Math.Min(length,
+                                                  start + 1024 * 1024);
+                            bool found = false;
+                            while (scan + TimedBinFormat.EventHeaderSize <= limit)
+                            {
+                                file.Seek(scan, SeekOrigin.Begin);
+                                if (!TimedBinReader.TryReadTail(file, eventHeader))
+                                {
+                                    break;
+                                }
+                                uint candidate = System.Buffers.Binary
+                                    .BinaryPrimitives.ReadUInt32LittleEndian(
+                                        eventHeader[4..]);
+                                if (candidate < FrameReader.HeaderSize ||
+                                    candidate > TimedBinFormat.MaxFrame ||
+                                    scan + TimedBinFormat.EventHeaderSize +
+                                        candidate > length)
+                                {
+                                    scan++;
+                                    continue;
+                                }
+                                if (!TimedBinReader.TryReadTail(file, magic) ||
+                                    magic[0] != 0x54 || magic[1] != 0x59)
+                                {
+                                    scan++;
+                                    continue;
+                                }
+                                found = true;
+                                break;
+                            }
+                            if (!found)
+                            {
+                                // Nothing complete yet; keep the position and
+                                // scan again when the record has arrived.
+                                file.Seek(start, SeekOrigin.Begin);
+                                Thread.Sleep(5);
+                                continue;
+                            }
+                            Console.Error.WriteLine(
+                                $"follow: resynchronised at byte {scan} " +
+                                $"(was {start})");
+                            file.Seek(scan, SeekOrigin.Begin);
+                            position = scan;
+                            start = scan;
+                            if (!TimedBinReader.TryReadTail(file, eventHeader))
+                            {
+                                continue;
+                            }
+                            stamp = System.Buffers.Binary.BinaryPrimitives
+                                .ReadUInt32LittleEndian(eventHeader);
+                            size = System.Buffers.Binary.BinaryPrimitives
+                                .ReadUInt32LittleEndian(eventHeader[4..]);
                         }
                         if (length - start < TimedBinFormat.EventHeaderSize + size)
                         {

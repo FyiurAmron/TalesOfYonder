@@ -156,9 +156,8 @@ static int yt2_folder_write(void *context, const uint8_t *frame, uint32_t length
         fwrite(frame, 1, (size_t)length, folder->output) != (size_t)length) {
         return YT2_ERR;
     }
-    if (fflush(folder->output) != 0) {
-        return YT2_ERR;
-    }
+    /* A present writes a batch of records; the flush (a frame_end boundary in
+       every live producer) publishes it, so a frame costs one commit. */
     folder->output_written += (uint32_t)sizeof(record) + length;
     folder->output_frames++;
     return YT2_OK;
@@ -192,11 +191,40 @@ static int yt2_folder_read_raw(yt2_folder_transport *folder, uint8_t *destinatio
     }
     got = fread(destination, 1, (size_t)want, folder->input);
     if (got == 0u) {
-        return YT2_ERR;
+        /* The writer truncated the file under us; retry on the next poll. */
+        return YT2_OK;
     }
     folder->input_position += (long)got;
     *read = (uint32_t)got;
     return YT2_OK;
+}
+
+/*
+ * A timed record is plausible when its length fits and the frame behind the
+ * 8-byte record header starts with the v0 magic.  Following a live file is
+ * racy by nature: the client truncates INPUT.BIN for a new session and the
+ * engine's pseudo-ring wraps OUTPUT.BIN, so a read offset taken from the file
+ * size can land inside a record.  Scanning for the next plausible record
+ * recovers from that instead of killing the link.
+ */
+static int yt2_folder_record_at(const uint8_t *buffer, uint32_t length,
+                                uint32_t offset, uint32_t *frame_length)
+{
+    uint32_t size;
+
+    if (length - offset < 8u) {
+        return 0;
+    }
+    size = yt2_le32(buffer + offset + 4u);
+    if (size < YT2_FRAME_HEADER_SIZE || size > YT2_MAX_FRAME) {
+        return 0;
+    }
+    if (length - offset >= 10u &&
+        (buffer[offset + 8u] != 0x54u || buffer[offset + 9u] != 0x59u)) {
+        return 0;                   /* not the v0 frame magic */
+    }
+    *frame_length = size;
+    return 1;
 }
 
 static int yt2_folder_read_timed(yt2_folder_transport *folder, uint8_t *destination,
@@ -263,7 +291,10 @@ static int yt2_folder_read_timed(yt2_folder_transport *folder, uint8_t *destinat
             got = fread(folder->input_buffer + folder->input_length, 1,
                         (size_t)want, folder->input);
             if (got == 0u) {
-                return YT2_ERR;
+                /* The writer truncated or replaced the file between the size
+                   probe and the read: wait for the next poll, which sees the
+                   new size and resets. */
+                return YT2_OK;
             }
             folder->input_length += (uint32_t)got;
             folder->input_position += (long)got;
@@ -272,13 +303,51 @@ static int yt2_folder_read_timed(yt2_folder_transport *folder, uint8_t *destinat
         if (folder->input_length - folder->input_offset < 8u) {
             return YT2_OK;
         }
-        frame_length = yt2_le32(folder->input_buffer + folder->input_offset + 4);
-        if (frame_length < YT2_FRAME_HEADER_SIZE ||
-            frame_length > YT2_MAX_FRAME) {
-            return YT2_ERR;
+        if (!yt2_folder_record_at(folder->input_buffer, folder->input_length,
+                                  folder->input_offset, &frame_length)) {
+            uint32_t scan = folder->input_offset + 1u;
+
+            while (scan < folder->input_length &&
+                   !yt2_folder_record_at(folder->input_buffer,
+                                         folder->input_length, scan,
+                                         &frame_length)) {
+                scan++;
+            }
+            if (scan >= folder->input_length) {
+                /* No boundary here: keep the tail, a header may be split. */
+                uint32_t keep = folder->input_length - folder->input_offset;
+
+                if (keep > 7u) {
+                    keep = 7u;
+                }
+                if (keep > 0u) {
+                    memmove(folder->input_buffer,
+                            folder->input_buffer + folder->input_length - keep,
+                            keep);
+                }
+                folder->input_length = keep;
+                folder->input_offset = 0;
+                return YT2_OK;
+            }
+            {
+                uint32_t skipped = scan - folder->input_offset;
+
+                folder->input_offset = scan;
+                folder->input_resyncs++;
+                fprintf(stderr,
+                        "yt2: input resynchronised after %u byte(s)\n",
+                        (unsigned)skipped);
+            }
         }
         if (folder->input_length - folder->input_offset < 8u + frame_length) {
             return YT2_OK;
+        }
+        if (!yt2_folder_record_at(folder->input_buffer, folder->input_length,
+                                  folder->input_offset, &frame_length)) {
+            /* The candidate was accepted while its frame magic had not
+               arrived yet; it was a false boundary.  Look again. */
+            folder->input_offset++;
+            continue;
         }
         for (uint32_t index = 0; index < frame_length; index++) {
             folder->pending[index] =
