@@ -1,11 +1,14 @@
 #!/bin/sh
-# M2 gate: build the C core, run its unit tests, replay the asm fixture through
-# the folder backend byte-for-byte, exercise the stub's folder/stream inputs,
-# and render its output with both the client and the Python decoder.
+# M2/M3 gate: build the C core, run its unit tests, replay the asm fixture
+# through the folder backend byte-for-byte, exercise the stub's folder/stream
+# inputs, render its output with both the client and the Python decoder, then
+# run the transliterated game to the title/attract and match the original's
+# settled frames and globals.
 #
 #   sh tests/c/run.sh [--no-build]
 #
-# Needs a C11 compiler and dotnet.  Artifacts land in build/runs/c/<stamp>/.
+# Needs a C11 compiler, UASM and python3-capstone (the game emission),
+# and dotnet (the client render).  Artifacts land in build/runs/c/<stamp>/.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 BUILD="$ROOT/build/c"
@@ -30,7 +33,8 @@ if [ "$DO_BUILD" = 1 ]; then
         exit 1
     }
 fi
-if [ ! -x "$BUILD/yt2stub" ] || [ ! -x "$BUILD/yt2core-tests" ]; then
+if [ ! -x "$BUILD/yt2stub" ] || [ ! -x "$BUILD/yt2core-tests" ] || \
+   [ ! -x "$BUILD/yt2game" ]; then
     echo "c: missing build output in $BUILD" >&2
     exit 1
 fi
@@ -149,5 +153,18 @@ python3 "$ROOT/tests/c/check.py" stream "$RUN/stream/OUTPUT.v0" --frames 2
 echo "c: null backend"
 "$BUILD/yt2stub" --transport null --frames 2 --no-wait >"$RUN/null.log" 2>&1
 grep -q 'done frames=2' "$RUN/null.log"
+
+echo "c: game first light"
+mkdir -p "$RUN/game" "$RUN/checkpoint"
+for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
+    cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
+done
+timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 2500 \
+    --transfers 100000000 --present-log "$RUN/checkpoint/present.txt" \
+    --dump "$RUN/checkpoint" >"$RUN/checkpoint/stdout.log" \
+    2>"$RUN/checkpoint/stderr.log"
+grep -q 'exited=0' "$RUN/checkpoint/stderr.log"
+python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
+    "$ROOT/tests/c/game_checkpoints.txt" --dump "$RUN/checkpoint"
 
 echo "c: OK (artifacts in $RUN)"

@@ -1,0 +1,24 @@
+# M3 first-light checkpoints (no input).
+#
+# Each line is a scene the original displays undisturbed for several seconds:
+#
+#   <name> <framebuffer-hash> <palette-hash>
+#
+# The hashes are FNV-1a 64 over the 320x200 mode-13h index buffer and the
+# 6-bit DAC values, in that order, seeded with the same offset basis the C
+# engine uses (0xCBF29CE484222325).  They were taken from the stream recording
+# of the original (tools/dosbox/stream.sh) at the end of each scene's fade and
+# cross-checked against the DOSBox-X save states, which show the same settled
+# palette.  The sequence is what the intro plays after start-up: the Webfoot
+# logo, the two story screens, then the four attract vignettes.
+#
+# The gate requires the pairs in this order, each held for at least 60 ticks
+# (3.3 s) of engine time.  A match means the C port drew the original's pixels
+# with the original's palette, not merely a similar screen.
+webfoot           c5b1519ef4c1133a 089875ebab4d4c6f
+story-sleep       fb816b027a864ad1 16e60732045316f6
+story-knock       033c9733af00eb97 16e60732045316f6
+attract-combat    1b323b732af8cfd9 e3275ee3ae459fb5
+attract-magic     e7bf3ff049508b10 e3275ee3ae459fb5
+attract-dragons   fd9a4b6d3ea90207 e3275ee3ae459fb5
+attract-tower     0384e6a33033b700 e3275ee3ae459fb5

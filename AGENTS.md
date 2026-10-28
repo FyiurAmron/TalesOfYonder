@@ -96,9 +96,11 @@ machine, checksum self-patch, and a DOSBox-X black-box harness (`engine/asm/sbfm
 The repository layout is settled (`docs/layout.md`): engine sources under `engine/`, host tooling
 under `tools/`, committed gates under `tests/`, and `build/` mirrors the tree
 (`build/swreg/<variant>`, `build/sbfmdrv/`, `build/client/`, `build/runs/<kind>/<stamp>`, `build/dist/`).
-Next: M3 first light (the emitted C reaches the title/attract). M2 is done: `engine/c/` has the
-flat-memory/ALU core, v0 protocol/service boundary, `null`/stream/folder backends and a
-deterministic headless stub; `tests/c/run.sh` pins it to the asm fixture byte-for-byte. The SDL3
+M3 first light is done (2026-10-28): the emitted C reaches the Webfoot logo, both story screens
+and the attract vignettes, and `tests/c/run.sh` matches seven settled scene hashes and the settled
+globals against the oracle. M2 is done: `engine/c/` has the flat-memory/ALU core, v0
+protocol/service boundary, `null`/stream/folder backends and a deterministic headless stub;
+`tests/c/run.sh` pins it to the asm fixture byte-for-byte. Next: M4 subsystem migration. The SDL3
 host stays the existing C# client; a direct host can follow behind the same service interface.
 The driver work is closed: real `WORLD.DAT`
 blocks play against the static walk (`test/run.sh music`, with `MUSIC_CAP=wav|dro|both`
