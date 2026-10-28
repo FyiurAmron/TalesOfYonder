@@ -210,7 +210,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md`; **live client link since 2026-10-20**, see `docs/client.md` |
 | M1c | Timed asm session trace | **done 2026-10-25** - capture/replay both directions with paced output and input |
 | M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them — **done 2026-10-28**, see `engine/c/README.md` |
-| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path - **done 2026-10-28**, see the progress log |
+| M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path - **done 2026-10-28**, see the progress log; the same engine is playable through the live folder link (`yt2game --live`, mode 13h) |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
 | M6 | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
@@ -1629,3 +1629,92 @@ emulator-hook demo, not this port).
     iteration than on the original (the settled frames agree), the RNG seed
     and DOS heap layout differ, and SBFMDRV is not resident yet (M6).
     These do not affect the gated scenes.
+- 2026-10-28 - live folder link: the C port is playable:
+  - **link**: `src/game/game_link.c` connects the M2 seam to the machine.
+    Every present pass polls `INPUT.BIN` through `yt2_service` first, then
+    copies the mode-13h framebuffer and DAC into `yt2_video`, which sends
+    `set_mode`, changed 1-line rects, the changed palette span and
+    `frame_end`. A client keyframe request forces mode + full palette + every
+    row; the 64 MiB pseudo-ring wrap forces the same. The folder transport
+    now batches one present and is committed by `yt2_service_flush` instead
+    of flushing every record;
+  - **keyboard**: INPUT key events go into a DOS type-ahead queue. INT 21h
+    06h returns the ASCII byte, or zero followed by the scancode on the next
+    call for an extended key; 0Ch flushes the queue. This is the exact
+    contract `fn_PollInput`/`fn_WaitKey` already used;
+  - **mouse**: INT 21h 3533h reports a sentinel vector so `fn_MouseInit`
+    probes successfully; the INT 33h shim handles 00h/03h/04h/0Bh/0Ch/0Fh and
+    delivers motion/button events to the game's own `fn_MouseHandler` through
+    a guest far call (`YT2_SENTINEL_SEG:0001`, balanced stack). Absolute
+    pointer events mirror the counters against `v_MouseNewX/Y` so the game's
+    clamp stays authoritative;
+  - **pacing**: `--live` enables the link and throttles the guest to the
+    oracle's 30,000 cycles/ms in ~2 ms slices against the platform PIT clock;
+    `--link` keeps the link without pacing for tests; `--transfers 0` is now
+    unlimited (the default) so a session is not cut off at 20 M dispatches;
+  - **diagnostics**: `--trace-input` logs received keys, delivered DOS keys,
+    mouse-handler installation and mouse events;
+  - **verification**: `tests/c/run.sh` adds a live game link section: a fast
+    800-tick run consumes an appended key + mouse move, requires the
+    `--trace-input` lines and inspects `OUTPUT.BIN` (single 320x200x8 mode,
+    40,521 rows, 289 frames, palette traffic). The M3 checkpoint run and the
+    asm gates are unchanged. A scripted Enter + Down at the title menu
+    reached "Assemble a Party", so the input path drives the real UI; the
+    intro/attract before the menu is the original's ~5.5 minutes;
+  - **limits**: VBE presentation and FM/PC-speaker audio still wait for
+    M4/M6; the cycle model stays flat, and input timestamps are applied when
+    polled (the live client writes them in real time).
+- 2026-10-28 - fix: string instructions moved the wrong pointer:
+  - the shared step helper advanced **both** SI and DI for every string op,
+    so a `lodsb` inside a sprite loop also walked the destination. The
+    intro's gate scene draws its waving flags and other masked sprites with
+    `lodsb`/`stosb`, so every pixel landed two bytes apart and each row
+    drifted right: the flags smeared across the row while the settled M3
+    scenes (drawn with `rep movsw`) stayed correct, which is why the byte
+    gate did not see it;
+  - the helper now takes the pointers that actually move: MOVS/CMPS both,
+    LODS/OUTS source, STOS/SCAS destination; DF still reverses the step and
+    the 8/16-bit sizes are unchanged;
+  - regression: `engine/c/tests/test_game_main.c` builds as
+    `build/c/yt2game-tests` (run by `tests/c/run.sh`) and checks the pointer,
+    flag, DF, word and REP behaviour of all six operations;
+  - visual check against the original's recording: the gate scene now shows
+    solid flags attached to the poles plus the guard, portcullis and banner
+    text (oracle frames around 710), and the hands/mirror scene matches; the
+    seven M3 checkpoints and the asm gate are unchanged.
+- 2026-10-29 - fix: present at the seam's DAC and delay points (intro fades):
+  - the C presented only at input-poll and tick-ISR entry. `fn_PaletteFade`
+    writes the DAC many times inside one tick, so every intermediate step was
+    overwritten before the next pass: the logo fades cut instead of fading and
+    DAC-paced effects (the twinkling starfield) lost their animation. The
+    original's seam presents at each palette write, at each palette block and
+    at `fn_DelayTicks` entry, which is what makes those steps frames;
+  - `yt2_port_out8(3C8h)` now runs a pass before the DAC index changes (a
+    completed write is already in `machine->palette`), INT 10h 1017h presents
+    after staging its block, and `yt2_game_run` presents when it dispatches
+    `fn_DelayTicks` (S084D:0004 at runtime `YT2_LOAD_SEG + 084Dh`, i.e.
+    `184Dh`; the first version compared the unrelocated `084Dh` and never
+    fired), mirroring `fn_SeamPalette`, `fn_SeamSetDACBlockStub` and
+    `fn_SeamDelayStub`. `yt2_game_present` also
+    mirrors the seam's `SEAM_PASSES_PER_TICK` budget (three passes per BIOS
+    tick); a keyframe pass bypasses it, as `seam_forcepass` does;
+  - every DAC byte (3C9h) and every 1017h entry now also updates
+    `v_PalCurrent` (DGROUP:4124h), the table the scene code re-shows with a
+    block call. `fn_PaletteFade` modes 1/5 write through the 4D56h/4754h
+    staging buffer and leave 4124h alone, so a later full block write used to
+    put a stale (mostly black) palette over the story picture; the block write
+    at the story text now keeps the 246-entry palette the fade left on the
+    DAC;
+  - keyboard, traced end to end under Xvfb: ESC skips the intro, the mouse
+    reaches the menu and the party screen, and `--trace-input` shows every key
+    arriving at the DOS type-ahead queue. The main menu is mouse-driven in the
+    original as well: Down and Enter do nothing there under DOSBox-X (only
+    Ctrl+Q/M/S are listed), so the port matches the original; in-game keys
+    use the same `fn_PollInput` queue;
+  - verification: the Webfoot/Sierra fades now show ~14 steps each against the
+    recording, the title star at (206,5) ramps 0 -> 156 over frames 94-107
+    like the oracle's 130 -> 158, and the story text at frames 376+ no longer
+    dips to black. `tests/c/run.sh` (seven M3 checkpoints) and
+    `tests/c/game.sh` pass, and `tests/c/intro.sh` pins the three presentation
+    symptoms (logo ramp, star ramp, story palette); the Linux C bundle is
+    republished and smoke-tested.

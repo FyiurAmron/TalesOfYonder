@@ -20,9 +20,11 @@ LIB_SOURCES := \
 	src/video.c
 
 GAME_SOURCES := \
+	src/game/game_link.c \
 	src/game/game_machine.c \
-	src/game/game_services.c \
-	src/game/game_main.c
+	src/game/game_services.c
+
+GAME_MAIN_SOURCE := src/game/game_main.c
 
 GAME_GENERATED := $(sort $(wildcard $(GENERATED)/game_*.c))
 
@@ -34,19 +36,24 @@ TEST_SOURCES := \
 	tests/test_service.c \
 	tests/test_video.c
 
+GAME_TEST_SOURCES := tests/test_game_main.c
+
 LIB_OBJECTS := $(LIB_SOURCES:src/%.c=$(BUILD)/obj/src/%.o)
 GAME_OBJECTS := $(GAME_SOURCES:src/%.c=$(BUILD)/obj/src/%.o) \
 	$(GAME_GENERATED:$(GENERATED)/%.c=$(BUILD)/obj/generated/%.o)
+GAME_MAIN_OBJECT := $(GAME_MAIN_SOURCE:src/%.c=$(BUILD)/obj/src/%.o)
 TEST_OBJECTS := $(TEST_SOURCES:tests/%.c=$(BUILD)/obj/tests/%.o)
+GAME_TEST_OBJECTS := $(GAME_TEST_SOURCES:tests/%.c=$(BUILD)/obj/tests/%.o)
 STUB_OBJECT := $(BUILD)/obj/stub.o
 
 STUB := $(BUILD)/yt2stub
 GAME := $(BUILD)/yt2game
 TESTS := $(BUILD)/yt2core-tests
+GAME_TESTS := $(BUILD)/yt2game-tests
 
 .PHONY: all test clean
 
-all: $(STUB) $(GAME) $(TESTS)
+all: $(STUB) $(GAME) $(TESTS) $(GAME_TESTS)
 
 $(BUILD)/obj/src/%.o: $(ROOT)/src/%.c
 	@mkdir -p $(dir $@)
@@ -68,7 +75,7 @@ $(STUB): $(LIB_OBJECTS) $(STUB_OBJECT)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(GAME): $(LIB_OBJECTS) $(GAME_OBJECTS)
+$(GAME): $(LIB_OBJECTS) $(GAME_OBJECTS) $(GAME_MAIN_OBJECT)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 
@@ -76,10 +83,16 @@ $(TESTS): $(LIB_OBJECTS) $(TEST_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 
+$(GAME_TESTS): $(LIB_OBJECTS) $(GAME_OBJECTS) $(GAME_TEST_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
 test: all
 	$(TESTS)
+	$(GAME_TESTS)
 
 clean:
 	rm -rf $(BUILD)
 
--include $(LIB_OBJECTS:.o=.d) $(GAME_OBJECTS:.o=.d) $(TEST_OBJECTS:.o=.d) $(STUB_OBJECT:.o=.d)
+-include $(LIB_OBJECTS:.o=.d) $(GAME_OBJECTS:.o=.d) $(GAME_MAIN_OBJECT:.o=.d) \
+	$(TEST_OBJECTS:.o=.d) $(GAME_TEST_OBJECTS:.o=.d) $(STUB_OBJECT:.o=.d)

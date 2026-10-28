@@ -223,6 +223,32 @@ def cmd_live(args) -> int:
     return 0
 
 
+def cmd_game_link(args) -> int:
+    records = read_timed(args.output, ENGINE_TO_CLIENT)
+    check_timestamps(records)
+    check_sequence(records)
+    modes = [
+        (int.from_bytes(payload[1:3], "little"),
+         int.from_bytes(payload[3:5], "little"), payload[5])
+        for _, _, family, _, _, payload in records
+        if family == 1 and payload and payload[0] == VIDEO_SET_MODE
+    ]
+    if not modes or any(mode != (320, 200, 8) for mode in modes):
+        raise AssertionError(f"live game modes are wrong: {modes}")
+    rects = count_message(records, 1, VIDEO_RECT)
+    ends = count_message(records, 1, VIDEO_FRAME_END)
+    palettes = count_message(records, 1, VIDEO_PALETTE)
+    if rects < 10 or ends < 1 or palettes < 1:
+        raise AssertionError(
+            f"live game video is incomplete (rects={rects} palette={palettes} ends={ends})")
+    for _, _, family, _, _, _ in records:
+        if family not in (1, 5):
+            raise AssertionError(f"unexpected live game family {family}")
+    print(f"c game link: OK ({len(records)} records, {rects} rows, "
+          f"{ends} frames, mode {modes[0]})")
+    return 0
+
+
 def write_input(path: pathlib.Path, kind: str, append: bool = False,
                 header_only: bool = False) -> None:
     if kind == "full":
@@ -288,6 +314,10 @@ def main() -> int:
     live = subparsers.add_parser("live")
     live.add_argument("output", type=pathlib.Path)
     live.set_defaults(func=cmd_live)
+
+    game_link = subparsers.add_parser("game-link")
+    game_link.add_argument("output", type=pathlib.Path)
+    game_link.set_defaults(func=cmd_game_link)
 
     stream = subparsers.add_parser("stream")
     stream.add_argument("output", type=pathlib.Path)

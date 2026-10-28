@@ -59,6 +59,22 @@ stream and null backends are checked as well.
 
     sh tests/c/run.sh [--no-build]
 
+## `tests/c/game.sh`
+
+The M3 game check: runs the transliterated intro headless and compares seven
+checkpoint frames and the settled globals with the original's recording.
+
+    sh tests/c/game.sh [--no-build] [--ticks N]
+
+## `tests/c/intro.sh`
+
+The intro presentation check: the logo fades must be ramps (one palette step
+per DAC write), the title star must twinkle through the DAC, and the story
+text must keep the full palette instead of a stale `4124h` block. Without
+those presents the logos cut and the story picture goes mostly black.
+
+    sh tests/c/intro.sh [--no-build]
+
 Needs a C11 compiler and `dotnet`; artifacts land in `build/runs/c/<stamp>/`.
 
 ## `tests/window/run.sh`

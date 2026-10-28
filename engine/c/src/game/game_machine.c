@@ -1,5 +1,6 @@
 #include "yt2/game.h"
 #include "game_segments.h"
+#include "yt2/platform.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -221,6 +222,105 @@ static void yt2_run_nested(yt2_machine *machine)
     /* The resumed code reads CS-relative data, so restore its code segment. */
     machine->r.cs = saved_reg_cs;
     machine->r.ip = saved_reg_ip;
+}
+
+int yt2_machine_call_safe(const yt2_machine *machine)
+{
+    return !machine->nested && !machine->in_tick && !machine->exited &&
+           !machine->stop_requested;
+}
+
+void yt2_machine_call(yt2_machine *machine, uint16_t segment, uint16_t offset)
+{
+    uint16_t saved_cs = machine->next_cs;
+    uint16_t saved_ip = machine->next_ip;
+    int saved_pending = machine->next_pending;
+    uint16_t saved_reg_cs = machine->r.cs;
+    uint16_t saved_reg_ip = machine->r.ip;
+    uint16_t saved_sp = machine->r.sp;
+
+    if (!yt2_machine_call_safe(machine)) {
+        return;
+    }
+
+    /* A far call: CS then IP, with the sentinel's resume stub as the return
+       address.  No flags word - the game's handler ends with retf. */
+    yt2_push16(YT2_SENTINEL_SEG);
+    yt2_push16(YT2_SENTINEL_RESUME);
+
+    machine->nested = 1;
+    machine->nested_done = 0;
+    machine->next_cs = segment;
+    machine->next_ip = offset;
+    machine->next_pending = 1;
+
+    while (!machine->nested_done && !machine->exited && !machine->stop_requested) {
+        uint16_t cs = machine->next_cs;
+        uint16_t ip = machine->next_ip;
+        if (!machine->next_pending) {
+            break;
+        }
+        machine->next_pending = 0;
+        machine->transfers++;
+        if (machine->trace_api) {
+            fprintf(stderr, "yt2: call %04X:%04X (ax=%04X bx=%04X cx=%04X dx=%04X ds=%04X es=%04X ss=%04X sp=%04X)\n",
+                    cs, ip, machine->r.ax, machine->r.bx, machine->r.cx, machine->r.dx,
+                    machine->r.ds, machine->r.es, machine->r.ss, machine->r.sp);
+        }
+        yt2_game_dispatch(cs, ip);
+    }
+
+    machine->nested = 0;
+    machine->next_cs = saved_cs;
+    machine->next_ip = saved_ip;
+    machine->next_pending = saved_pending;
+    machine->r.sp = saved_sp;
+    machine->r.cs = saved_reg_cs;
+    machine->r.ip = saved_reg_ip;
+}
+
+void yt2_pace_slow(void)
+{
+    uint64_t target;
+    uint32_t elapsed;
+    uint32_t now;
+
+    /* Re-arm first: everything below may run inside nested guest code. */
+    g_m.pace_at = (uint32_t)(g_m.cycles + 65536u);
+    if (!g_m.pace || g_m.in_tick || g_m.nested) {
+        return;
+    }
+    now = yt2_platform_pit_now();
+    if (!g_m.pace_started) {
+        g_m.pace_started = 1;
+        g_m.pace_wall_start = now;
+        g_m.pace_cycle_start = g_m.cycles;
+        return;
+    }
+    target = (g_m.cycles - g_m.pace_cycle_start) * (uint64_t)YT2_PIT_RATE /
+             ((uint64_t)YT2_CYCLES_PER_MS * 1000u);
+    elapsed = now - g_m.pace_wall_start;
+    if (target > 0xFFFFFFFFu) {
+        /* The 32-bit PIT stamp wrapped; rebase rather than stall. */
+        g_m.pace_wall_start = now;
+        g_m.pace_cycle_start = g_m.cycles;
+        return;
+    }
+    if (target > (uint64_t)elapsed + 4000u) {
+        uint64_t ahead = target - elapsed;
+        uint64_t milliseconds = ahead * 1000u / YT2_PIT_RATE;
+
+        if (milliseconds > 50u) {
+            milliseconds = 50u;
+        }
+        if (milliseconds > 0u) {
+            yt2_platform_sleep_ms((uint32_t)milliseconds);
+        }
+    } else if ((uint64_t)elapsed > target + 2u * YT2_PIT_RATE) {
+        /* A host stall (debugger, scheduler): do not run at double speed. */
+        g_m.pace_wall_start = now;
+        g_m.pace_cycle_start = g_m.cycles;
+    }
 }
 
 void yt2_machine_tick(yt2_machine *machine)
@@ -805,14 +905,21 @@ void yt2_cpu_das(yt2_registers *r)
 /* String instructions                                                       */
 /* ------------------------------------------------------------------------ */
 
-static void yt2_string_step(yt2_machine *m, unsigned size)
+static void yt2_string_step(yt2_machine *m, unsigned size, int advance_si,
+                            int advance_di)
 {
     uint16_t delta = (uint16_t)size;
     if ((m->r.flags & YT2_FLAG_DF) != 0u) {
         delta = (uint16_t)(0u - delta);
     }
-    m->r.si = (uint16_t)(m->r.si + delta);
-    m->r.di = (uint16_t)(m->r.di + delta);
+    /* Only the operands an instruction actually uses move: MOVS/CMPS move
+       both pointers, LODS/OUTS only source, STOS/SCAS only destination. */
+    if (advance_si) {
+        m->r.si = (uint16_t)(m->r.si + delta);
+    }
+    if (advance_di) {
+        m->r.di = (uint16_t)(m->r.di + delta);
+    }
 }
 
 static uint8_t yt2_read8(yt2_machine *m, uint16_t seg, uint16_t off)
@@ -848,7 +955,7 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
         } else {
             yt2_write16(m, m->r.es, m->r.di, yt2_read16(m, source_seg, m->r.si));
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 1, 1);
         if (repeat == 0u) {
             return;
         }
@@ -864,7 +971,7 @@ void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)
         } else {
             yt2_write16(m, m->r.es, m->r.di, m->r.ax);
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 0, 1);
         if (repeat == 0u) {
             return;
         }
@@ -881,7 +988,7 @@ void yt2_string_lods(yt2_machine *m, unsigned size, uint16_t source_seg,
         } else {
             m->r.ax = yt2_read16(m, source_seg, m->r.si);
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 1, 0);
         if (repeat == 0u) {
             return;
         }
@@ -904,7 +1011,7 @@ void yt2_string_cmps(yt2_machine *m, unsigned size, uint16_t source_seg,
             right = yt2_read16(m, source_seg, m->r.si);
             yt2_cpu_sub16(&m->r, left, right, 0u);
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 1, 1);
         if (repeat == 0u) {
             return;
         }
@@ -929,7 +1036,7 @@ void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
             memory_value = yt2_read16(m, m->r.es, m->r.di);
             yt2_cpu_sub16(&m->r, m->r.ax, memory_value, 0u);
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 0, 1);
         if (repeat == 0u) {
             return;
         }
@@ -952,7 +1059,7 @@ void yt2_string_outs(yt2_machine *m, unsigned size, uint16_t source_seg,
         } else {
             yt2_port_out16(m->r.dx, yt2_read16(m, source_seg, m->r.si));
         }
-        yt2_string_step(m, size);
+        yt2_string_step(m, size, 1, 0);
         if (repeat == 0u) {
             return;
         }
@@ -1001,11 +1108,26 @@ void yt2_port_out8(uint16_t port, uint8_t value)
 {
     switch (port) {
     case 0x3C8u:
+        /* fn_WriteDAC and fn_WriteDAC768 set the DAC index at the start of a
+           palette write.  The seam runs a present at that point (with the
+           palette staged for the bytes it is about to write); presenting
+           before the index changes sends the previous completed write, so a
+           fade step is a frame instead of being lost until the next poll. */
+        yt2_game_present(&g_m);
         g_m.dac_index = value;
         g_m.dac_phase = 0;
         break;
     case 0x3C9u:
         g_m.palette[(g_m.dac_index % 256u) * 3u + g_m.dac_phase] = (uint8_t)(value & 0x3Fu);
+        /* v_PalCurrent (DGROUP:4124h) is documented as "the palette on the
+           DAC", and the scene code shows it with a DAC block call.  A fade
+           through the v_PalOutput staging buffer (fn_FadeIn and friends)
+           writes the DAC without touching 4124h, so keep the buffer in step
+           with every DAC byte or the next block call would restore a stale
+           palette over the picture. */
+        g_m.mem.bytes[((uint32_t)YT2_DGROUP_SEG << 4) + 0x4124u +
+                      (g_m.dac_index % 256u) * 3u + g_m.dac_phase] =
+            (uint8_t)(value & 0x3Fu);
         g_m.video_dirty = 1;
         g_m.dac_phase++;
         if (g_m.dac_phase == 3u) {
@@ -1052,8 +1174,13 @@ void yt2_game_init(yt2_machine *machine, const char *root)
     machine->dos_blocks[0].used = 0;
     machine->cycles = 0u;
     machine->tick_at = (uint64_t)YT2_CYCLES_PER_TICK;
+    machine->pace_at = YT2_CYCLES_PER_MS * 2u;
     machine->int1c_cs = YT2_SENTINEL_SEG;
     machine->int1c_ip = YT2_SENTINEL_IRET;
+    machine->mouse_x = 0x00E6u;
+    machine->mouse_y = 0x00B4u;
+    machine->mouse_ratio_x = 8u;
+    machine->mouse_ratio_y = 8u;
     machine->ems_total_pages = 0x3C0u;
     machine->ems_free_pages = 0x3C0u;
     machine->ems_free_count = 0x3C0u;
@@ -1112,7 +1239,7 @@ int yt2_game_run(yt2_machine *machine, unsigned long max_transfers)
         return machine->exited ? machine->exit_code : 0;
     }
     while (!machine->exited && !machine->stop_requested &&
-           machine->transfers < max_transfers) {
+           (max_transfers == 0u || machine->transfers < max_transfers)) {
         uint16_t cs;
         uint16_t ip;
         if (!machine->next_pending) {
@@ -1122,6 +1249,13 @@ int yt2_game_run(yt2_machine *machine, unsigned long max_transfers)
         ip = machine->next_ip;
         machine->next_pending = 0;
         machine->transfers++;
+        /* The seam's fn_SeamDelayStub presents at fn_DelayTicks entry (S084D
+           offset 4, reached at runtime as YT2_LOAD_SEG + 084Dh), so an
+           animation that waits a tick between steps gets a frame per step
+           even when it never polls input. */
+        if (cs == (uint16_t)(YT2_LOAD_SEG + 0x084Du) && ip == 0x0004u) {
+            yt2_game_present(machine);
+        }
         if (machine->trace_api) {
             fprintf(stderr, "yt2: dispatch %04X:%04X (ax=%04X bx=%04X cx=%04X dx=%04X ds=%04X es=%04X ss=%04X sp=%04X)\n",
                     cs, ip, machine->r.ax, machine->r.bx, machine->r.cx, machine->r.dx,
@@ -1136,6 +1270,8 @@ int yt2_game_run(yt2_machine *machine, unsigned long max_transfers)
 void yt2_game_shutdown(yt2_machine *machine)
 {
     unsigned index;
+
+    yt2_link_close(machine);
     for (index = 0; index < YT2_DOS_FILES; index++) {
         if (machine->files[index].used && machine->files[index].stream != NULL) {
             fclose(machine->files[index].stream);

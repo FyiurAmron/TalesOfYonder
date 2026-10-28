@@ -7,6 +7,9 @@
 #include "yt2/core.h"
 #include "yt2/cpu.h"
 #include "yt2/memory.h"
+#include "yt2/service.h"
+#include "yt2/transport.h"
+#include "yt2/video.h"
 
 /*
  * The transliterated game code runs the original 16-bit image inside the
@@ -30,6 +33,15 @@
 #define YT2_DOS_HEAP_END 0xA000u
 
 #define YT2_SCREEN_SEG 0xA000u
+
+/* The game's DGROUP frame: S1DEA in the original layout. */
+#define YT2_DGROUP_SEG (YT2_LOAD_SEG + 0x1DEAu)
+
+/* DOS type-ahead queue drained by int 21h 06h (the BIOS ring equivalent). */
+#define YT2_KEY_QUEUE 32u
+
+#define YT2_MOUSE_LEFT 0x02u
+#define YT2_MOUSE_RIGHT 0x04u
 
 typedef enum yt2_r8 {
     YT2_R8_AL, YT2_R8_AH, YT2_R8_BL, YT2_R8_BH,
@@ -64,6 +76,7 @@ typedef struct yt2_machine {
     int exit_code;
     int halted;
     int trace_api;
+    int trace_input;
     uint32_t steps;
     uint32_t limit_ticks;
     int stop_requested;
@@ -97,15 +110,19 @@ typedef struct yt2_machine {
     uint8_t vbe_bank[4][0x10000];
     int vbe_bank_active;
 
-    /* Presentation log: the SEAM build presents at input-poll and tick-ISR
-       entry, so a hash per present gives the same frame sequence as a stream
-       recording.  Only frames that changed are logged. */
+    /* Presentation log: the SEAM build presents at input-poll, tick-ISR and
+       palette/delay hooks, so a hash per present gives the same frame
+       sequence as a stream recording.  Only frames that changed are logged.
+       present_tick/present_passes mirror the seam's three-passes-per-BIOS-tick
+       gate, so a palette fade cannot flood the client. */
     FILE *present_log;
     unsigned long long present_frames;
     uint64_t present_last_fb;
     uint64_t present_last_pal;
     int present_have_last;
     int video_dirty;
+    uint32_t present_tick;
+    unsigned present_passes;
     uint8_t present_frame[64000];
     uint8_t present_palette[768];
     char present_dir[512];
@@ -136,6 +153,46 @@ typedef struct yt2_machine {
 
     /* Checkpoint/diagnostic output. */
     uint64_t transfers;
+
+    /* Folder link (live play): the M2 seam moved over OUTPUT.BIN/INPUT.BIN. */
+    int link;
+    int link_ready;
+    int link_mode13;
+    char link_output_path[1024];
+    char link_input_path[1024];
+    yt2_folder_transport folder;
+    yt2_transport transport;
+    yt2_service service;
+    yt2_video video;
+
+    /* Real-time pacing: guest cycles against the host's monotonic PIT clock. */
+    int pace;
+    uint32_t pace_at;
+    int pace_started;
+    uint32_t pace_wall_start;
+    uint64_t pace_cycle_start;
+
+    /* DOS keyboard type-ahead. */
+    uint16_t key_queue[YT2_KEY_QUEUE];
+    unsigned key_head;
+    unsigned key_tail;
+    unsigned key_count;
+    int key_extended;
+    uint8_t key_scan;
+
+    /* INT 33h shim state (the game's fn_MouseInit/fn_MouseHandler peer). */
+    uint16_t mouse_x;
+    uint16_t mouse_y;
+    uint16_t mouse_buttons;
+    int16_t mouse_dx;
+    int16_t mouse_dy;
+    int16_t mouse_frac_x;
+    int16_t mouse_frac_y;
+    uint16_t mouse_handler_ip;
+    uint16_t mouse_handler_cs;
+    uint16_t mouse_mask;
+    uint16_t mouse_ratio_x;
+    uint16_t mouse_ratio_y;
 } yt2_machine;
 
 extern yt2_machine g_m;
@@ -151,14 +208,18 @@ extern yt2_machine g_m;
 #define YT2_CYCLES_INSN 2u
 #define YT2_VGA_FRAME_CYCLES 428040u   /* 640x400 at 70.086 Hz */
 #define YT2_VGA_RETRACE_CYCLES 36000u  /* vertical retrace window */
+#define YT2_PASSES_PER_TICK 3u         /* SEAM_PASSES_PER_TICK */
 
 void yt2_cycles_slow(void);
+void yt2_pace_slow(void);
 
 static inline void yt2_cycles(uint32_t cycles)
 {
     g_m.cycles += cycles;
     if (g_m.cycles >= g_m.tick_at) {
         yt2_cycles_slow();
+    } else if (g_m.pace && g_m.cycles >= g_m.pace_at) {
+        yt2_pace_slow();
     }
 }
 
@@ -166,6 +227,27 @@ void yt2_game_init(yt2_machine *machine, const char *root);
 void yt2_game_load(yt2_machine *machine);
 int yt2_game_run(yt2_machine *machine, unsigned long max_transfers);
 void yt2_game_shutdown(yt2_machine *machine);
+
+/* Live folder link (game_link.c). */
+int yt2_link_open(yt2_machine *machine);
+void yt2_link_poll(yt2_machine *machine);
+void yt2_link_present(yt2_machine *machine);
+void yt2_link_close(yt2_machine *machine);
+
+/* Input glue shared by the DOS/INT 33h services and the link (game_services.c). */
+void yt2_key_push(yt2_machine *machine, uint8_t scan, uint8_t ascii);
+void yt2_key_flush(yt2_machine *machine);
+int yt2_key_pop(yt2_machine *machine, uint16_t *value);
+void yt2_mouse_move(yt2_machine *machine, int16_t dx, int16_t dy);
+void yt2_mouse_abs(yt2_machine *machine, uint16_t x, uint16_t y);
+void yt2_mouse_button(yt2_machine *machine, uint8_t button, uint8_t down);
+
+/*
+ * Run a far call into guest code to completion (the mouse callback path).
+ * The caller must be at the top level: not inside a tick or another call.
+ */
+void yt2_machine_call(yt2_machine *machine, uint16_t segment, uint16_t offset);
+int yt2_machine_call_safe(const yt2_machine *machine);
 
 void yt2_game_dispatch(uint16_t seg, uint16_t off);
 

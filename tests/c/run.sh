@@ -34,13 +34,16 @@ if [ "$DO_BUILD" = 1 ]; then
     }
 fi
 if [ ! -x "$BUILD/yt2stub" ] || [ ! -x "$BUILD/yt2core-tests" ] || \
-   [ ! -x "$BUILD/yt2game" ]; then
+   [ ! -x "$BUILD/yt2game" ] || [ ! -x "$BUILD/yt2game-tests" ]; then
     echo "c: missing build output in $BUILD" >&2
     exit 1
 fi
 
 echo "c: unit tests"
 "$BUILD/yt2core-tests" | tee "$RUN/unit.log"
+
+echo "c: game string tests"
+"$BUILD/yt2game-tests" | tee "$RUN/game-unit.log"
 
 echo "c: asm fixture parity"
 mkdir -p "$RUN/replay"
@@ -153,6 +156,31 @@ python3 "$ROOT/tests/c/check.py" stream "$RUN/stream/OUTPUT.v0" --frames 2
 echo "c: null backend"
 "$BUILD/yt2stub" --transport null --frames 2 --no-wait >"$RUN/null.log" 2>&1
 grep -q 'done frames=2' "$RUN/null.log"
+
+echo "c: game live link"
+mkdir -p "$RUN/link/game"
+for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
+    cp "$ROOT/_ref/orig-bin/$file" "$RUN/link/game/$file"
+done
+python3 "$ROOT/tests/c/check.py" write-input "$RUN/link/game/INPUT.BIN" \
+    full --header-only >/dev/null
+timeout 60s "$BUILD/yt2game" --game "$RUN/link/game" --link --ticks 800 \
+    --trace-input >"$RUN/link/log" 2>&1 &
+LINK_PID=$!
+sleep 0.8
+python3 "$ROOT/tests/c/check.py" write-input "$RUN/link/game/INPUT.BIN" \
+    full --append >>"$RUN/link/log" 2>&1
+wait "$LINK_PID"
+grep -q 'exited=0' "$RUN/link/log"
+for text in "input mouse handler" "input key scan=1E ascii=61" \
+            "input deliver ascii=61" "input mouse mask=0001"; do
+    if ! grep -q "$text" "$RUN/link/log"; then
+        echo "c: live game link did not log '$text'" >&2
+        cat "$RUN/link/log"
+        exit 1
+    fi
+done
+python3 "$ROOT/tests/c/check.py" game-link "$RUN/link/game/OUTPUT.BIN"
 
 echo "c: game first light"
 mkdir -p "$RUN/game" "$RUN/checkpoint"

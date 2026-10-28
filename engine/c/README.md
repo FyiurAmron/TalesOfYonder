@@ -2,8 +2,9 @@
 
 The Stage B C core and platform service layer. M2 and M3 (2026-10-28) are implemented: a
 C11 program speaks the same v0 / timed `YT2B` boundary as the asm seam and the existing
-C# client renders it, and the transliterated original reaches the title/attract with
-checkpoint hashes matching the oracle.
+C# client renders it, the transliterated original reaches the title/attract with
+checkpoint hashes matching the oracle, and the same engine is playable through the live
+folder link (`--live`).
 
 ## What is here
 
@@ -12,7 +13,7 @@ checkpoint hashes matching the oracle.
 | `include/yt2/` | the public core headers: memory, CPU flags/ALU, protocol, service, transports, video, `game.h` |
 | `src/` | the core implementation and the `yt2stub` headless program |
 | `src/game/` | the hand-written boundary for the transliterated game (machine, services, `yt2game`) |
-| `tests/` | unit tests for memory, ALU/flags, framing/parsing, the service callbacks and video deltas |
+| `tests/` | unit tests for memory, ALU/flags, framing/parsing, the service callbacks, video deltas and the game's string-instruction semantics |
 | `tools/build.sh`, `tools/build.bat` | build entry points (gcc/clang and MSVC) |
 
 The game code itself is emitted at build time into `build/c/generated/` by `tools/port/`
@@ -47,6 +48,7 @@ C compiler; the M2-only targets need just the compiler.
 
     sh engine/c/tools/build.sh
     build/c/yt2core-tests
+    build/c/yt2game-tests   # string-instruction pointer semantics
     sh tests/c/run.sh
     sh tests/c/game.sh       # game run + M3 checkpoints (builds if stale)
 
@@ -97,6 +99,50 @@ hashes matching the stream recording. The end dump is re-hashed and the settled 
 `--present-dir DIR` additionally writes the raw index buffer and 6-bit palette of every
 changed frame (`frame_NNNNN.idx`/`.pal`), which is how new checkpoints are inspected.
 `--ppm FILE` writes the last presented frame as 8-bit RGB.
+
+## Live play (folder link)
+
+`--live` runs the game in real time and connects it to the C# client through the same
+`OUTPUT.BIN`/`INPUT.BIN` pair as the asm seam build. From the tree, one command stages
+the game data, builds what is stale, starts the engine and opens the client:
+
+    sh tools/play-c.sh                # client window
+    sh tools/play-c.sh --scale 4
+    sh tools/play-c.sh --headless --stats 5
+
+By hand (two terminals):
+
+    mkdir -p build/tmp/play
+    cp _ref/orig-bin/CURGAME _ref/orig-bin/WORLD.DAT _ref/orig-bin/PICTURES.VGA \
+       _ref/orig-bin/CH2.BAT build/tmp/play/
+    build/c/yt2game --game build/tmp/play --live
+
+    dotnet run --project client -c Release -- \
+        --follow build/tmp/play/OUTPUT.BIN --input build/tmp/play/INPUT.BIN
+
+`--live` means the link plus pacing at the oracle profile's 30,000 cycles/ms, so the
+BIOS tick and the game's animations run at the original speed. `--link` enables the
+folder link without pacing (fast, used by the transport tests); `--no-pace` with
+`--live` does the same. `--transfers 0` (the default) runs without a dispatch cap.
+The client asks for a keyframe when it connects, so a client that starts late
+resynchronises.
+
+Input is delivered exactly where the game looks for it: key events go into the DOS
+type-ahead queue drained by INT 21h 06h (with the zero-byte/scancode form for extended
+keys and the 0Ch flush), and mouse motion/buttons drive the INT 33h shim and the game's
+own `fn_MouseHandler`. `--trace-input` logs the traffic for debugging.
+
+The whole thing ships as a bundle without DOSBox-X:
+
+    sh engine/c/tools/build.sh
+    sh tools/publish-linux.sh --server c
+    build/dist/yt2-linux-x64/play.sh
+
+The C server presents mode 13h only for now: the VBE intro modes wait for M4 and the
+FM/PC-speaker stream waits for M6, so the engine is silent and skips VBE-only pictures.
+The original intro and attract run about 5.5 minutes before the title menu; that pacing is
+the oracle's, not a stall. The menu accepts the mouse (the client maps the desktop pointer
+to game pixels) and the keyboard.
 
 ## Deliberate M2/M3 limits
 

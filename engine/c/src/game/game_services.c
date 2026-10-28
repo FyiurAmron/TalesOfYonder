@@ -30,6 +30,45 @@ static void yt2_dos_result(yt2_machine *machine, uint16_t ax, int carry)
     yt2_cpu_set_flag(&machine->r, YT2_FLAG_CF, carry);
 }
 
+/* ------------------------------------------------------------------------ */
+/* Keyboard type-ahead (what DOS int 21h 06h/0Ch drain)                     */
+/* ------------------------------------------------------------------------ */
+
+void yt2_key_flush(yt2_machine *machine)
+{
+    machine->key_head = 0;
+    machine->key_tail = 0;
+    machine->key_count = 0;
+    machine->key_extended = 0;
+    machine->key_scan = 0;
+}
+
+void yt2_key_push(yt2_machine *machine, uint8_t scan, uint8_t ascii)
+{
+    if (machine->key_count >= YT2_KEY_QUEUE) {
+        return;
+    }
+    if (machine->trace_input) {
+        fprintf(stderr, "yt2: input key scan=%02X ascii=%02X\n",
+                (unsigned)scan, (unsigned)ascii);
+    }
+    machine->key_queue[machine->key_tail] =
+        (uint16_t)((uint16_t)ascii | ((uint16_t)scan << 8));
+    machine->key_tail = (machine->key_tail + 1u) % YT2_KEY_QUEUE;
+    machine->key_count++;
+}
+
+int yt2_key_pop(yt2_machine *machine, uint16_t *value)
+{
+    if (machine->key_count == 0u) {
+        return 0;
+    }
+    *value = machine->key_queue[machine->key_head];
+    machine->key_head = (machine->key_head + 1u) % YT2_KEY_QUEUE;
+    machine->key_count--;
+    return 1;
+}
+
 static const char *yt2_host_path(yt2_machine *machine, const char *dos_name,
                                  char *buffer, size_t size)
 {
@@ -132,8 +171,17 @@ int yt2_video_int10(yt2_machine *machine)
                 machine->palette[target + 0u] = (uint8_t)(machine->mem.bytes[source + 0u] & 0x3Fu);
                 machine->palette[target + 1u] = (uint8_t)(machine->mem.bytes[source + 1u] & 0x3Fu);
                 machine->palette[target + 2u] = (uint8_t)(machine->mem.bytes[source + 2u] & 0x3Fu);
+                /* The block write is a DAC write too: keep v_PalCurrent in
+                   step (see the 3C9 handler in game_machine.c). */
+                memcpy(machine->mem.bytes + ((uint32_t)YT2_DGROUP_SEG << 4) +
+                           0x4124u + target,
+                       machine->palette + target, 3u);
             }
             machine->video_dirty = 1;
+            /* The seam presents a palette block at the write, not at the
+               next poll: scene palettes and fade "show" steps then reach the
+               client in the same frame as the rows they belong to. */
+            yt2_game_present(machine);
         }
         break;
     case 0x4Fu:
@@ -191,9 +239,165 @@ int yt2_clock_int1a(yt2_machine *machine)
 /* Mouse                                                                    */
 /* ------------------------------------------------------------------------ */
 
+static uint16_t yt2_mouse_clamp_x(uint16_t x)
+{
+    return x > 319u ? 319u : x;
+}
+
+static uint16_t yt2_mouse_clamp_y(uint16_t y)
+{
+    return y > 199u ? 199u : y;
+}
+
+static uint16_t yt2_mouse_dgroup_get(uint16_t offset)
+{
+    return YT2_MEM16(YT2_DGROUP_SEG, offset);
+}
+
+static void yt2_mouse_event(yt2_machine *machine, uint16_t mask)
+{
+    uint16_t cs = machine->mouse_handler_cs;
+    uint16_t ip = machine->mouse_handler_ip;
+
+    if ((cs | ip) == 0u || (machine->mouse_mask & mask) == 0u) {
+        return;
+    }
+    if (!yt2_machine_call_safe(machine)) {
+        return;                     /* the next poll repeats nothing: drop */
+    }
+    if (machine->trace_input) {
+        fprintf(stderr, "yt2: input mouse mask=%04X at %u,%u buttons=%04X\n",
+                (unsigned)mask, (unsigned)machine->mouse_x,
+                (unsigned)machine->mouse_y, (unsigned)machine->mouse_buttons);
+    }
+    machine->r.ax = mask;
+    machine->r.bx = machine->mouse_buttons;
+    machine->r.cx = machine->mouse_x;
+    machine->r.dx = machine->mouse_y;
+    yt2_machine_call(machine, cs, ip);
+}
+
+void yt2_mouse_move(yt2_machine *machine, int16_t dx, int16_t dy)
+{
+    int32_t scaled;
+    int32_t x;
+    int32_t y;
+
+    if (dx == 0 && dy == 0) {
+        return;
+    }
+    scaled = (int32_t)dx * (int32_t)machine->mouse_ratio_x + machine->mouse_frac_x;
+    machine->mouse_frac_x = (int16_t)(scaled & 7);
+    machine->mouse_dx = (int16_t)(machine->mouse_dx + (int16_t)(scaled >> 3));
+    scaled = (int32_t)dy * (int32_t)machine->mouse_ratio_y + machine->mouse_frac_y;
+    machine->mouse_frac_y = (int16_t)(scaled & 7);
+    machine->mouse_dy = (int16_t)(machine->mouse_dy + (int16_t)(scaled >> 3));
+
+    x = (int32_t)machine->mouse_x + dx;
+    y = (int32_t)machine->mouse_y + dy;
+    if (x < 0) {
+        x = 0;
+    } else if (x > 319) {
+        x = 319;
+    }
+    if (y < 0) {
+        y = 0;
+    } else if (y > 199) {
+        y = 199;
+    }
+    machine->mouse_x = (uint16_t)x;
+    machine->mouse_y = (uint16_t)y;
+    yt2_mouse_event(machine, 0x0001u);
+}
+
+void yt2_mouse_abs(yt2_machine *machine, uint16_t x, uint16_t y)
+{
+    uint16_t current_x;
+    uint16_t current_y;
+
+    x = yt2_mouse_clamp_x(x);
+    y = yt2_mouse_clamp_y(y);
+    current_x = yt2_mouse_dgroup_get(0x0F1Cu);   /* v_MouseNewX */
+    current_y = yt2_mouse_dgroup_get(0x0F1Eu);   /* v_MouseNewY */
+    machine->mouse_dx = (int16_t)(x - current_x);
+    machine->mouse_dy = (int16_t)(y - current_y);
+    machine->mouse_x = x;
+    machine->mouse_y = y;
+    yt2_mouse_event(machine, 0x0001u);
+    /* The game clamps its own cursor: keep the click position in step. */
+    machine->mouse_x = yt2_mouse_dgroup_get(0x0F1Cu);
+    machine->mouse_y = yt2_mouse_dgroup_get(0x0F1Eu);
+}
+
+void yt2_mouse_button(yt2_machine *machine, uint8_t button, uint8_t down)
+{
+    uint16_t bit;
+    uint16_t mask;
+
+    if (button == 0u) {
+        bit = YT2_MOUSE_LEFT;
+        mask = down ? 0x0002u : 0x0004u;
+    } else if (button == 2u) {
+        bit = YT2_MOUSE_RIGHT;
+        mask = down ? 0x0008u : 0x0010u;
+    } else {
+        return;                     /* middle: the game has no use for it */
+    }
+    if (down) {
+        machine->mouse_buttons |= bit;
+    } else {
+        machine->mouse_buttons &= (uint16_t)~bit;
+    }
+    yt2_mouse_event(machine, mask);
+}
+
 int yt2_mouse_int33(yt2_machine *machine)
 {
-    (void)machine;
+    uint16_t ax = machine->r.ax;
+
+    switch (ax) {
+    case 0x0000u:
+        /* Reset: the game's start-up probe and its exit path.  A handler
+           means the game is leaving, so stop delivering events. */
+        machine->mouse_handler_ip = 0;
+        machine->mouse_handler_cs = 0;
+        machine->mouse_mask = 0;
+        machine->r.ax = 0xFFFFu;
+        machine->r.bx = 2;
+        break;
+    case 0x0003u:
+        machine->r.bx = machine->mouse_buttons;
+        machine->r.cx = machine->mouse_x;
+        machine->r.dx = machine->mouse_y;
+        break;
+    case 0x0004u:
+        machine->mouse_x = yt2_mouse_clamp_x(machine->r.cx);
+        machine->mouse_y = yt2_mouse_clamp_y(machine->r.dx);
+        break;
+    case 0x000Bu:
+        machine->r.cx = (uint16_t)machine->mouse_dx;
+        machine->r.dx = (uint16_t)machine->mouse_dy;
+        machine->mouse_dx = 0;
+        machine->mouse_dy = 0;
+        machine->r.bx = machine->mouse_buttons;
+        break;
+    case 0x000Cu:
+        machine->mouse_handler_ip = machine->r.dx;
+        machine->mouse_handler_cs = machine->r.es;
+        machine->mouse_mask = machine->r.cx;
+        if (machine->trace_input) {
+            fprintf(stderr, "yt2: input mouse handler %04X:%04X mask=%04X\n",
+                    (unsigned)machine->r.es, (unsigned)machine->r.dx,
+                    (unsigned)machine->r.cx);
+        }
+        break;
+    case 0x000Fu:
+        machine->mouse_ratio_x = machine->r.cx;
+        machine->mouse_ratio_y = machine->r.dx;
+        break;
+    default:
+        break;
+    }
     return 0;
 }
 
@@ -405,8 +609,27 @@ void yt2_game_present(yt2_machine *machine)
     uint64_t fb_hash;
     uint64_t pal_hash;
 
+    /* The SEAM polls the link inside every present pass. */
+    if (machine->link_ready) {
+        yt2_link_poll(machine);
+    }
     if (!machine->video_dirty) {
         return;
+    }
+    /* SEAM_PASSES_PER_TICK: the seam lets at most three passes run in one
+       BIOS tick.  A fade loop writes the DAC faster than the display can
+       show it, so the gate keeps the stream at the original's sampling rate
+       and stops a tight draw loop from starving the game.  A resync/keyframe
+       pass bypasses the budget, as seam_forcepass does. */
+    if (machine->video.force_full == 0u) {
+        if (machine->present_tick != machine->ticks) {
+            machine->present_tick = machine->ticks;
+            machine->present_passes = 0u;
+        }
+        if (machine->present_passes >= YT2_PASSES_PER_TICK) {
+            return;
+        }
+        machine->present_passes++;
     }
     machine->video_dirty = 0;
     memcpy(machine->present_frame, framebuffer, 64000u);
@@ -414,7 +637,8 @@ void yt2_game_present(yt2_machine *machine)
     fb_hash = yt2_hash64(0xCBF29CE484222325ull, framebuffer, 64000u);
     pal_hash = yt2_hash64(0xCBF29CE484222325ull, machine->palette, 768u);
     if (machine->present_have_last && fb_hash == machine->present_last_fb &&
-        pal_hash == machine->present_last_pal) {
+        pal_hash == machine->present_last_pal &&
+        !(machine->link_ready && machine->video.force_full != 0u)) {
         return;
     }
     machine->present_have_last = 1;
@@ -442,6 +666,9 @@ void yt2_game_present(yt2_machine *machine)
             fwrite(machine->present_palette, 1, 768u, stream);
             fclose(stream);
         }
+    }
+    if (machine->link_ready) {
+        yt2_link_present(machine);
     }
     machine->present_frames++;
 }
@@ -720,17 +947,44 @@ int yt2_dos_int21(yt2_machine *machine)
     switch (ah) {
     case 0x06u:
         if ((uint8_t)(machine->r.dx & 0xFFu) == 0xFFu) {
+            uint16_t entry;
+
             /* The SEAM build presents at the entry of the input poll. */
             yt2_game_present(machine);
-            /* No console input in the headless run. */
-            machine->r.ax = 0;
-            yt2_cpu_set_flag(&machine->r, YT2_FLAG_ZF, 1);
+            /* Direct console input: type-ahead first, extended keys as a
+               zero byte followed by the scancode (what fn_PollInput reads). */
+            if (machine->key_extended) {
+                machine->key_extended = 0;
+                machine->r.ax = machine->key_scan;
+                if (machine->trace_input) {
+                    fprintf(stderr, "yt2: input deliver scan=%02X\n",
+                            (unsigned)machine->key_scan);
+                }
+                yt2_cpu_set_flag(&machine->r, YT2_FLAG_ZF, 0);
+            } else if (yt2_key_pop(machine, &entry)) {
+                uint8_t ascii = (uint8_t)(entry & 0xFFu);
+
+                machine->r.ax = ascii;
+                if (ascii == 0u) {
+                    machine->key_extended = 1;
+                    machine->key_scan = (uint8_t)(entry >> 8);
+                }
+                if (machine->trace_input) {
+                    fprintf(stderr, "yt2: input deliver ascii=%02X scan=%02X\n",
+                            (unsigned)ascii, (unsigned)(entry >> 8));
+                }
+                yt2_cpu_set_flag(&machine->r, YT2_FLAG_ZF, 0);
+            } else {
+                machine->r.ax = 0;
+                yt2_cpu_set_flag(&machine->r, YT2_FLAG_ZF, 1);
+            }
         } else {
             putchar(al);
             fflush(stdout);
         }
         break;
     case 0x0Cu:
+        yt2_key_flush(machine);
         machine->r.ax = 0;
         break;
     case 0x09u: {
@@ -760,6 +1014,11 @@ int yt2_dos_int21(yt2_machine *machine)
         } else if (al == 0x67u) {
             machine->r.bx = 0;
             machine->r.es = 0xE000u;
+        } else if (al == 0x33u) {
+            /* The game probes for a mouse driver and rejects a null vector
+               or an IRET stub; the sentinel paragraph starts with zeroes. */
+            machine->r.bx = 0;
+            machine->r.es = YT2_SENTINEL_SEG;
         } else {
             machine->r.bx = 0;
             machine->r.es = 0;

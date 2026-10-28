@@ -156,9 +156,8 @@ static int yt2_folder_write(void *context, const uint8_t *frame, uint32_t length
         fwrite(frame, 1, (size_t)length, folder->output) != (size_t)length) {
         return YT2_ERR;
     }
-    if (fflush(folder->output) != 0) {
-        return YT2_ERR;
-    }
+    /* A present writes a batch of records; the flush (a frame_end boundary in
+       every live producer) publishes it, so a frame costs one commit. */
     folder->output_written += (uint32_t)sizeof(record) + length;
     folder->output_frames++;
     return YT2_OK;
