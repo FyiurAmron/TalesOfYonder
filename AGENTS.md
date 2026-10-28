@@ -73,6 +73,8 @@ adds agent-specific operational rules.
   `build/dist/yt2-linux-x64/play.sh` for the live folder link. Windows:
   `sh tools/publish-win.sh --server asm`. Tests: `tests/replay/run.sh` (offline),
   `tests/link/run.sh` (obsolete serial link); stream tools are in `tools/stream/`.
+- C core: `engine/c/` — `src/`, `include/yt2/`, unit tests in `tests/`; build with
+  `sh engine/c/tools/build.sh` (outputs `build/c/`), gate with `sh tests/c/run.sh`.
 - Guard hook: `.githooks/pre-commit` blocks any commit touching `_ref/`.
 - Reference hashes: `SWREG.EXE` MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 
@@ -94,10 +96,11 @@ machine, checksum self-patch, and a DOSBox-X black-box harness (`engine/asm/sbfm
 The repository layout is settled (`docs/layout.md`): engine sources under `engine/`, host tooling
 under `tools/`, committed gates under `tests/`, and `build/` mirrors the tree
 (`build/swreg/<variant>`, `build/sbfmdrv/`, `build/client/`, `build/runs/<kind>/<stamp>`, `build/dist/`).
-Next: start M2 (C core + headless platform service layer); M1c's timed
-bidirectional asm-server session trace/replay is done (see
-`docs/protocol.md`). The SDL3 host stays the existing C# client; the C core
-must first reach seam parity. The driver work is closed: real `WORLD.DAT`
+Next: M3 first light (the emitted C reaches the title/attract). M2 is done: `engine/c/` has the
+flat-memory/ALU core, v0 protocol/service boundary, `null`/stream/folder backends and a
+deterministic headless stub; `tests/c/run.sh` pins it to the asm fixture byte-for-byte. The SDL3
+host stays the existing C# client; a direct host can follow behind the same service interface.
+The driver work is closed: real `WORLD.DAT`
 blocks play against the static walk (`test/run.sh music`, with `MUSIC_CAP=wav|dro|both`
 recordings), the game-level audio run is `tools/dosbox/audio.sh`, and `/U` refusing to
 remove the driver from under a later TSR is gated by `test/run.sh uninstall-late`.  The

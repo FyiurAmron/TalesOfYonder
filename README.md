@@ -9,9 +9,10 @@ documented engine ↔ client protocol (`docs/protocol.md`).
 seam (`engine/asm/swreg/src/seam.asm`) streams the live display through two files in a shared
 folder (`OUTPUT.BIN`/`INPUT.BIN`) and takes keyboard input back. The C# client (`client/`)
 mirrors the screen in a window and forwards keys, and the Linux/Windows bundles are one script
-away. The C stage (`engine/c/`) has not started: M2 begins with the headless C core and
-platform service layer, while the existing client remains the SDL3 host. `docs/porting.md` §9 is
-the live progress log.
+away. M2 is done too: `engine/c/` now has the C11 core (flat memory, 16-bit ALU/flags, v0
+protocol), the service boundary, `null`/raw-recording/folder backends, and a deterministic
+headless stub that writes timed `OUTPUT.BIN` and consumes `INPUT.BIN`. The existing client
+remains the SDL3 host. `docs/porting.md` §9 is the live progress log.
 
 ## Quick start
 
@@ -35,6 +36,7 @@ for fun; `docs/client.md` has both.
 Recordings and gates:
 
     sh tools/dosbox/stream.sh 45             # file backend, run + replay the capture to PNG
+    sh tests/c/run.sh                        # C core: unit, asm parity, client render, input backends
     sh tests/replay/run.sh                   # client render == Python render, byte for byte
     sh tests/session/run.sh                  # timed BIN / YT2S capture, playback and input replay
     sh tests/link/run.sh                     # obsolete serial link check, kept for fun
@@ -49,7 +51,7 @@ Windows bundle (self-contained, no .NET install on the target):
 |---|---|
 | `engine/asm/swreg/` | the byte-perfect `SWREG.EXE` disassembly and its build/verify tools |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` (FM driver) disassembly and its black-box harness |
-| `engine/c/` | (planned) the C core and platform layer |
+| `engine/c/` | the C11 core and platform service layer (`yt2stub`, unit tests, folder/stream backends) |
 | `client/` | the C# companion client (SDL3) and platform bundle files |
 | `tools/` | host tooling, including the `publish-*.sh` bundle publishers |
 | `tests/` | committed gates (the list is in `tests/README.md`) and fixtures |
