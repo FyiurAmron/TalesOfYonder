@@ -209,7 +209,7 @@ service seam as §3 — a client is just another service backend. Message detail
 | M1 | Annotated-asm pilot | 2–3 subsystems annotated (EMS manager, file manager, palette) with byte-verify green |
 | M1b | Boundary spike (optional) | one seam (video present/palette) streamed from the asm build to a minimal client; proves protocol + showcase path — **done 2026-10-19**, see `docs/stream.md`; **live client link since 2026-10-20**, see `docs/client.md` |
 | M1c | Timed asm session trace | **done 2026-10-25** - capture/replay both directions with paced output and input |
-| M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them |
+| M2 | C core + platform service layer | memory model and service boundary; headless/recording/folder backends run a stub program that writes timed `OUTPUT.BIN` and reads `INPUT.BIN`; the existing C# client renders them — **done 2026-10-28**, see `engine/c/README.md` |
 | M3 | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path |
 | M4 | Subsystem migration | each module ported + tested in dependency order (§3); streams diff against TRACE builds |
 | M5 | Gameplay slice | scripted char-creation → walking → combat session matches oracle |
@@ -1544,3 +1544,44 @@ emulator-hook demo, not this port).
     program writes timed `OUTPUT.BIN` and reads timed `INPUT.BIN`, and the
     existing client renders/replays that stream. A direct SDL3 host is a later
     optional backend behind the same service interface.
+- 2026-10-28 - M2: C core and headless service layer:
+  - **core**: `engine/c/` now builds a C11 `yt2stub` and `yt2core-tests` under
+    `build/c/`. The core has the flat `0x110000`-byte memory with
+    `seg:off -> seg*16+off`, explicit 16-bit registers and CF/PF/AF/ZF/SF/OF
+    rules for add/sub/inc/dec/logic/test/neg plus all 16 condition codes.
+    There is no interpreter; the transliterated code will do its own
+    arithmetic through the helpers;
+  - **protocol/service**: v0 header/frame builders and parsers for VIDEO,
+    AUDIO, INPUT and CONTROL, the incremental timed-input parser (including
+    the bare `'K'` keyframe request), and the service seam that owns the
+    output sequence, answers a client hello once, turns INPUT/CONTROL frames
+    into callbacks and returns `error(2,"bad message")` for an unknown
+    family. The engine core never reads a wall clock; the host clock is
+    platform code;
+  - **display**: `yt2_video` keeps the current mode, pixels and DAC plus the
+    shadow of what the client has. A present sends `set_mode` when needed,
+    changed 1-line rects, the minimal changed palette span and `frame_end`; a
+    keyframe resends the mode, the whole palette and every row. Raw video
+    codec 0 for now;
+  - **backends**: `null` drops frames, `stream` writes a raw v0 recording,
+    and `folder` writes timed `YT2B` records to `OUTPUT.BIN` (16-byte header,
+    per-frame flush, 64 MiB pseudo-ring wrap) and follows timed or legacy
+    `INPUT.BIN` (header detection, append/rewind handling, `--input-start`
+    for offline replay). INPUT timestamps are validated as envelopes but are
+    applied on poll, matching the asm seam;
+  - **stub**: a deterministic 320x200x8 scene with palette animation,
+    row-delta presentation and key/mouse/keyframe/quit handling. Runs on the
+    three backends, or with `--replay-v0 PATH`, which re-encodes every frame
+    of a raw recording through the C builders and requires each payload to be
+    byte-identical before sending it;
+  - **verification**: `sh tests/c/run.sh` passes end to end: warnings-as-errors
+    build, all unit tests, 483 v0 frames / 150,360 bytes re-emitted
+    frame-identically from `tests/data/sample-video.bin`, stub output rendered
+    byte-identically by the C# client and `tools/stream/replay.py`, scripted
+    keyframe/key/quit/live-append input runs, and the stream/null backends.
+    The final-state PPM from both decoders is `cmp`-identical and the client
+    reports `unknown=0`. No asm source changed for M2; `verify.sh` still reports
+    `seam_pin: OK`, `SWREG.EXE: OK` and `IDENTICAL`;
+  - **deliberate limits**: codec 0 only (row runs/scroll detection arrive with
+    the video subsystem), AUDIO payload encoders exist but no engine emitter
+    uses them yet, the stub is not game content, and VBE modes wait for M3/M4.

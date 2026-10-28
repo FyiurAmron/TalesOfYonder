@@ -1,8 +1,8 @@
 # Tests
 
-Nine checks pin the link and the client; eight cover the folder transport
-and the client, and `tests/link` covers the obsolete serial one (kept for fun).
-All are ordinary shell scripts; artifacts land under
+Ten checks pin the link and the client; nine cover the folder transport,
+the client and the C seam, and `tests/link` covers the obsolete serial one
+(kept for fun). All are ordinary shell scripts; artifacts land under
 `build/runs/<kind>/<stamp>/`.
 
 ## `tests/replay/run.sh`
@@ -46,6 +46,20 @@ generator. This pins the timed folder-link boundary without requiring DOSBox-X.
     sh tests/session/run.sh
 
 Needs `dotnet` and Python 3.
+
+## `tests/c/run.sh`
+
+The M2 C gate. It builds `engine/c/` with warnings as errors, runs the memory/ALU/framing/
+service/video unit tests, then re-emits `tests/data/sample-video.bin` through the C folder
+backend and requires every unwrapped v0 frame to match the asm recording byte for byte (483
+frames, 150,360 bytes). The deterministic stub scene must render identically through the C#
+client and `tools/stream/replay.py`; scripted timed `INPUT.BIN` files exercise the keyframe
+path, a partial key-driven row delta, quit handling and a live append after start; the raw
+stream and null backends are checked as well.
+
+    sh tests/c/run.sh [--no-build]
+
+Needs a C11 compiler and `dotnet`; artifacts land in `build/runs/c/<stamp>/`.
 
 ## `tests/window/run.sh`
 

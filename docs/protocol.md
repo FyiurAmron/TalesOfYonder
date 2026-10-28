@@ -421,6 +421,10 @@ The engine polls `INPUT.BIN` with a seek to its own position before each read: D
 flag set on a file that grows under it, and a seek is the portable way to clear it.  The file
 length is queried each poll, which is also the wrap check.
 
+The Stage B C core (`engine/c/`) implements the same folder files behind its service boundary.
+Its `tests/c/run.sh` gate re-emits `tests/data/sample-video.bin` through the C folder backend and
+requires every unwrapped v0 frame to be byte-identical to the asm recording.
+
 ## Non-goals
 
 - Remote display of the unmodified binary (dropped: emulator-hook demo, proves nothing here).
