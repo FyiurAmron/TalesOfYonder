@@ -105,7 +105,8 @@ harness before starting Stage B.
 
 ## 3. Stage B — portable C ("faithful reincarnation")
 
-Target: C11, gcc/clang/msvc, no dependencies besides SDL3. Runs on >= 32-bit systems.
+Target: C11, gcc/clang/msvc; the engine core has no host dependencies. SDL3
+belongs to the companion/direct host, not the core. Runs on >= 32-bit systems.
 
 Memory & CPU model:
 
@@ -120,9 +121,12 @@ Platform layer (the only modern code):
 - files: DOS-ish semantics (8.3, case-insensitive, wildcards) behind the service interface;
   engine-local shim while porting, flipped to the client as the final layer step (§5);
 - EMS: arena + 64 KB window emulation (int 67h 40h–51h implemented);
-- video: windowed linear framebuffer + palette + SDL3 present (texture with 8-bit palette);
-- input: scripted events (harness) and SDL3 keyboard/mouse mapped onto the existing dispatch
-  tables / int 33h equivalents, incl. invoking the game's user handler;
+- video: 8-bit framebuffer + palette behind a sink; the companion client presents it (the
+  folder `YT2B` records are the first backend). An optional direct SDL3 host can share the
+  same interface later;
+- input: scripted events (harness) plus companion-client input mapped onto the existing dispatch
+  tables / int 33h equivalents, incl. invoking the game's user handler; SDL3 capture belongs
+  to the host/client;
 - clock: logical 18.2 Hz tick; `int 1Ah`/int 1Ch served from it → deterministic replay;
 - sound: OPL2/3 core + reimplemented `SBFMDRV` INT 00h protocol (see `docs/sbfmdrv.md`);
 - record/replay + transport backends: the same service calls can be logged to a stream, replayed,
@@ -1533,3 +1537,10 @@ emulator-hook demo, not this port).
     publishers stage `sample/OUTPUT.BIN`, and the Linux bundle replay decodes
     41 frames. The session gate now waits for its replay/log completion line
     before terminating the client, removing a termination race.
+- 2026-10-28 - M2 scope:
+  - M2 is the C core plus a **headless platform service layer**, not an
+    engine-side SDL3 host. The existing C# client remains the host and the C
+    core has no SDL3 dependency. The first gate is seam parity: a stub C
+    program writes timed `OUTPUT.BIN` and reads timed `INPUT.BIN`, and the
+    existing client renders/replays that stream. A direct SDL3 host is a later
+    optional backend behind the same service interface.
