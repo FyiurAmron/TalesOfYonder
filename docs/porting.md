@@ -1661,6 +1661,12 @@ emulator-hook demo, not this port).
     asm gates are unchanged. A scripted Enter + Down at the title menu
     reached "Assemble a Party", so the input path drives the real UI; the
     intro/attract before the menu is the original's ~5.5 minutes;
+  - **bundle**: `tools/publish-linux.sh --server c` stages `yt2game` plus
+    the original game data and a C `server-start.sh`; `play.sh` starts the
+    engine and the client with no DOSBox-X. `tools/play-c.sh` does the same
+    from the tree (build if stale, stage game data, `--live`, then
+    `dotnet run`). The Windows C bundle waits for a Windows `yt2game.exe`
+    build;
   - **limits**: VBE presentation and FM/PC-speaker audio still wait for
     M4/M6; the cycle model stays flat, and input timestamps are applied when
     polled (the live client writes them in real time).

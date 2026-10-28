@@ -18,6 +18,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
     tools/                       host-side tooling
       publish-win.sh             builds the client + selected server bundle
       publish-linux.sh           builds the client + selected server bundle
+      play-c.sh                  plays the C engine + client from the tree (build/stage/run)
       dosbox/                    DOSBox-X profiles + headless runners (oracle, audio, stream, client)
       stream/                    recording tooling: replay.py (reference decoder), compare_streams.py, dro.py, wav.py
       repro/                     reproductions of wire-level behaviour (nullmodem 0xFF)

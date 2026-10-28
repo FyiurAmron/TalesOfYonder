@@ -9,7 +9,7 @@ if [ ! -x client/Yt2Client ]; then
     echo "client-start: client/Yt2Client is missing; unpack the bundle again."
     exit 1
 fi
-if [ ! -f server/game/SWREG.EXE ]; then
+if [ ! -f server/game/SWREG.EXE ] && [ ! -x server/game/yt2game ]; then
     echo "client-start: server/game is missing; unpack the bundle again."
     exit 1
 fi

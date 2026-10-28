@@ -1,20 +1,23 @@
 #!/bin/sh
-# Publish the Linux x64 client + asm server bundle.
+# Publish the Linux x64 client + engine server bundle (asm seam or C engine).
 #
 #   sh tools/publish-linux.sh [options]
 #
-#     --server KIND       asm (current) or c (future)
+#     --server KIND       asm (seam build) or c (the transliterated engine)
 #     --server-dir DIR    asm seam build to stage as server/game
-#                         (default: build/swreg/file, the folder-link build)
+#                         (default: build/swreg/file, the folder-link build);
+#                         for c, the build tree holding yt2game
+#                         (default: build/c)
 #     --out DIR           output root (default: build/dist)
 #     --framework         framework-dependent publish (needs .NET 11 on the
 #                         target); the default is self-contained
 #     -n, --no-zip        leave the bundle directory unpacked only
 #     --no-tar            alias for --no-zip
 #
-# The bundle is ready to run: server-start.sh opens DOSBox-X, and
-# client-start.sh (or play.sh, which starts both) mirrors the game.
-# Output: build/dist/yt2-linux-x64/ and yt2-linux-x64.tar.gz.  See docs/client.md.
+# The bundle is ready to run: server-start.sh starts the engine (DOSBox-X for
+# asm, yt2game for c), and client-start.sh (or play.sh, which starts both)
+# mirrors the game.  Output: build/dist/yt2-linux-x64/ and
+# yt2-linux-x64.tar.gz.  See docs/client.md.
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -40,28 +43,39 @@ done
 
 SERVER=${SERVER:-asm}
 case "$SERVER" in
-    asm) SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file} ;;
+    asm)
+        SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file}
+        if [ ! -f "$SERVER_DIR/SWREG.EXE" ]; then
+            echo "publish-linux: no seam build in $SERVER_DIR" >&2
+            echo "  build it first:  sh engine/asm/swreg/tools/build.sh --variant file" >&2
+            exit 1
+        fi
+        for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
+            if [ ! -f "$SERVER_DIR/$f" ]; then
+                echo "publish-linux: $SERVER_DIR/$f is missing" >&2
+                exit 1
+            fi
+        done
+        ;;
     c)
-        echo "publish-linux: the C server bundle is not available yet" >&2
-        exit 2
+        SERVER_DIR=${SERVER_DIR:-$ROOT/build/c}
+        if [ ! -x "$SERVER_DIR/yt2game" ]; then
+            echo "publish-linux: no C engine in $SERVER_DIR" >&2
+            echo "  build it first:  sh engine/c/tools/build.sh" >&2
+            exit 1
+        fi
+        for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
+            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
+                echo "publish-linux: _ref/orig-bin/$f is missing" >&2
+                exit 1
+            fi
+        done
         ;;
     *)
         echo "publish-linux: --server must be asm or c" >&2
         exit 2
         ;;
 esac
-
-if [ ! -f "$SERVER_DIR/SWREG.EXE" ]; then
-    echo "publish-linux: no seam build in $SERVER_DIR" >&2
-    echo "  build it first:  sh engine/asm/swreg/tools/build.sh --variant file" >&2
-    exit 1
-fi
-for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
-    if [ ! -f "$SERVER_DIR/$f" ]; then
-        echo "publish-linux: $SERVER_DIR/$f is missing" >&2
-        exit 1
-    fi
-done
 SAMPLE=$ROOT/tests/data/sample-timed-stream.bin
 if [ ! -f "$SAMPLE" ]; then
     echo "publish-linux: $SAMPLE is missing (the timed BIN smoke-test stream)" >&2
@@ -77,7 +91,7 @@ CLIENT=$BUNDLE/client
 rm -rf "$BUNDLE"
 mkdir -p "$CLIENT" "$BUNDLE/server/game" "$BUNDLE/server/capture" "$BUNDLE/sample"
 
-echo "publish-linux: publishing client+asm server bundle"
+echo "publish-linux: publishing client+$SERVER server bundle"
 if [ "$SELF_CONTAINED" = 1 ]; then
     dotnet publish "$ROOT/client" -c Release -r linux-x64 --self-contained true \
         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true \
@@ -98,15 +112,25 @@ else
     echo "publish-linux: warning: no libSDL3.so.0 found; the target needs SDL3" >&2
 fi
 
-for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
-    cp -f "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
-done
-cp -f "$PUBLISH_DIR/dosbox-x.conf" "$BUNDLE/server/dosbox-x.conf"
-cp -f "$PUBLISH_DIR/server-start.sh" "$BUNDLE/server-start.sh"
+if [ "$SERVER" = c ]; then
+    for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
+        cp -f "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+    done
+    cp -f "$SERVER_DIR/yt2game" "$BUNDLE/server/game/yt2game"
+    chmod +x "$BUNDLE/server/game/yt2game"
+    cp -f "$PUBLISH_DIR/server-start-c.sh" "$BUNDLE/server-start.sh"
+    cp -f "$PUBLISH_DIR/README-c.txt" "$BUNDLE/README.txt"
+else
+    for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
+        cp -f "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
+    done
+    cp -f "$PUBLISH_DIR/dosbox-x.conf" "$BUNDLE/server/dosbox-x.conf"
+    cp -f "$PUBLISH_DIR/server-start.sh" "$BUNDLE/server-start.sh"
+    cp -f "$PUBLISH_DIR/README.txt" "$BUNDLE/README.txt"
+fi
 cp -f "$PUBLISH_DIR/client-start.sh" "$BUNDLE/client-start.sh"
 cp -f "$PUBLISH_DIR/play.sh" "$BUNDLE/play.sh"
 cp -f "$PUBLISH_DIR/smoke-test.sh" "$BUNDLE/smoke-test.sh"
-cp -f "$PUBLISH_DIR/README.txt" "$BUNDLE/README.txt"
 cp -f "$SAMPLE" "$BUNDLE/sample/OUTPUT.BIN"
 chmod +x "$BUNDLE/client-start.sh" "$BUNDLE/server-start.sh" \
          "$BUNDLE/play.sh" "$BUNDLE/smoke-test.sh"
@@ -116,4 +140,4 @@ if [ "$TAR" = 1 ]; then
     tar -C "$OUT" -czf "$OUT/yt2-linux-x64.tar.gz" yt2-linux-x64
     echo "publish-linux: $OUT/yt2-linux-x64.tar.gz"
 fi
-echo "publish-linux: client+asm server bundle in $BUNDLE"
+echo "publish-linux: client+$SERVER server bundle in $BUNDLE"
