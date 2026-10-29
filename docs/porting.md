@@ -1724,3 +1724,23 @@ emulator-hook demo, not this port).
     `tests/c/game.sh` pass, and `tests/c/intro.sh` pins the three presentation
     symptoms (logo ramp, star ramp, story palette); the Linux C bundle is
     republished and smoke-tested.
+- 2026-10-29 - fix: keep every `frame_end`, not only the latest:
+  - the engine can write several complete frames inside one BIOS tick (the
+    intro fades, the title star and the orb's palette-cycled objects). The
+    client kept one `_presentPending` flag, so when the reader thread decoded
+    a burst before the render loop ran, the intermediate states were already
+    gone: the orb's single-tick objects and the star's twinkle were barely
+    visible even though the engine's present log had every step;
+  - `ClientState` now queues complete frame replicas (bounded to eight; the
+    oldest is dropped and counted as `dropped=` only if the display falls
+    behind) and `SnapshotFrame` returns one per call. Dirty rows travel with
+    the frame so xBRZ still scales the right rows; `--ppm` and `--dump-frame`
+    use `SnapshotCurrent`, which is the latest replica, not a queued one;
+  - the render loop holds a queued frame for one display slot (16 ms when a
+    window is open), so a three-frame burst is spread over refreshes instead
+    of being presented inside one; the headless path drains immediately;
+  - `tests/c/live.sh` runs the engine live to the title star (320 ticks),
+    follows `OUTPUT.BIN` headless, and requires `shown >= frames`,
+    `dropped=0` and at least 100 frames. The old single-flag client fails it;
+    `tests/c/intro.sh`, `tests/replay/run.sh`, `tests/window/run.sh` and the
+    C bundle smoke test stay green.

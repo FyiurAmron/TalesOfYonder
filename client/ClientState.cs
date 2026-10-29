@@ -31,6 +31,8 @@ public sealed class ClientStats
     public long Bytes;
     /// <summary>Frames actually pushed to the window (not just decoded).</summary>
     public long Presented;
+    /// <summary>Complete frames dropped because the display fell behind the link.</summary>
+    public long Dropped;
     /// <summary>Total milliseconds spent inside the renderer's Present call.</summary>
     public double PresentMs;
     /// <summary>Total milliseconds spent inside the xBRZ filter.</summary>
@@ -50,6 +52,7 @@ public sealed class ClientStats
         (AudioSpeakers > 0 ? $"speaker={AudioSpeakers} " : string.Empty) +
         (AudioSamples > 0 ? $"samples={AudioSamples} " : string.Empty) +
         $"records={Records} bytes={Bytes} shown={Presented} " +
+        (Dropped > 0 ? $"dropped={Dropped} " : string.Empty) +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
         (Filtered > 0 ? $"filter={FilterMs / Filtered:F1}ms " : string.Empty) +
         $"unknown={UnknownFamilies + UnknownMessages} " +
@@ -84,12 +87,32 @@ public sealed class ClientState(int width, int height)
     public bool PaletteDirty { get; private set; } = true;
 
     /// <summary>
-    /// True when a complete frame (a frame_end) is waiting to be shown.  Rects
-    /// and palette spans only change the replica; presenting them one by one
-    /// would upload the whole frame dozens of times and show half-drawn
-    /// frames, which is both slow and visibly flickers.
+    /// Complete frames waiting to be shown, oldest first.  Rects and palette
+    /// spans only change the replica; presenting them one by one would upload
+    /// the whole frame dozens of times and show half-drawn frames.  A frame is
+    /// queued at frame_end instead, and every frame is kept: a DAC-paced fade
+    /// or palette-cycled animation can produce several frames inside one BIOS
+    /// tick, and collapsing them to the latest would swallow every single-tick
+    /// step before the render loop could show it.
     /// </summary>
-    private bool _presentPending = true;
+    private readonly Queue<PendingFrame> _pendingFrames = new();
+    private const int MaxPendingFrames = 8;
+
+    private sealed class PendingFrame(byte[] indices, byte[] palette,
+        int width, int height, List<int> dirtyRows, bool dirtyAll)
+    {
+        public byte[] Indices { get; } = indices;
+        public byte[] Palette { get; } = palette;
+        public int Width { get; } = width;
+        public int Height { get; } = height;
+        public List<int> DirtyRows { get; } = dirtyRows;
+        public bool DirtyAll { get; set; } = dirtyAll;
+    }
+
+    /// <summary>Dirty rows belonging to the frame last taken from the queue.</summary>
+    private List<int> _takenDirtyRows = [];
+    private bool _takenDirtyAll;
+    private bool _haveTakenDirty;
 
     private volatile bool _sawMode;
     private volatile bool _needsKeyframe;
@@ -122,12 +145,57 @@ public sealed class ClientState(int width, int height)
     {
         lock (_lock)
         {
+            if (_haveTakenDirty)
+            {
+                var taken = _takenDirtyRows;
+                bool takenAll = _takenDirtyAll;
+                _takenDirtyRows = [];
+                _takenDirtyAll = false;
+                _haveTakenDirty = false;
+                return (taken, takenAll);
+            }
             var rows = new List<int>(_dirtyRows);
             _dirtyRows.Clear();
             bool all = _dirtyAll;
             _dirtyAll = false;
             return (rows, all);
         }
+    }
+
+    /// <summary>
+    /// Queues the replica as one complete frame.  The dirty rows travel with
+    /// it: the filter may still be scaling an older queued frame when the
+    /// reader has already applied a newer one.
+    /// </summary>
+    private void QueuePresentLocked()
+    {
+        if (_pendingFrames.Count >= MaxPendingFrames)
+        {
+            _pendingFrames.Dequeue();
+            Stats.Dropped++;
+            // the filter's cache is now older than the queue says
+            if (_pendingFrames.Count > 0)
+            {
+                _pendingFrames.Peek().DirtyAll = true;
+            }
+        }
+        _pendingFrames.Enqueue(new PendingFrame(
+            (byte[])Indices.Clone(), (byte[])Palette.Clone(), Width, Height,
+            new List<int>(_dirtyRows), _dirtyAll));
+        _dirtyRows.Clear();
+        _dirtyAll = false;
+    }
+
+    private void ClearPendingLocked()
+    {
+        if (_pendingFrames.Count == 0)
+        {
+            return;
+        }
+        // frames queued for the old mode cannot be shown at the new size
+        _pendingFrames.Clear();
+        // whatever the filter last scaled belongs to the old mode
+        _dirtyAll = true;
     }
 
     /// <summary>One-line messages from the engine (hello, errors, bye).</summary>
@@ -196,13 +264,15 @@ public sealed class ClientState(int width, int height)
                         IndicesDirty = true;
                         Stats.ModeChanges++;
                     }
-                    // a new mode means new pixels everywhere
+                    // a new mode means new pixels everywhere; frames queued for
+                    // the old mode cannot be shown at the new size
+                    ClearPendingLocked();
                     _dirtyAll = true;
                     Stats.Width = w;
                     Stats.Height = h;
                     _sawMode = true;
                     _needsKeyframe = false;
-                    _presentPending = true;
+                    QueuePresentLocked();
                     return false;
                 }
 
@@ -291,7 +361,7 @@ public sealed class ClientState(int width, int height)
 
                 case VideoMessage.FrameEnd:
                     Stats.Frames++;
-                    _presentPending = true;
+                    QueuePresentLocked();
                     return false;
 
                 case VideoMessage.Scroll:
@@ -340,7 +410,7 @@ public sealed class ClientState(int width, int height)
                     Array.Clear(Indices);
                     IndicesDirty = true;
                     _dirtyAll = true;
-                    _presentPending = true;
+                    QueuePresentLocked();
                     return true;
 
                 default:
@@ -477,28 +547,45 @@ public sealed class ClientState(int width, int height)
         }
     }
 
-    /// <summary>Palette snapshot as 8-bit RGBA (little-endian byte order ARGB).</summary>
+    /// <summary>
+    /// Takes the oldest complete frame and returns it as 8-bit RGBA
+    /// (little-endian byte order ARGB).  Every frame_end is returned once; the
+    /// render loop may be slower than a burst, so this must not jump to the
+    /// latest state.
+    /// </summary>
     public byte[] SnapshotFrame()
     {
         lock (_lock)
         {
-            _presentPending = false;
-            var rgba = new byte[Width * Height * 4];
-            for (int i = 0; i < Width * Height; i++)
+            PendingFrame? frame = _pendingFrames.Count > 0 ? _pendingFrames.Dequeue() : null;
+            _takenDirtyRows = frame is not null
+                ? frame.DirtyRows
+                : new List<int>(_dirtyRows);
+            _takenDirtyAll = frame?.DirtyAll ?? _dirtyAll;
+            _haveTakenDirty = true;
+            if (frame is null)
             {
-                int c = Indices[i] * 3;
-                byte r = Expand(Palette[c]);
-                byte g = Expand(Palette[c + 1]);
-                byte b = Expand(Palette[c + 2]);
-                int o = i * 4;
-                rgba[o] = b;
-                rgba[o + 1] = g;
-                rgba[o + 2] = r;
-                rgba[o + 3] = 0xFF;
+                _dirtyRows.Clear();
+                _dirtyAll = false;
             }
             PaletteDirty = false;
             IndicesDirty = false;
-            return rgba;
+            return ToRgba(frame?.Indices ?? Indices, frame?.Palette ?? Palette,
+                          frame?.Width ?? Width, frame?.Height ?? Height);
+        }
+    }
+
+    /// <summary>
+    /// The replica's current state, for the final PPM/dump after the stream
+    /// ends.  Unlike SnapshotFrame this does not consume a queued frame.
+    /// </summary>
+    public byte[] SnapshotCurrent()
+    {
+        lock (_lock)
+        {
+            PaletteDirty = false;
+            IndicesDirty = false;
+            return ToRgba(Indices, Palette, Width, Height);
         }
     }
 
@@ -506,8 +593,26 @@ public sealed class ClientState(int width, int height)
     {
         lock (_lock)
         {
-            return _presentPending;
+            return _pendingFrames.Count > 0;
         }
+    }
+
+    private static byte[] ToRgba(byte[] indices, byte[] palette, int width, int height)
+    {
+        var rgba = new byte[width * height * 4];
+        for (int i = 0; i < width * height; i++)
+        {
+            int c = indices[i] * 3;
+            byte r = Expand(palette[c]);
+            byte g = Expand(palette[c + 1]);
+            byte b = Expand(palette[c + 2]);
+            int o = i * 4;
+            rgba[o] = b;
+            rgba[o + 1] = g;
+            rgba[o + 2] = r;
+            rgba[o + 3] = 0xFF;
+        }
+        return rgba;
     }
 
     /// <summary>

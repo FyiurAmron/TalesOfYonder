@@ -77,6 +77,18 @@ those presents the logos cut and the story picture goes mostly black.
 
 Needs a C11 compiler and `dotnet`; artifacts land in `build/runs/c/<stamp>/`.
 
+## `tests/c/live.sh`
+
+The live presentation check: the C engine runs the intro to the title star
+(320 ticks, about 18 s), the C# client follows `OUTPUT.BIN` headless, and the
+final stats must show `shown >= frames`, `dropped=0` and at least 100 frames.
+The engine writes several complete frames inside one BIOS tick during the
+fades and the star twinkle; a client with only one pending present flag
+collapses that burst into its last frame and fails this gate. The queue keeps
+every frame and the windowed path spreads them over display slots.
+
+    sh tests/c/live.sh [--no-build] [--ticks N]
+
 ## `tests/window/run.sh`
 
 Guards the one thing the pixel gates cannot see: that the client's window is

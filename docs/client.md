@@ -290,8 +290,14 @@ for fun.
   converting the whole framebuffer once per row (about 200 times per frame) and showing half-drawn
   frames: the window stuttered, and rows drawn before their palette arrived flickered.  One
   snapshot per frame keeps the client at a few percent CPU and every shown frame consistent.
-  Window resize and expose events re-present the last frame: the renderer's back buffer is
-  invalid after them, and a static game would otherwise leave a black window.
+  A complete frame is queued, not just flagged: a DAC-paced fade can put several frames inside
+  one BIOS tick, and keeping only the latest would swallow the single-tick steps of the title
+  star and the orb's palette-cycled objects.  The queue is bounded to eight frames; if a window
+  cannot keep up, the oldest is dropped and the stats line reports `dropped=`.  With a window the
+  render loop holds each queued frame for one display slot (16 ms), so a burst is spread over
+  refreshes rather than landing inside one.  Window resize and expose events re-present the last
+  frame: the renderer's back buffer is invalid after them, and a static game would otherwise
+  leave a black window.
 - The engine commits `OUTPUT.BIN` after every flush (`INT 21h` AH=68h): DOSBox buffers the
   host-side file, so without it the reader sees the stream in 4 KB bursts and the last frame of
   a burst never arrives.  Measured with `--keyframe-every 0.05` (a full 320x200 frame each time),
