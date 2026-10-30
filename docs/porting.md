@@ -1744,3 +1744,29 @@ emulator-hook demo, not this port).
     `dropped=0` and at least 100 frames. The old single-flag client fails it;
     `tests/c/intro.sh`, `tests/replay/run.sh`, `tests/window/run.sh` and the
     C bundle smoke test stay green.
+- 2026-10-30 - fix: present after the full-screen work-buffer flush (attract
+  shooting star):
+  - the attract gate's shooting star is not a sprite in the scene list.  At
+    `sub_052BF` the game starts at `(10Ch,8)` with colour `1Fh`, restores the
+    previous pixel with `sub_060A5`, draws the next one with `sub_060B6`, and
+    flushes the whole work buffer to A000 with `fn_1A6B5` for every step;
+    the path is `x + y = 276`, two pixels left and two down per step.  All 32
+    steps run inside one BIOS tick, so the C port's present points (input
+    poll, tick ISR, DAC write, delay tick) sampled the scene before and after
+    the streak and never inside it;
+  - `yt2_string_movs` now presents when a REP MOVSW copies the full `7D00h`
+    words to `A000h`, i.e. immediately after the game's frame flush.  The
+    three-pass-per-tick budget still applies, so the burst becomes three
+    frames like the original's 60 fps display, not 32 link frames;
+  - verified against a 60 fps DOSBox-X capture of the original: the star is
+    visible for three samples at 9.83-9.87 s (frames 590-592) on the same
+    `x + y = 276` line, moving two pixels per sample.  The C run now presents
+    the first three positions `(268,8)`, `(266,10)`, `(264,12)` at tick 296;
+    the capture's phase lands later on the line, but both are the same
+    transient and it is no longer dropped.  The 20 fps stream recording never
+    caught it;
+  - `tests/c/star.sh` stages the game, runs 400 ticks with a frame dump and
+    requires at least two distinct single-pixel hits on the gate path, two
+    pixels apart; `tests/c/run.sh` includes it.  The seven M3 checkpoints,
+    `tests/c/intro.sh` and `tests/c/live.sh` stay green, and the asm gate is
+    untouched (no assembly changed).

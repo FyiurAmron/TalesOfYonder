@@ -949,6 +949,8 @@ static void yt2_write16(yt2_machine *m, uint16_t seg, uint16_t off, uint16_t val
 void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
+    uint16_t start_cx = m->r.cx;
+
     do {
         if (size == 1u) {
             yt2_write8(m, m->r.es, m->r.di, yt2_read8(m, source_seg, m->r.si));
@@ -961,6 +963,17 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
     } while (m->r.cx != 0u);
+
+    /* fn_1A6B5 copies the whole work buffer into the VGA aperture with one
+       REP MOVSW.  That is the game's frame flush: on a real card the new
+       picture is visible immediately, and short-lived effects (the shooting
+       star on the attract gate) last only a few milliseconds.  Sample here
+       as well as at the poll/DAC/tick points, or a whole transient can fall
+       between two presents.  The three-pass budget still applies. */
+    if (repeat != 0u && size == 2u && start_cx == 0x7D00u &&
+        m->r.es == (uint16_t)YT2_SCREEN_SEG) {
+        yt2_game_present(m);
+    }
 }
 
 void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)

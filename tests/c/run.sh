@@ -195,4 +195,7 @@ grep -q 'exited=0' "$RUN/checkpoint/stderr.log"
 python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
     "$ROOT/tests/c/game_checkpoints.txt" --dump "$RUN/checkpoint"
 
+echo "c: game shooting star"
+sh "$ROOT/tests/c/star.sh" --no-build
+
 echo "c: OK (artifacts in $RUN)"

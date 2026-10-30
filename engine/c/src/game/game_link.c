@@ -10,10 +10,13 @@
  * state, so this file is only the glue: one present pass copies the game's
  * framebuffer and DAC into the video state and lets it emit the changed rows,
  * and the input callbacks feed the DOS type-ahead queue and the INT 33h shim.
- * The SEAM presents at the input-poll, tick-ISR, DAC-write and delay-tick
- * entry points, and the game presents at those same points, so the client
- * sees the same sequence as the asm build (fades and other DAC-paced effects
- * become frames instead of being collapsed into the next poll).
+ * The game presents at the input-poll, tick-ISR, DAC-write and delay-tick
+ * entry points, so fades and other DAC-paced effects become frames instead
+ * of being collapsed into the next poll.  It also presents after the
+ * full-screen REP MOVSW that flushes the work buffer to A000: a real card
+ * shows those writes immediately, and the attract gate's shooting star runs
+ * through one flush per step inside a single tick.  Without that sample the
+ * whole streak falls between passes.
  */
 
 static void yt2_link_on_key(void *context, uint8_t scan, uint8_t ascii)
