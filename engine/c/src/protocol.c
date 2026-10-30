@@ -96,6 +96,26 @@ int yt2_payload_video_rect(uint8_t *destination, uint16_t x, uint16_t y,
     return (int)(9u + count);
 }
 
+int yt2_payload_video_rect_rle(uint8_t *destination, uint16_t x, uint16_t y,
+                               uint16_t width, uint16_t height,
+                               const uint8_t *encoded,
+                               uint32_t encoded_length)
+{
+    if (width == 0u || height == 0u ||
+        9u + encoded_length > YT2_MAX_PAYLOAD) {
+        return YT2_ERR;
+    }
+    destination[0] = (uint8_t)YT2_VIDEO_RECT;
+    yt2_put_le16(destination + 1, x);
+    yt2_put_le16(destination + 3, y);
+    yt2_put_le16(destination + 5, width);
+    yt2_put_le16(destination + 7, height);
+    for (uint32_t index = 0; index < encoded_length; index++) {
+        destination[9u + index] = encoded[index];
+    }
+    return (int)(9u + encoded_length);
+}
+
 int yt2_payload_video_frame_end(uint8_t *destination)
 {
     destination[0] = (uint8_t)YT2_VIDEO_FRAME_END;

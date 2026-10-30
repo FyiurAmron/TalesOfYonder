@@ -93,8 +93,8 @@ Rules:
   `w`, which is a protocol error.
 - Runs of three or more pixels use `00`/`01`; one- and two-pixel runs become literals, because
   three bytes for two pixels is not a saving. Literals are merged into chunks of at most 255, so
-  the worst case is the raw size plus one opcode and one count byte per 255 pixels - a rect can
-  never outgrow the raw form, and a flat row is 4 bytes instead of 320.
+  the worst case is the raw size plus one opcode and one count byte per 255 pixels (647 bytes
+  for a 640-pixel noise row), and a flat row is 4 bytes instead of 320.
 - The opcode byte only describes the row, so the rect header (and therefore the client's
   dirty-row bookkeeping) is unchanged: decoding writes exactly `w` pixels per row.
 - Message framing is untouched: `codec` in the 14-byte header is 1, and the payload length covers
@@ -129,17 +129,18 @@ Rules:
 - `|dy|` must be smaller than the client's height (a jump bigger than that is a repaint, not a
   pan); `dy = 0` is a no-op a client may ignore.
 - The `codec` field is 0: a scroll has no pixel payload.
-- Detection is engine-side and cheap: the seam already keeps a 32-bit checksum per row of what the
-  client has, and a pan makes this pass's row `y` equal the checksum of the row at `y-dy`. The seam
-  scores every step in +-8 rows and takes the best one **only when it explains more rows than no
-  shift at all and at least 100 rows**; otherwise the rows go out as rects exactly as before. So
-  the game stays correct when the heuristic does not fire, and a step costs 2 bytes when it does.
-  The client's checksum table is shifted with the message, which is what makes the following rows
-  comparable again.
+- Detection is engine-side and cheap: the seam and the C engine keep a 32-bit checksum per row of
+  what the client has, and a pan makes this pass's row `y` equal the checksum of the row at
+  `y-dy`. They score every step in +-8 rows and take the best one **only when it explains more
+  rows than no shift at all and at least 100 rows**; otherwise the rows go out as rects exactly as
+  before. So the game stays correct when the heuristic does not fire, and a step costs 2 bytes
+  when it does. The client's checksum table is shifted with the message, which is what makes the
+  following rows comparable again.
 - A pan beyond +-8 rows per presented picture falls back to rects: correct, just not cheap. The
   detector is covered by `tests/seam-scroll/run.sh` (the asm routine against a Python model of
-  these rules), and `tests/data/sample-pan-rows.bin` / `sample-pan-scroll.bin` are the same twelve
-  pictures encoded both ways, which `tests/replay/run.sh` renders with both decoders.
+  these rules) and by the C port's pan cases in `yt2core-tests`; `tests/data/sample-pan-rows.bin`
+  / `sample-pan-scroll.bin` are the same twelve pictures encoded both ways, which
+  `tests/replay/run.sh` renders with both decoders.
 
 ### Client display state
 
@@ -253,8 +254,8 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   VIDEO uses `h=1` rects (one message per changed row, at most 640 wide), in
   320x200x8 for the game and 640x480x8 for the VBE intro. Raw v0 files remain
   supported for protocol fixtures.
-  Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam build uses codec 1 and a
-  recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
+  Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam and C builds use codec 1 and
+  a recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
   `tests/data/sample-vbe.bin` the intro raw, `tests/data/sample-video-rle.bin` both modes with the
   run codec, and `tests/data/sample-pan-rows.bin` / `sample-pan-scroll.bin` the same twelve-picture
   pan encoded as rows and as scroll messages.

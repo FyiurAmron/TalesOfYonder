@@ -44,6 +44,10 @@ int yt2_service_video_palette(yt2_service *service, uint16_t start,
 int yt2_service_video_rect(yt2_service *service, uint8_t codec, uint16_t x,
                            uint16_t y, uint16_t width, uint16_t height,
                            const uint8_t *pixels);
+int yt2_service_video_rect_rle(yt2_service *service, uint16_t x, uint16_t y,
+                               uint16_t width, uint16_t height,
+                               const uint8_t *encoded,
+                               uint32_t encoded_length);
 int yt2_service_video_frame_end(yt2_service *service);
 int yt2_service_video_reset(yt2_service *service);
 int yt2_service_video_scroll(yt2_service *service, int8_t delta);

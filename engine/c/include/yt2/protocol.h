@@ -89,6 +89,10 @@ int yt2_payload_video_palette(uint8_t *destination, uint16_t start,
 int yt2_payload_video_rect(uint8_t *destination, uint16_t x, uint16_t y,
                            uint16_t width, uint16_t height,
                            const uint8_t *pixels);
+int yt2_payload_video_rect_rle(uint8_t *destination, uint16_t x, uint16_t y,
+                               uint16_t width, uint16_t height,
+                               const uint8_t *encoded,
+                               uint32_t encoded_length);
 int yt2_payload_video_frame_end(uint8_t *destination);
 int yt2_payload_video_reset(uint8_t *destination);
 int yt2_payload_video_scroll(uint8_t *destination, int8_t delta);

@@ -34,6 +34,7 @@ int test_protocol(void)
     uint8_t payload[YT2_MAX_PAYLOAD];
     uint8_t frame[YT2_MAX_FRAME];
     uint8_t a[4] = {0xAAu, 0xBBu, 0xCCu, 0xDDu};
+    uint8_t runs[4] = {0x01u, 0x03u, 0xAAu, 0x03u};
     uint8_t dac[6] = {0x11u, 0x22u, 0x33u, 0x44u, 0x55u, 0x66u};
     yt2_frame_header header;
     yt2_frame_reader reader;
@@ -83,6 +84,15 @@ int test_protocol(void)
     CHECK(payload[5] == 3u && payload[6] == 0u);
     CHECK(payload[7] == 1u && payload[8] == 0u);
     CHECK(payload[9] == 0xAAu && payload[10] == 0xBBu && payload[11] == 0xCCu);
+
+    length = yt2_payload_video_rect_rle(payload, 1, 2, 3, 1, runs, 4);
+    CHECK(length == 13);
+    CHECK(payload[0] == 2u && payload[1] == 1u && payload[2] == 0u);
+    CHECK(payload[3] == 2u && payload[4] == 0u && payload[5] == 3u);
+    CHECK(payload[6] == 0u && payload[7] == 1u && payload[8] == 0u);
+    CHECK(memcmp(payload + 9, runs, 4) == 0);
+    CHECK(yt2_payload_video_rect_rle(payload, 0, 0, 320, 1, runs,
+                                     YT2_MAX_PAYLOAD) == YT2_ERR);
 
     length = yt2_payload_video_frame_end(payload);
     CHECK(length == 1 && payload[0] == 3u);

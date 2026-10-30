@@ -10,9 +10,11 @@
 
 /*
  * The engine side of the display boundary: the picture and DAC live here, and
- * the seam remembers what the client already has (pixels and palette).  A
- * present sends only the rows and palette entries that differ, exactly like
- * the asm seam, and closes the frame.
+ * the seam remembers what the client already has (the asm seam's 32-bit row
+ * checksums and the palette).  A present sends only the rows and palette
+ * entries that differ, exactly like the asm seam, encodes changed rows with
+ * the run-length codec and recognises a whole-screen vertical pan before the
+ * row pass.
  */
 
 typedef struct yt2_video {
@@ -22,8 +24,9 @@ typedef struct yt2_video {
 
     uint8_t pixels[YT2_VIDEO_MAX_PIXELS];
     uint8_t palette[YT2_VIDEO_PALETTE_SIZE];
-    uint8_t shadow[YT2_VIDEO_MAX_PIXELS];
     uint8_t sent_palette[YT2_VIDEO_PALETTE_SIZE];
+    uint32_t row_sum[YT2_VIDEO_MAX_HEIGHT];
+    uint32_t shadow_sum[YT2_VIDEO_MAX_HEIGHT];
 
     uint16_t sent_width;
     uint16_t sent_height;
@@ -35,6 +38,7 @@ typedef struct yt2_video {
 
     uint32_t frames;
     uint32_t rects;
+    uint32_t scrolls;
     uint32_t palette_messages;
     uint32_t frame_ends;
 } yt2_video;
