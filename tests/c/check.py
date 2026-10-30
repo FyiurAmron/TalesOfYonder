@@ -233,8 +233,13 @@ def cmd_game_link(args) -> int:
         for _, _, family, _, _, payload in records
         if family == 1 and payload and payload[0] == VIDEO_SET_MODE
     ]
-    if not modes or any(mode != (320, 200, 8) for mode in modes):
+    allowed = {(320, 200, 8), (640, 480, 8), (640, 400, 8)}
+    if not modes or modes[0] != (320, 200, 8):
+        raise AssertionError(f"live game did not start in mode 13h: {modes}")
+    if any(mode not in allowed for mode in modes):
         raise AssertionError(f"live game modes are wrong: {modes}")
+    if not any(mode != (320, 200, 8) for mode in modes):
+        raise AssertionError(f"live game never entered VBE: {modes}")
     rects = count_message(records, 1, VIDEO_RECT)
     ends = count_message(records, 1, VIDEO_FRAME_END)
     palettes = count_message(records, 1, VIDEO_PALETTE)
@@ -245,7 +250,7 @@ def cmd_game_link(args) -> int:
         if family not in (1, 5):
             raise AssertionError(f"unexpected live game family {family}")
     print(f"c game link: OK ({len(records)} records, {rects} rows, "
-          f"{ends} frames, mode {modes[0]})")
+          f"{ends} frames, modes {modes})")
     return 0
 
 
