@@ -76,10 +76,25 @@ int yt2_service_video_rect(yt2_service *service, uint8_t codec, uint16_t x,
     int length;
 
     if (codec != 0u) {
-        return YT2_ERR;             /* row runs arrive with the port's video code */
+        return YT2_ERR;             /* raw rows only in this entry point */
     }
     length = yt2_payload_video_rect(payload, x, y, width, height, pixels);
     return yt2_service_video_payload(service, codec, payload, length);
+}
+
+int yt2_service_video_rect_rle(yt2_service *service, uint16_t x, uint16_t y,
+                               uint16_t width, uint16_t height,
+                               const uint8_t *encoded,
+                               uint32_t encoded_length)
+{
+    uint8_t payload[YT2_MAX_PAYLOAD];
+    int length = yt2_payload_video_rect_rle(payload, x, y, width, height,
+                                            encoded, encoded_length);
+
+    if (length < 0) {
+        return YT2_ERR;
+    }
+    return yt2_service_video_payload(service, 1, payload, length);
 }
 
 int yt2_service_video_frame_end(yt2_service *service)

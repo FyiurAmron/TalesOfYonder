@@ -19,6 +19,7 @@ VIDEO_SET_MODE = 0
 VIDEO_PALETTE = 1
 VIDEO_RECT = 2
 VIDEO_FRAME_END = 3
+VIDEO_SCROLL = 5
 CONTROL_HELLO = 0
 CONTROL_KEYFRAME_REQUEST = 4
 
@@ -241,16 +242,22 @@ def cmd_game_link(args) -> int:
     if not any(mode != (320, 200, 8) for mode in modes):
         raise AssertionError(f"live game never entered VBE: {modes}")
     rects = count_message(records, 1, VIDEO_RECT)
+    scrolls = count_message(records, 1, VIDEO_SCROLL)
     ends = count_message(records, 1, VIDEO_FRAME_END)
     palettes = count_message(records, 1, VIDEO_PALETTE)
     if rects < 10 or ends < 1 or palettes < 1:
         raise AssertionError(
             f"live game video is incomplete (rects={rects} palette={palettes} ends={ends})")
+    if scrolls < 1:
+        raise AssertionError("the live game never sent a scroll message")
+    if not any(family == 1 and codec == 1 and payload and payload[0] == VIDEO_RECT
+               for _, _, family, codec, _, payload in records):
+        raise AssertionError("the live game never sent a codec-1 row")
     for _, _, family, _, _, _ in records:
         if family not in (1, 5):
             raise AssertionError(f"unexpected live game family {family}")
-    print(f"c game link: OK ({len(records)} records, {rects} rows, "
-          f"{ends} frames, modes {modes})")
+    print(f"c game link: OK ({len(records)} records, {rects} RLE rows, "
+          f"{scrolls} scrolls, {ends} frames, modes {modes})")
     return 0
 
 

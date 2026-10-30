@@ -32,10 +32,11 @@ The layers, from the game outward:
 - **service**: the seam. It owns the output sequence, builds complete frames, answers the
   client hello once, turns INPUT/CONTROL frames into callbacks, and sends the `error` reply
   for an unknown family.
-- **video**: the engine-side display seam: current mode, pixels, palette, and a shadow of
-  what the client has. A present sends `set_mode` when needed, changed rows as
-  `rect(0,y,w,1)`, the changed palette span, and `frame_end`; a keyframe resends the mode,
-  the whole palette and every row.
+- **video**: the engine-side display seam: current mode, pixels, palette, and the client's
+  per-row checksums. A present sends `set_mode` when needed, changed rows as codec-1
+  `rect(0,y,w,1)` runs, a whole-screen `scroll(dy)` when the mode-13h pan detector fires,
+  the changed palette span, and `frame_end`; a keyframe resends the mode, the whole palette
+  and every row.
 - **transport**: the only host-aware piece. `null` drops output, `stream` writes raw v0
   records, and `folder` writes timed `OUTPUT.BIN` and follows `INPUT.BIN` exactly like the
   asm file backend (16-byte `YT2B` header, one record per v0 frame, pseudo-ring wrap at
@@ -144,18 +145,26 @@ The whole thing ships as a bundle without DOSBox-X:
     sh tools/publish-linux.sh --server c
     build/dist/yt2-linux-x64/play.sh
 
-The C server presents mode 13h only for now: the VBE intro modes wait for M4 and the
-FM/PC-speaker stream waits for M6, so the engine is silent and skips VBE-only pictures.
+The C server presents mode 13h and both VBE intro modes (640x480 mode 101h,
+640x400 mode 100h); the FM/PC-speaker stream waits for M6, so the engine is silent.
 The original intro and attract run about 5.5 minutes before the title menu; that pacing is
 the oracle's, not a stall. The menu accepts the mouse (the client maps the desktop pointer
 to game pixels) and the keyboard.
 
-## Deliberate M2/M3 limits
+The display link uses the seam's video codec 1 (row runs) and its whole-screen scroll
+detector: a changed row travels as runs, and a mode-13h pan becomes one `scroll(dy)`
+message plus the rows that slid in. The detector is the C port of
+`sub_SeamScrollCheck` (+-8 rows, at least 32 changed rows and 100 matches); anything
+else falls back to ordinary row rects. `tests/seam-rle` / `tests/seam-scroll` remain
+the asm references, and `yt2core-tests` checks the encoder against their 640-pixel
+rows and the pan rules.
 
-- VIDEO codec 0 (raw rows) only; the run-length codec and scroll detection arrive with the
-  video subsystem port. The AUDIO payload encoders exist, but no sound engine emits them yet.
-- The stub scene is 320x200x8; VBE modes beyond the game's `4F02h 101h` probe wait for
-  M4, and `LOGO.PCX` is absent from `_ref/orig-bin/`, so the intro falls through to the
+## Deliberate limits
+
+- VIDEO codec 1 (row runs) and whole-screen `scroll(dy)` detection are in place; LZ is
+  still future. The AUDIO payload encoders exist, but no sound engine emits them yet.
+- The stub scene is 320x200x8; the game's VBE intro modes are presented, and
+  `LOGO.PCX` is absent from `_ref/orig-bin/`, so the intro falls through to the
   title as it does in the oracle run.
 - SBFMDRV is not resident yet (M6): the game's sound calls are accepted but no OPL
   stream is produced.

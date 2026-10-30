@@ -1986,3 +1986,36 @@ emulator-hook demo, not this port).
     descent instead of the five-step flash the 30,000 clock gave.  That
     entry's `YT2_PRESENT_GAP_CYCLES` constant is now the per-machine
     `present_gap_cycles` field.
+- 2026-10-30 - M4 video subsystem port: codec-1 rows and scroll detection:
+  - `yt2_video` now keeps the asm seam's 32-bit row checksum (a 16-bit sum
+    plus a rotate/xor hash) instead of a byte shadow, and sends every changed
+    row through the C port of `sub_SeamEncodeRow`: runs of three or more use
+    `00`/`01`, one- and two-pixel runs become literals, long runs and literal
+    chunks split at 255, and a following run can reuse the last literal with
+    `00`.  `yt2_payload_video_rect_rle` / `yt2_service_video_rect_rle` carry
+    the encoded row under codec 1; raw codec 0 stays for the stub and the
+    protocol fixtures;
+  - the whole-screen pan detector is the C port of `sub_SeamScrollCheck`:
+    mode 13h only, at least 32 changed rows, score no shift and every step in
+    +-8 rows, take a non-zero step only when it beats no shift and explains
+    at least 100 rows.  The scroll goes out before the row pass, the client's
+    checksum table is shifted with it, and the rows that slid in are poisoned
+    (complement checksums) so they are sent; rows that changed on their own
+    (a sprite over a panning background) still go out as rects;
+  - verification: `yt2core-tests` covers the six 640-pixel rows from
+    `tests/seam-rle/rltest.asm` and gets the asm encoder's exact lengths
+    (8, 647, 330, 647, 11, 564 bytes), plus 320-pixel literal/repeat/split
+    cases, pans of +2 (with an animated row), -3 and +8, the +9 repaint
+    fallback, an unchanged screen and a non-pan repaint.  The full
+    `tests/c/run.sh` game link now carries 5,780 codec-1 rows and 69 scroll
+    messages over 573 frames; `tests/c/check.py` requires both, and the gate
+    replays that `OUTPUT.BIN` through `tools/stream/replay.py` and the C#
+    client and compares the final PPM, so the C encoder, the Python decoder
+    and the client agree (5,780 rows, 69 scrolls, 573 frames);
+  - `tests/seam-rle`, `tests/seam-scroll`, `tests/c/live.sh`,
+    `tests/c/intro.sh`, `tests/replay/run.sh` and the VBE gate stay green.
+    No assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+  - docs: `engine/c/README.md` and `docs/client.md` no longer say the C server
+    is mode-13h-only; `docs/protocol.md` records that both builds use codec 1
+    and corrects the worst-case encoded row size (647 bytes for 640 pixels).

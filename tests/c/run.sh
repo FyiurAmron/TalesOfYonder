@@ -1,5 +1,5 @@
 #!/bin/sh
-# M2/M3 gate: build the C core, run its unit tests, replay the asm fixture
+# M2/M3/M4 video gate: build the C core, run its unit tests, replay the asm fixture
 # through the folder backend byte-for-byte, exercise the stub's folder/stream
 # inputs, render its output with both the client and the Python decoder, then
 # run the transliterated game to the title/attract and match the original's
@@ -181,6 +181,20 @@ for text in "input mouse handler" "input key scan=1E ascii=61" \
     fi
 done
 python3 "$ROOT/tests/c/check.py" game-link "$RUN/link/game/OUTPUT.BIN"
+
+echo "c: game link render"
+python3 "$ROOT/tools/stream/replay.py" "$RUN/link/game/OUTPUT.BIN" \
+    --out "$RUN/link/python-frames" --ppm "$RUN/link/python.ppm" --quiet \
+    >"$RUN/link/python.log" 2>&1
+dotnet "$ROOT/build/client/bin/Release/net11.0/Yt2Client.dll" \
+    --file "$RUN/link/game/OUTPUT.BIN" --headless --no-audio --stats 0 \
+    --ppm "$RUN/link/client.ppm" >"$RUN/link/client.log" 2>&1
+if ! cmp -s "$RUN/link/python.ppm" "$RUN/link/client.ppm"; then
+    echo "c: game link renders differ" >&2
+    exit 1
+fi
+grep -q 'unknown=0' "$RUN/link/client.log"
+rm -rf "$RUN/link/python-frames"
 
 echo "c: input resync"
 sh "$ROOT/tests/c/link-resync.sh" --no-build >"$RUN/link-resync.log" 2>&1 || {
