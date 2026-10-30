@@ -133,6 +133,32 @@ static int yt2_video_send_palette(yt2_video *video, yt2_service *service)
     return changed;
 }
 
+int yt2_video_present_blank(yt2_video *video, yt2_service *service)
+{
+    /* Switch the client and leave it on a blank screen.  A VBE decoder fills
+       the hidden banks first and loads its palette last; sending those rows
+       now would show the picture with the previous scene's colours. */
+    if (video->mode_sent == 0u || video->sent_width != video->width ||
+        video->sent_height != video->height || video->sent_bpp != video->bpp) {
+        if (yt2_service_video_set_mode(service, video->width, video->height,
+                                       video->bpp) != YT2_OK) {
+            return YT2_ERR;
+        }
+        video->sent_width = video->width;
+        video->sent_height = video->height;
+        video->sent_bpp = video->bpp;
+        video->mode_sent = 1;
+        video->force_full = 1;
+        video->force_palette = 1;
+        if (yt2_service_video_frame_end(service) != YT2_OK) {
+            return YT2_ERR;
+        }
+        video->frame_ends++;
+        video->frames++;
+    }
+    return YT2_OK;
+}
+
 int yt2_video_present(yt2_video *video, yt2_service *service)
 {
     int dirty = 0;
