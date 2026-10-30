@@ -198,4 +198,7 @@ python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
 echo "c: game shooting star"
 sh "$ROOT/tests/c/star.sh" --no-build
 
+echo "c: VBE publisher logo"
+sh "$ROOT/tests/c/vbe.sh" --no-build
+
 echo "c: OK (artifacts in $RUN)"

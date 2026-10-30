@@ -1770,3 +1770,44 @@ emulator-hook demo, not this port).
     pixels apart; `tests/c/run.sh` includes it.  The seven M3 checkpoints,
     `tests/c/intro.sh` and `tests/c/live.sh` stay green, and the asm gate is
     untouched (no assembly changed).
+- 2026-10-30 - feat: VBE presentation (M4 first slice):
+  - the live link skipped every mode except 13h, so the Spectrum Pacific
+    publisher logo (VBE 101h, 640x480x8) never reached the client.  Both VBE
+    packed-pixel modes are now presented: 640x480 mode 101h and 640x400 mode
+    100h.  `yt2_video` carries the 640-wide picture; rows are assembled by
+    reading the active bank through the A000 aperture and the other banks
+    from `vbe_bank[]`, so a row may cross a 64 KB boundary without changing
+    the game's mapping;
+  - fixed the bank mirror while doing it: bank 0 was never saved when the
+    game mapped another bank (`vbe_bank_active == 0` was treated as "none"),
+    and mode 101h needs a fifth 64 KB page for the last 0xB000 bytes.  The
+    machine now keeps five banks, uses -1 as "no active bank", and accepts
+    4F05h page 4 in 640x480;
+  - a VBE mode set blanks the client and holds the rows until the loader
+    writes all 768 DAC bytes, because the logo decoder fills the hidden
+    banks first and loads the palette last.  A 60-tick grace prevents a
+    screen that never rewrites the palette from staying blank; 1017h block
+    writes of 256 entries release the hold too.  The blank pass is a
+    set_mode-only present (`yt2_video_present_blank`);
+  - separated the presentation budget from link state: the per-tick gate
+    used `yt2_video.force_full`, which only the link clears.  Headless mode
+    therefore bypassed the three-pass budget forever after a mode change and
+    the gate star emitted all 32 positions.  `present_force` is now the
+    engine-side "next pass bypasses the budget" flag and is consumed by
+    `yt2_game_present`; a mode change or keyframe sets it;
+  - verification: a 320-tick `--link` run records `set_mode(640,480,8)`,
+    a blank frame and the Spectrum Pacific logo, then `set_mode(320,200,8)`
+    on the way back; replaying `OUTPUT.BIN` with `tools/stream/replay.py`
+    renders the logo at 640x480 with 17,776 non-black pixels.  That final
+    frame is pixel-identical to the original's 20 fps stream recording
+    (`build/runs/stream/20261028-204013/frames/frame_0010.png`): every RGB
+    channel matches (max diff 0).  The 640x400 path shares the same row
+    reader.  The live client follows the same transitions (`frames=122`,
+    `shown=124`, `dropped=0`).  `tests/c/check.py` now requires the game link
+    to start in 13h, enter a VBE mode and use only
+    320x200x8/640x480x8/640x400x8; the seven M3 checkpoints,
+    `tests/c/intro.sh`, `tests/c/star.sh` and `tests/c/live.sh` stay green.
+    The Linux C bundle is republished and its smoke test passes.
+    `tests/c/vbe.sh` replays the link output and pins the final 640x480 logo
+    hash (`6a51cf21adb30266`) and 17,776 non-black pixels; `tests/c/run.sh`
+    includes it.  No assembly changed.

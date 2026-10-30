@@ -46,6 +46,7 @@ static void yt2_link_on_keyframe(void *context)
     /* A keyframe is a fresh start for the client: mode, full palette, every
        row.  video_dirty also gets the pass past the unchanged-frame gate. */
     machine->video_dirty = 1;
+    machine->present_force = 1;
     yt2_video_force_keyframe(&machine->video);
 }
 
@@ -85,7 +86,6 @@ int yt2_link_open(yt2_machine *machine)
 
     machine->link = 1;
     machine->link_ready = 1;
-    machine->link_mode13 = 0;
     return YT2_OK;
 }
 
@@ -100,25 +100,76 @@ void yt2_link_poll(yt2_machine *machine)
     }
 }
 
+/* The VBE aperture shows one 64 KB bank at a time.  The machine mirrors that
+   in vbe_bank[]; the active bank also sits at A000.  Read the active bank
+   from the aperture and the others from the saved copies, so a row may cross
+   a bank boundary without disturbing the game's mapping. */
+static uint8_t yt2_link_vbe_byte(const yt2_machine *machine, uint32_t offset)
+{
+    unsigned bank = (unsigned)(offset >> 16);
+
+    if ((int)bank == machine->vbe_bank_active) {
+        return machine->mem.bytes[((uint32_t)YT2_SCREEN_SEG << 4) +
+                                  (offset & 0xFFFFu)];
+    }
+    if (bank < YT2_VBE_BANKS) {
+        return machine->vbe_bank[bank][offset & 0xFFFFu];
+    }
+    return 0;
+}
+
+static void yt2_link_fill_vbe(yt2_machine *machine, uint16_t height)
+{
+    unsigned row;
+
+    for (row = 0; row < height; row++) {
+        uint32_t offset = (uint32_t)row * 640u;
+        unsigned column;
+
+        for (column = 0; column < 640u; column++) {
+            machine->video.pixels[offset + column] =
+                yt2_link_vbe_byte(machine, offset + column);
+        }
+    }
+}
+
 void yt2_link_present(yt2_machine *machine)
 {
     if (!machine->link_ready) {
         return;
     }
-    if (machine->video_mode != 0x13 || machine->vbe_mode) {
-        /* VBE presentation waits for M4; re-send set_mode when 13h returns. */
-        if (machine->link_mode13) {
-            machine->link_mode13 = 0;
-            yt2_video_force_keyframe(&machine->video);
+    if (machine->vbe_mode &&
+        (machine->video_mode == 0x100 || machine->video_mode == 0x101)) {
+        uint16_t height = machine->video_mode == 0x101 ? 480u : 400u;
+
+        yt2_video_set_mode(&machine->video, 640, height, 8);
+        if (machine->vbe_wait_palette) {
+            /* The decoder has not loaded its palette yet.  Switch and blank
+               the client, but keep the banks off the wire. */
+            if (yt2_video_present_blank(&machine->video,
+                                        &machine->service) != YT2_OK ||
+                yt2_service_flush(&machine->service) != YT2_OK) {
+                fprintf(stderr,
+                        "yt2: link write failed; continuing without the client\n");
+                machine->link_ready = 0;
+                return;
+            }
+            if (yt2_service_take_wrap(&machine->service) != 0) {
+                yt2_video_force_keyframe(&machine->video);
+            }
+            return;
         }
+        yt2_link_fill_vbe(machine, height);
+        yt2_video_set_palette(&machine->video, 0, 256,
+                              machine->present_palette);
+    } else if (machine->video_mode == 0x13 && !machine->vbe_mode) {
+        yt2_video_set_mode(&machine->video, 320, 200, 8);
+        memcpy(machine->video.pixels, machine->present_frame, 64000u);
+        yt2_video_set_palette(&machine->video, 0, 256,
+                              machine->present_palette);
+    } else {
         return;
     }
-    if (!machine->link_mode13) {
-        machine->link_mode13 = 1;
-        yt2_video_force_keyframe(&machine->video);
-    }
-    memcpy(machine->video.pixels, machine->present_frame, 64000u);
-    yt2_video_set_palette(&machine->video, 0, 256, machine->present_palette);
     if (yt2_video_present(&machine->video, &machine->service) != YT2_OK ||
         yt2_service_flush(&machine->service) != YT2_OK) {
         fprintf(stderr, "yt2: link write failed; continuing without the client\n");

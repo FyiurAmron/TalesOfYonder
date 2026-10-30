@@ -33,6 +33,7 @@
 #define YT2_DOS_HEAP_END 0xA000u
 
 #define YT2_SCREEN_SEG 0xA000u
+#define YT2_VBE_BANKS 5u
 
 /* The game's DGROUP frame: S1DEA in the original layout. */
 #define YT2_DGROUP_SEG (YT2_LOAD_SEG + 0x1DEAu)
@@ -107,8 +108,15 @@ typedef struct yt2_machine {
     unsigned dac_phase;
     int vbe_mode;
 
-    uint8_t vbe_bank[4][0x10000];
+    uint8_t vbe_bank[YT2_VBE_BANKS][0x10000];
     int vbe_bank_active;
+
+    /* A VBE mode set blanks the screen until the game loads the new DAC.
+       The decoder writes the picture first and the palette last, so hold the
+       rows (and skip their dirty marks) until a full palette write lands. */
+    int vbe_wait_palette;
+    uint16_t vbe_palette_bytes;
+    uint32_t vbe_palette_deadline;
 
     /* Presentation log: the SEAM build presents at input-poll, tick-ISR and
        palette/delay hooks, so a hash per present gives the same frame
@@ -121,6 +129,7 @@ typedef struct yt2_machine {
     uint64_t present_last_pal;
     int present_have_last;
     int video_dirty;
+    int present_force;        /* next pass bypasses the per-tick budget */
     uint32_t present_tick;
     unsigned present_passes;
     uint8_t present_frame[64000];
@@ -157,7 +166,6 @@ typedef struct yt2_machine {
     /* Folder link (live play): the M2 seam moved over OUTPUT.BIN/INPUT.BIN. */
     int link;
     int link_ready;
-    int link_mode13;
     char link_output_path[1024];
     char link_input_path[1024];
     yt2_folder_transport folder;
@@ -292,7 +300,8 @@ static inline uint16_t yt2_ea(uint16_t base, uint16_t index, uint16_t disp)
 
 static inline void yt2_mark_video(uint32_t address)
 {
-    if (address >= 0xA0000u && address < 0xB0000u) {
+    if (address >= 0xA0000u && address < 0xB0000u &&
+        !(g_m.vbe_mode && g_m.vbe_wait_palette)) {
         g_m.video_dirty = 1;
     }
 }

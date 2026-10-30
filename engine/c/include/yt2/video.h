@@ -47,5 +47,6 @@ int yt2_video_set_palette(yt2_video *video, uint16_t start, uint16_t count,
                           const uint8_t *dac);
 void yt2_video_force_keyframe(yt2_video *video);
 int yt2_video_present(yt2_video *video, yt2_service *service);
+int yt2_video_present_blank(yt2_video *video, yt2_service *service);
 
 #endif /* YT2_VIDEO_H */

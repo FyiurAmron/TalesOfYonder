@@ -1,5 +1,7 @@
 #include "test.h"
 
+#include <string.h>
+
 #include "yt2/game.h"
 
 /*
@@ -125,6 +127,46 @@ static void test_strings(void)
     CHECK(g_m.r.di == 0x0200u);
 }
 
+static void test_vbe_modes(void)
+{
+    uint32_t screen = (uint32_t)YT2_SCREEN_SEG << 4;
+
+    /* 640x400 mode 100h uses four 64 KB pages. */
+    g_m.r.ax = 0x4F02u;
+    g_m.r.bx = 0x0100u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.vbe_mode == 1);
+    CHECK(g_m.video_mode == 0x0100);
+    CHECK(g_m.vbe_bank_active == -1);
+    CHECK(g_m.vbe_wait_palette == 1);
+
+    g_m.r.ax = 0x4F05u;
+    g_m.r.dx = 3u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.vbe_bank_active == 3);
+    CHECK(memcmp(g_m.mem.bytes + screen, g_m.vbe_bank[3], 0x10000u) == 0);
+
+    /* Writes to page 0 used to vanish because index 0 doubled as "none". */
+    g_m.mem.bytes[screen + 0x1234u] = 0x5Au;
+    g_m.r.dx = 0u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.vbe_bank[3][0x1234u] == 0x5Au);
+    CHECK(g_m.vbe_bank_active == 0);
+
+    /* 640x480 mode 101h needs and accepts page 4; page 5 is out of range. */
+    g_m.r.ax = 0x4F02u;
+    g_m.r.bx = 0x0101u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.video_mode == 0x0101);
+    g_m.r.ax = 0x4F05u;
+    g_m.r.dx = 4u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.vbe_bank_active == 4);
+    g_m.r.dx = 5u;
+    yt2_video_int10(&g_m);
+    CHECK(g_m.vbe_bank_active == 4);
+}
+
 int main(void)
 {
     yt2_game_init(&g_m, NULL);
@@ -133,6 +175,7 @@ int main(void)
         return 1;
     }
     test_strings();
+    test_vbe_modes();
     yt2_game_shutdown(&g_m);
     if (test_failures != 0) {
         fprintf(stderr, "yt2game-tests: %d failure(s)\n", test_failures);

@@ -150,11 +150,17 @@ int yt2_video_int10(yt2_machine *machine)
         if (al == 0x13u || al == 0x03u || al == 0x00u) {
             machine->video_mode = al;
             machine->vbe_mode = 0;
+            machine->vbe_bank_active = -1;
+            machine->vbe_wait_palette = 0;
+            machine->vbe_palette_bytes = 0;
             if (al == 0x13u) {
                 memset(machine->mem.bytes + ((uint32_t)YT2_SCREEN_SEG << 4), 0, 64000u);
                 yt2_video_set_default_palette(machine);
                 machine->dac_index = 0;
                 machine->dac_phase = 0;
+                machine->video_dirty = 1;
+                machine->present_force = 1;
+                yt2_video_force_keyframe(&machine->video);
             }
         }
         break;
@@ -177,6 +183,11 @@ int yt2_video_int10(yt2_machine *machine)
                            0x4124u + target,
                        machine->palette + target, 3u);
             }
+            if (machine->vbe_mode && machine->vbe_wait_palette &&
+                count >= 256u) {
+                machine->vbe_wait_palette = 0;
+                machine->vbe_palette_bytes = 0;
+            }
             machine->video_dirty = 1;
             /* The seam presents a palette block at the write, not at the
                next poll: scene palettes and fade "show" steps then reach the
@@ -187,23 +198,37 @@ int yt2_video_int10(yt2_machine *machine)
     case 0x4Fu:
         if (al == 0x02u) {
             machine->r.ax = 0x004Fu;
-            if (machine->r.bx == 0x0101u) {
+            if (machine->r.bx == 0x0100u || machine->r.bx == 0x0101u) {
                 machine->vbe_mode = 1;
-                machine->video_mode = 0x101;
+                machine->video_mode = machine->r.bx;
                 memset(machine->vbe_bank, 0, sizeof(machine->vbe_bank));
-                memset(machine->mem.bytes + ((uint32_t)YT2_SCREEN_SEG << 4), 0, 0x10000u);
-                machine->vbe_bank_active = 0;
+                memset(machine->mem.bytes + ((uint32_t)YT2_SCREEN_SEG << 4),
+                       0, 0x10000u);
+                machine->vbe_bank_active = -1;
+                machine->vbe_wait_palette = 1;
+                machine->vbe_palette_bytes = 0;
+                machine->vbe_palette_deadline = machine->ticks + 60u;
+                machine->video_dirty = 1;
+                machine->present_force = 1;
+                yt2_video_force_keyframe(&machine->video);
+                /* Blank the client now.  The decoder writes the hidden banks
+                   first and loads the palette last; the rows wait for it. */
+                yt2_game_present(machine);
             }
         } else if (al == 0x05u) {
             uint16_t bank = machine->r.dx;
             if (machine->vbe_mode) {
                 uint32_t screen = (uint32_t)YT2_SCREEN_SEG << 4;
-                if (bank < 4u) {
-                    if (machine->vbe_bank_active && machine->vbe_bank_active < 4) {
+                unsigned banks = machine->video_mode == 0x0101u ? 5u : 4u;
+
+                if (bank < banks) {
+                    if (machine->vbe_bank_active >= 0 &&
+                        machine->vbe_bank_active < (int)YT2_VBE_BANKS) {
                         memcpy(machine->vbe_bank[machine->vbe_bank_active],
                                machine->mem.bytes + screen, 0x10000u);
                     }
-                    memcpy(machine->mem.bytes + screen, machine->vbe_bank[bank], 0x10000u);
+                    memcpy(machine->mem.bytes + screen, machine->vbe_bank[bank],
+                           0x10000u);
                     machine->vbe_bank_active = (int)bank;
                 }
             }
@@ -608,10 +633,20 @@ void yt2_game_present(yt2_machine *machine)
         machine->mem.bytes + ((uint32_t)YT2_SCREEN_SEG << 4);
     uint64_t fb_hash;
     uint64_t pal_hash;
+    int forced = machine->present_force;
 
+    machine->present_force = 0;
     /* The SEAM polls the link inside every present pass. */
     if (machine->link_ready) {
         yt2_link_poll(machine);
+    }
+    if (machine->vbe_mode && machine->vbe_wait_palette &&
+        machine->ticks >= machine->vbe_palette_deadline) {
+        /* A VBE screen that never loads a palette must not stay blank
+           forever; show it with the palette at hand after a short grace. */
+        machine->vbe_wait_palette = 0;
+        machine->vbe_palette_bytes = 0;
+        machine->video_dirty = 1;
     }
     if (!machine->video_dirty) {
         return;
@@ -621,7 +656,7 @@ void yt2_game_present(yt2_machine *machine)
        show it, so the gate keeps the stream at the original's sampling rate
        and stops a tight draw loop from starving the game.  A resync/keyframe
        pass bypasses the budget, as seam_forcepass does. */
-    if (machine->video.force_full == 0u) {
+    if (!forced) {
         if (machine->present_tick != machine->ticks) {
             machine->present_tick = machine->ticks;
             machine->present_passes = 0u;
@@ -637,7 +672,7 @@ void yt2_game_present(yt2_machine *machine)
     fb_hash = yt2_hash64(0xCBF29CE484222325ull, framebuffer, 64000u);
     pal_hash = yt2_hash64(0xCBF29CE484222325ull, machine->palette, 768u);
     if (machine->present_have_last && fb_hash == machine->present_last_fb &&
-        pal_hash == machine->present_last_pal &&
+        pal_hash == machine->present_last_pal && !forced &&
         !(machine->link_ready && machine->video.force_full != 0u)) {
         return;
     }

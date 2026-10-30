@@ -1129,6 +1129,9 @@ void yt2_port_out8(uint16_t port, uint8_t value)
         yt2_game_present(&g_m);
         g_m.dac_index = value;
         g_m.dac_phase = 0;
+        if (g_m.vbe_mode && g_m.vbe_wait_palette) {
+            g_m.vbe_palette_bytes = 0;
+        }
         break;
     case 0x3C9u:
         g_m.palette[(g_m.dac_index % 256u) * 3u + g_m.dac_phase] = (uint8_t)(value & 0x3Fu);
@@ -1146,6 +1149,17 @@ void yt2_port_out8(uint16_t port, uint8_t value)
         if (g_m.dac_phase == 3u) {
             g_m.dac_phase = 0;
             g_m.dac_index = (uint16_t)((g_m.dac_index + 1u) % 256u);
+        }
+        if (g_m.vbe_mode && g_m.vbe_wait_palette) {
+            g_m.vbe_palette_bytes++;
+            if (g_m.vbe_palette_bytes >= 768u) {
+                /* The logo loader writes all 768 bytes after the picture is
+                   decoded.  Only now is the VBE frame worth presenting. */
+                g_m.vbe_wait_palette = 0;
+                g_m.vbe_palette_bytes = 0;
+                g_m.video_dirty = 1;
+                yt2_game_present(&g_m);
+            }
         }
         break;
     case 0x61u:
