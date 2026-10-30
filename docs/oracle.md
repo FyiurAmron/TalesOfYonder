@@ -29,7 +29,10 @@ with no input.
 ## Pieces
 
 - `tools/dosbox/dosbox-x.conf` — oracle profile: svga_s3 (VBE 1.2), EMS/XMS/UMB, SB16+OPL3,
-  16 MB, fixed 30 000 cycles, autosave on, no input macros.
+  16 MB, fixed 3 000 cycles, autosave on, no input macros.  DOSBox-X counts `cycles` as
+  instructions per millisecond: 3,000 is its default and about a 286 at 20-25 MHz, the
+  class the game's pacing was made for; 30,000 is a 486DX2-66/DX4-100 and collapses the
+  gate star.
 - `tools/dosbox/baseline.sh` — Xvfb + DOSBox-X + snapshots + artifact collection.
 - `tools/dosbox/snap.py` — X window snapshots (`XGetImage` via ctypes, PNG via Pillow).
 - `tools/dosbox/keys.py` — XTEST key injection (hotkeys like `F12+P`, `Ctrl+F9`; later:

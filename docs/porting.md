@@ -1907,3 +1907,82 @@ emulator-hook demo, not this port).
     render, link resync), `tests/c/live.sh`, `tests/c/intro.sh` and
     `tests/replay/run.sh` are green.  No assembly changed; `SWREG.EXE`
     remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-10-30 - fix: pace the gate star at the display, not the tick budget's
+  first flushes (correction to the 2026-10-30 star entry):
+  - the older entry read the 60 fps capture as three samples two pixels
+    apart.  It is not: the attract star's second loop runs 20 more steps with
+    `dec v_0CC6`, so the streak is 52 steps from `(268,8)` to `(164,112)`,
+    with colour `1Fh` falling to `0Bh`.  The capture shows it at steps 8,
+    20, 31 and 43 (frames 590-593), 11-12 steps apart: the four copies take
+    ~1.3 ms each, and the star is only at the path start in the C run
+    because all 52 flushes ran inside one BIOS tick and the three-pass
+    budget took the first three;
+  - the C port now charges string instructions per iteration: DOSBox-X's
+    normal core at the oracle's 30,000 cycles/ms took 48 BIOS ticks for 2000
+    `REP MOVSW` of `7D00h` words, i.e. ~39.5k cycles (~1.32 ms) per 64 KB
+    screen copy, 1.25 cycles a word.  The flat per-instruction charge had
+    made `fn_1A6B5` almost free, which collapsed every string-paced effect
+    into one tick.  `yt2_string_cost` charges after the copy, so a tick that
+    falls due presents the completed flush;
+  - the present gate still allows the seam's three passes per BIOS tick, but
+    takes at most one per 60 Hz client slot (`YT2_PRESENT_GAP_CYCLES`,
+    500,000 cycles) since the last emitted frame.  The passes are spread
+    across the tick instead of bursting at its start; a 52-flush streak
+    spanning ~70 ms is sampled at steps 0, 13, 26, 41 and 52 (ticks 296-297),
+    matching the original's 11-12-step sampling cadence and its fade to a dim
+    final pixel.  The seam only presents at game hooks, but the last flush
+    has no following hook, so `yt2_cycles` also emits a pending frame when a
+    display slot expires; that is the C port acting as the display, not an
+    extra game hook;
+  - verified against the 60 fps capture twice: the C headless frame dump
+    shows those five positions, and a live client capture on Xvfb at ~60 fps
+    shows the same positions with the palette falling 255 -> 182 -> 89,
+    close to the original's 255 -> 166 -> 89.  The star is a visible descent
+    over the whole line now, not a blink at `(268,8)`;
+  - `tests/c/star.sh` now walks the full 53-step path and requires at least
+    four sampled positions, starting at the top and ending at the bottom of
+    the path, with gaps of at least six steps.  `tests/c/intro.sh` anchors
+    the title-star twinkle on the title screen's first present rather than
+    fixed frame numbers, because the spread gate emits fewer frames during
+    short DAC bursts.  `tests/c/live.sh`'s floor is 60 frames for the same
+    reason; its real checks (`shown >= frames`, `dropped=0`) are unchanged.
+    `tests/c/run.sh` (seven M3 checkpoints, star, VBE), `tests/c/intro.sh`,
+    `tests/c/live.sh` and `tests/replay/run.sh` are green.  No assembly
+    changed.
+- 2026-10-30 - guest clock: 3,000 cycles/ms becomes the default and the
+  oracle (correction to the star entries above):
+  - DOSBox-X `cycles` counts instructions per millisecond, not MHz.  The
+    oracle profile inherited `fixed 30000` from M0; that is roughly a
+    486DX2-66/DX4-100, far above the machine the intro and attract pacing
+    were made for, and it is why the gate star collapsed into a ~70 ms
+    streak.  A DOSBox-X comparison at `fixed 3000` shows the intended
+    visible descent.  3,000 is the DOSBox-X default, about a 286 at
+    20-25 MHz, and the game's minimum class (`README.DOC` lists VGA,
+    2 MB, EMS and a mouse as requirements and recommends a 386/40).
+  - `yt2game` grows `--cycles-per-ms N` (default 3,000).  The BIOS tick,
+    VGA frame and retrace window, 60 Hz present slot and the live pacer
+    are derived from it at startup instead of being compile-time
+    constants; the per-instruction and per-string-iteration costs stay in
+    guest cycles, so a 64 KB `REP MOVSW` still costs ~40k cycles
+    (~13 ms at 3,000) and the star's 52 flushes descend over ~0.7 s.
+  - the oracle profile, both bundles' DOSBox-X configs and the docs move to
+    `fixed 3000` with the cycles-as-instructions wording; the C
+    `server-start.sh` forwards its arguments, so
+    `--cycles-per-ms 30000` remains available for a fast-machine
+    comparison.
+  - gates at the default clock: `tests/c/star.sh` follows the dense descent
+    (27 samples at frames 334-363, steps 1..52, gaps 1..2); the same
+    instruction work now spans ten times as many BIOS ticks, so
+    `tests/c/game.sh` runs 3,600 ticks and `tests/c/intro.sh` 2,000.
+    `tests/c/intro.sh` no longer anchors the story check on a fixed text
+    hash (the story flame animation changes it); it walks back from the
+    settled story scene and requires the full-palette text run.  The title
+    twinkle is sampled over 200 frames because it starts later at the
+    slower clock.  `tests/c/run.sh`, `tests/c/game.sh`,
+    `tests/c/intro.sh`, `tests/c/star.sh`, `tests/c/vbe.sh` and
+    `tests/c/live.sh` are green.
+  - the `07ce087` sampling fix stands: at 3,000 cycles/ms the spread
+    present gate samples every one or two steps, so the star is a visible
+    descent instead of the five-step flash the 30,000 clock gave.  That
+    entry's `YT2_PRESENT_GAP_CYCLES` constant is now the per-machine
+    `present_gap_cycles` field.

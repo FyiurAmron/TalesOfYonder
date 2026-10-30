@@ -86,13 +86,14 @@ through an IRET sentinel and advances the BIOS tick word from the emitted cycle 
     mkdir -p build/tmp/game build/tmp/checkpoint
     cp _ref/orig-bin/CURGAME _ref/orig-bin/WORLD.DAT _ref/orig-bin/PICTURES.VGA \
        _ref/orig-bin/CH2.BAT build/tmp/game/
-    build/c/yt2game --game build/tmp/game --ticks 2500 --transfers 100000000 \
+    build/c/yt2game --game build/tmp/game --ticks 3600 --transfers 100000000 \
         --present-log build/tmp/present.txt --dump build/tmp/checkpoint
     python3 tests/c/game_frames.py build/tmp/present.txt \
         tests/c/game_checkpoints.txt --dump build/tmp/checkpoint
 
-The SEAM build presents at input-poll and tick-ISR entry, the same points `yt2game`
-samples, so `--present-log` gives the original's frame sequence (changed frames only).
+The C port presents at the seam's input-poll, tick-ISR, DAC and delay points and after
+the full-screen work-buffer flush, with the seam's three passes per BIOS tick spread over
+the tick, so `--present-log` gives the original's frame sequence (changed frames only).
 The checker requires seven settled intro scenes (Webfoot logo, two story screens, four
 attract vignettes) in order, each held for at least 60 ticks, with framebuffer and DAC
 hashes matching the stream recording. The end dump is re-hashed and the settled globals
@@ -122,8 +123,11 @@ By hand (two terminals):
     dotnet run --project client -c Release -- \
         --follow build/tmp/play/OUTPUT.BIN --input build/tmp/play/INPUT.BIN
 
-`--live` means the link plus pacing at the oracle profile's 30,000 cycles/ms, so the
-BIOS tick and the game's animations run at the original speed. `--link` enables the
+`--live` means the link plus real-time pacing at the guest clock. The default is
+3,000 cycles/ms (DOSBox-X's `cycles` are instructions per millisecond): about a 286
+at 20-25 MHz, the class the game's intro and attract pacing were made for.
+`--cycles-per-ms N` overrides it — 30,000 is roughly a 486DX2-66/DX4-100 and shows
+how the original's timing collapses on a much faster machine. `--link` enables the
 folder link without pacing (fast, used by the transport tests); `--no-pace` with
 `--live` does the same. `--transfers 0` (the default) runs without a dispatch cap.
 The client asks for a keyframe when it connects, so a client that starts late

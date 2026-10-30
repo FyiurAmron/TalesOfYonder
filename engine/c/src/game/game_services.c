@@ -663,14 +663,25 @@ void yt2_game_present(yt2_machine *machine)
     /* SEAM_PASSES_PER_TICK: the seam lets at most three passes run in one
        BIOS tick.  A fade loop writes the DAC faster than the display can
        show it, so the gate keeps the stream at the original's sampling rate
-       and stops a tight draw loop from starving the game.  A resync/keyframe
-       pass bypasses the budget, as seam_forcepass does. */
+       and stops a tight draw loop from starving the game.  The passes are
+       also the display samples: take at most one per 60 Hz slot instead of
+       the first three flushes, or a transient drawn by a tight string loop
+       (the attract gate star) reaches the client as three steps at its start
+       and never as the descent the original shows.  `yt2_cycles` presents a
+       pending frame when the slot expires even without a game hook, so the
+       last flush (which has no following hook) is not held back.  A
+       resync/keyframe pass bypasses both gates, as seam_forcepass does. */
     if (!forced) {
         if (machine->present_tick != machine->ticks) {
             machine->present_tick = machine->ticks;
             machine->present_passes = 0u;
         }
         if (machine->present_passes >= YT2_PASSES_PER_TICK) {
+            return;
+        }
+        if (machine->present_have_cycle &&
+            machine->cycles <
+                machine->present_cycles + machine->present_gap_cycles) {
             return;
         }
         machine->present_passes++;
@@ -688,6 +699,8 @@ void yt2_game_present(yt2_machine *machine)
     machine->present_have_last = 1;
     machine->present_last_fb = fb_hash;
     machine->present_last_pal = pal_hash;
+    machine->present_cycles = machine->cycles;
+    machine->present_have_cycle = 1;
     if (machine->present_log != NULL) {
         fprintf(machine->present_log, "%llu %u %016llX %016llX\n",
                 machine->present_frames, machine->ticks,
