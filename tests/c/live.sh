@@ -81,8 +81,13 @@ if [ -z "$FRAMES" ] || [ -z "$SHOWN" ]; then
     echo "live: cannot read frames/shown from: $LAST" >&2
     exit 1
 fi
-if [ "$FRAMES" -lt 100 ]; then
-    echo "live: only $FRAMES frames reached the client (want >= 100)" >&2
+# The presentation gate samples at three passes per BIOS tick, spread over
+# the tick; a short length of game time therefore holds fewer complete
+# frames than a burst-per-tick gate did.  The floor only has to prove the
+# client received a stream, while shown >= frames and dropped = 0 carry the
+# "no frame is collapsed" check.
+if [ "$FRAMES" -lt 60 ]; then
+    echo "live: only $FRAMES frames reached the client (want >= 60)" >&2
     exit 1
 fi
 if [ "$DROPPED" -ne 0 ]; then

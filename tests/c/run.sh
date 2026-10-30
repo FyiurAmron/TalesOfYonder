@@ -194,7 +194,7 @@ mkdir -p "$RUN/game" "$RUN/checkpoint"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
     cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
 done
-timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 2500 \
+timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 3600 \
     --transfers 100000000 --present-log "$RUN/checkpoint/present.txt" \
     --dump "$RUN/checkpoint" >"$RUN/checkpoint/stdout.log" \
     2>"$RUN/checkpoint/stderr.log"

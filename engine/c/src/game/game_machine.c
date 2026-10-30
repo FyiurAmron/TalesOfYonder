@@ -311,7 +311,7 @@ void yt2_pace_slow(void)
         return;
     }
     target = (g_m.cycles - g_m.pace_cycle_start) * (uint64_t)YT2_PIT_RATE /
-             ((uint64_t)YT2_CYCLES_PER_MS * 1000u);
+             ((uint64_t)g_m.cycles_per_ms * 1000u);
     elapsed = now - g_m.pace_wall_start;
     if (target > 0xFFFFFFFFu) {
         /* The 32-bit PIT stamp wrapped; rebase rather than stall. */
@@ -366,7 +366,7 @@ void yt2_cycles_slow(void)
         return;
     }
     while (g_m.cycles >= g_m.tick_at && !g_m.exited && !g_m.stop_requested) {
-        g_m.tick_at += (uint64_t)YT2_CYCLES_PER_TICK;
+        g_m.tick_at += g_m.cycles_per_tick;
         yt2_machine_tick(&g_m);
         if (g_m.limit_ticks != 0u && g_m.ticks >= g_m.limit_ticks) {
             g_m.stop_requested = 1;
@@ -959,10 +959,22 @@ static void yt2_write16(yt2_machine *m, uint16_t seg, uint16_t off, uint16_t val
     yt2_write8(m, seg, (uint16_t)(off + 1u), (uint8_t)(value >> 8));
 }
 
+/* A repeated string instruction is not one instruction's worth of work: the
+   game's frame flush is a 7D00h-word REP MOVSW and the screen clears are
+   REP STOSW of the same size.  DOSBox-X's normal core charges every
+   iteration (see YT2_CYCLES_STRING_ITER), and those 1.3 ms copies are what
+   pace the attract gate star.  Charge after the copy, so a tick that falls
+   due presents the completed flush. */
+static void yt2_string_cost(unsigned iterations)
+{
+    yt2_cycles((uint32_t)iterations * YT2_CYCLES_STRING_ITER / 4u);
+}
+
 void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
     uint16_t start_cx = m->r.cx;
+    unsigned iterations = 0u;
 
     do {
         if (size == 1u) {
@@ -971,18 +983,20 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
             yt2_write16(m, m->r.es, m->r.di, yt2_read16(m, source_seg, m->r.si));
         }
         yt2_string_step(m, size, 1, 1);
+        iterations++;
         if (repeat == 0u) {
-            return;
+            break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
     } while (m->r.cx != 0u);
+    yt2_string_cost(iterations);
 
     /* fn_1A6B5 copies the whole work buffer into the VGA aperture with one
        REP MOVSW.  That is the game's frame flush: on a real card the new
-       picture is visible immediately, and short-lived effects (the shooting
-       star on the attract gate) last only a few milliseconds.  Sample here
-       as well as at the poll/DAC/tick points, or a whole transient can fall
-       between two presents.  The three-pass budget still applies. */
+       picture is visible immediately, so sample the screen here as well as at
+       the poll/DAC/tick points.  The per-tick budget and its minimum gap make
+       this one sample per display interval, which is what a 60 Hz capture of
+       the original shows for the attract gate star. */
     if (repeat != 0u && size == 2u && start_cx == 0x7D00u &&
         m->r.es == (uint16_t)YT2_SCREEN_SEG) {
         yt2_game_present(m);
@@ -991,6 +1005,8 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
 
 void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)
 {
+    unsigned iterations = 0u;
+
     do {
         if (size == 1u) {
             yt2_write8(m, m->r.es, m->r.di, (uint8_t)(m->r.ax & 0xFFu));
@@ -998,16 +1014,20 @@ void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)
             yt2_write16(m, m->r.es, m->r.di, m->r.ax);
         }
         yt2_string_step(m, size, 0, 1);
+        iterations++;
         if (repeat == 0u) {
-            return;
+            break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
     } while (m->r.cx != 0u);
+    yt2_string_cost(iterations);
 }
 
 void yt2_string_lods(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
+    unsigned iterations = 0u;
+
     do {
         if (size == 1u) {
             yt2_r8_set(&m->r, YT2_R8_AL, yt2_read8(m, source_seg, m->r.si));
@@ -1015,16 +1035,20 @@ void yt2_string_lods(yt2_machine *m, unsigned size, uint16_t source_seg,
             m->r.ax = yt2_read16(m, source_seg, m->r.si);
         }
         yt2_string_step(m, size, 1, 0);
+        iterations++;
         if (repeat == 0u) {
-            return;
+            break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
     } while (m->r.cx != 0u);
+    yt2_string_cost(iterations);
 }
 
 void yt2_string_cmps(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
+    unsigned iterations = 0u;
+
     do {
         uint16_t left;
         uint16_t right;
@@ -1038,21 +1062,25 @@ void yt2_string_cmps(yt2_machine *m, unsigned size, uint16_t source_seg,
             yt2_cpu_sub16(&m->r, left, right, 0u);
         }
         yt2_string_step(m, size, 1, 1);
+        iterations++;
         if (repeat == 0u) {
-            return;
+            break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
         if (repeat == 1u && !yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
-            return;
+            break;
         }
         if (repeat == 2u && yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
-            return;
+            break;
         }
     } while (m->r.cx != 0u);
+    yt2_string_cost(iterations);
 }
 
 void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
 {
+    unsigned iterations = 0u;
+
     do {
         uint16_t memory_value;
         if (size == 1u) {
@@ -1063,17 +1091,19 @@ void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
             yt2_cpu_sub16(&m->r, m->r.ax, memory_value, 0u);
         }
         yt2_string_step(m, size, 0, 1);
+        iterations++;
         if (repeat == 0u) {
-            return;
+            break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
         if (repeat == 1u && !yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
-            return;
+            break;
         }
         if (repeat == 2u && yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
-            return;
+            break;
         }
     } while (m->r.cx != 0u);
+    yt2_string_cost(iterations);
 }
 
 void yt2_string_outs(yt2_machine *m, unsigned size, uint16_t source_seg,
@@ -1101,12 +1131,12 @@ uint8_t yt2_port_in8(uint16_t port)
 {
     switch (port) {
     case 0x3DAu: {
-        uint32_t phase = (uint32_t)(g_m.cycles % YT2_VGA_FRAME_CYCLES);
+        uint32_t phase = (uint32_t)(g_m.cycles % g_m.vga_frame_cycles);
         uint8_t status = 0;
-        if (phase + YT2_VGA_RETRACE_CYCLES >= YT2_VGA_FRAME_CYCLES) {
+        if (phase + g_m.vga_retrace_cycles >= g_m.vga_frame_cycles) {
             status |= 0x08u;              /* vertical retrace active */
         }
-        if (phase + YT2_VGA_FRAME_CYCLES / 8u >= YT2_VGA_FRAME_CYCLES) {
+        if (phase + g_m.vga_frame_cycles / 8u >= g_m.vga_frame_cycles) {
             status |= 0x01u;              /* display disabled (blanking) */
         }
         return status;
@@ -1202,6 +1232,36 @@ void yt2_port_out32(uint16_t port, uint32_t value)
 /* Startup and run loop                                                      */
 /* ------------------------------------------------------------------------ */
 
+void yt2_game_set_clock(yt2_machine *machine, uint32_t cycles_per_ms)
+{
+    if (cycles_per_ms == 0u) {
+        cycles_per_ms = 1u;
+    }
+    machine->cycles_per_ms = cycles_per_ms;
+    /* 65536 PIT ticks at 1.193182 MHz; times are in microseconds. */
+    machine->cycles_per_tick = (uint64_t)cycles_per_ms * 65536u * 1000u /
+                               YT2_PIT_HZ;
+    if (machine->cycles_per_tick == 0u) {
+        machine->cycles_per_tick = 1u;
+    }
+    machine->vga_frame_cycles = (uint32_t)((uint64_t)cycles_per_ms *
+                                           YT2_VGA_FRAME_US / 1000u);
+    if (machine->vga_frame_cycles == 0u) {
+        machine->vga_frame_cycles = 1u;
+    }
+    machine->vga_retrace_cycles = (uint32_t)((uint64_t)cycles_per_ms *
+                                             YT2_VGA_RETRACE_US / 1000u);
+    machine->present_gap_cycles = (uint32_t)((uint64_t)cycles_per_ms *
+                                             1000u / YT2_PRESENT_HZ);
+    if (machine->present_gap_cycles == 0u) {
+        machine->present_gap_cycles = 1u;
+    }
+    machine->tick_at = (machine->cycles / machine->cycles_per_tick + 1u) *
+                       machine->cycles_per_tick;
+    machine->pace_at = (uint32_t)(machine->cycles +
+                                  (uint64_t)cycles_per_ms * 2u);
+}
+
 void yt2_game_init(yt2_machine *machine, const char *root)
 {
     memset(machine, 0, sizeof(*machine));
@@ -1213,8 +1273,7 @@ void yt2_game_init(yt2_machine *machine, const char *root)
     machine->dos_blocks[0].paragraphs = (uint16_t)(YT2_DOS_HEAP_END - YT2_DOS_HEAP_START);
     machine->dos_blocks[0].used = 0;
     machine->cycles = 0u;
-    machine->tick_at = (uint64_t)YT2_CYCLES_PER_TICK;
-    machine->pace_at = YT2_CYCLES_PER_MS * 2u;
+    yt2_game_set_clock(machine, YT2_CYCLES_PER_MS);
     machine->int1c_cs = YT2_SENTINEL_SEG;
     machine->int1c_ip = YT2_SENTINEL_IRET;
     machine->mouse_x = 0x00E6u;

@@ -1,23 +1,28 @@
 #!/bin/sh
 # Check the shooting star on the attract gate.  The star is drawn directly
-# into the work buffer and flushed with one full-screen REP MOVSW per step;
-# the whole streak lasts less than one BIOS tick.  Without a present at that
-# flush it falls between passes and never reaches the client.
+# into the work buffer and flushed with one full-screen REP MOVSW per step.
+# At the default 3,000 cycles/ms one 64 KB copy is ~13 ms, so the 52-step
+# streak lasts ~0.7 s and the 60 Hz display samples it every one or two
+# steps: a visible descent, the way the game looks on its minimum machine.
 #
-#   sh tests/c/star.sh              # build if needed, run 400 ticks
+#   sh tests/c/star.sh              # build if needed, run 1200 ticks
 #   sh tests/c/star.sh --no-build   # use build/c/yt2game as it is
 #   sh tests/c/star.sh --build      # force a rebuild
+#   sh tests/c/star.sh --ticks N    # run longer (the gate is ~tick 600)
 #
-# The star path is x + y = 276, x = 268, 266, ... 206 (the loop starts at
-# (268,8) and moves two pixels left and two down).  A frame must show exactly
-# one bright pixel on that path; fixed 2x2 stars and the title star are off it.
+# The star path is x + y = 276, x = 268, 266, ... 164: the loop starts at
+# (268,8), moves two pixels left and two down, and its colour starts at 1Fh
+# and falls to 0Bh on the last 20 steps.  The star is the only path pixel
+# whose index matches that ramp; static 2x2 stars and the title star are off
+# the line.  Blank presents (between the erase and the next draw) have no
+# hit and are simply skipped.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 BUILD="$ROOT/build/c"
 STAMP=$(date +%Y%m%d-%H%M%S)-$$
 RUN="$ROOT/build/runs/star/$STAMP"
 GAME="$BUILD/yt2game"
-TICKS=400
+TICKS=1200
 DO_BUILD=auto
 
 while [ $# -gt 0 ]; do
@@ -63,35 +68,56 @@ import sys
 from pathlib import Path
 
 frames = Path(sys.argv[1])
-hits = []
-for path in sorted(frames.glob("frame_*.idx")):
-    frame = int(path.stem.split("_")[1])
-    idx = path.read_bytes()
-    pal = (frames / f"frame_{frame:05d}.pal").read_bytes()
-    bright = [entry for entry in range(256)
-              if min(pal[entry * 3:entry * 3 + 3]) >= 50]
-    found = []
-    for y in range(8, 71):
-        x = 276 - y
-        if 206 <= x <= 268 and idx[y * 320 + x] in bright:
-            found.append((x, y))
-    if len(found) == 1:
-        hits.append((frame, found[0]))
+STEPS = 53
 
-positions = [p for _, p in hits]
-distinct = []
-for position in positions:
-    if position not in distinct:
-        distinct.append(position)
-if len(hits) < 2 or len(distinct) < 2:
+
+def path(n):
+    return 268 - 2 * n, 8 + 2 * n
+
+
+def star_colour(n):
+    return 0x1F if n <= 32 else 0x1F - (n - 32)
+
+
+samples = []
+for file in sorted(frames.glob("frame_*.idx")):
+    frame = int(file.stem.split("_")[1])
+    index = file.read_bytes()
+    hits = [n for n in range(STEPS)
+            if index[path(n)[1] * 320 + path(n)[0]] == star_colour(n)]
+    if len(hits) == 1:
+        samples.append((frame, hits[0]))
+
+runs = []
+current = []
+for frame, n in samples:
+    if current and n <= current[-1][1]:
+        if len(current) > len(runs):
+            runs.append(current)
+        current = []
+    current.append((frame, n))
+if len(current) > len(runs):
+    runs.append(current)
+
+if not runs:
+    raise SystemExit("star: no sampled frames on the gate path")
+run = max(runs, key=len)
+steps = [entry[1] for entry in run]
+if len(run) < 20:
     raise SystemExit(
-        f"star: only {len(hits)} frame(s) with the gate star "
-        f"({len(distinct)} position(s)); want at least 2")
-steps = [b[0] - a[0] for a, b in zip(distinct, distinct[1:])]
-if any(step != -2 for step in steps):
-    raise SystemExit(f"star: the gate star did not move by two: {distinct}")
-print(f"star: OK ({len(hits)} frames at frames "
-      f"{hits[0][0]}..{hits[-1][0]}, positions {distinct})")
+        f"star: only {len(run)} sampled position(s) ({steps}); want >= 20")
+if steps[0] > 4:
+    raise SystemExit(f"star: the streak starts at step {steps[0]}, not the path top")
+if steps[-1] < STEPS - 3:
+    raise SystemExit(
+        f"star: the streak ends at step {steps[-1]}, not the path end")
+gaps = [b - a for a, b in zip(steps, steps[1:])]
+if any(gap < 1 or gap > 4 for gap in gaps):
+    raise SystemExit(
+        f"star: sampled positions are not the expected descent: {steps}")
+print(f"star: OK ({len(run)} samples at frames "
+      f"{run[0][0]}..{run[-1][0]}, steps {steps[0]}..{steps[-1]}, "
+      f"gaps {min(gaps)}..{max(gaps)})")
 PY
 
 # Keep the log but not the frame dump.

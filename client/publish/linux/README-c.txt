@@ -54,9 +54,9 @@ Replay the last run at its captured pace:
 
 The engine itself also has a headless mode and is used by the gates:
 
-  server/game/yt2game --game server/game --ticks 2500 --present-log present.txt
+  server/game/yt2game --game server/game --ticks 3600 --present-log present.txt
   server/game/yt2game --game server/game --link --trace-input
 
-`--live` is the server launcher's mode (link plus real-time pacing at the
-oracle's 30,000 cycles/ms); `--link` runs the link as fast as the host can,
+`--live` is the server launcher's mode (link plus real-time pacing at the guest
+clock, 3,000 cycles/ms by default); `--link` runs the link as fast as the host can,
 which is what the transport tests use.

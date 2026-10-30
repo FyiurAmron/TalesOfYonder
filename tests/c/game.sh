@@ -2,10 +2,10 @@
 # Run the transliterated game to the title/attract and check the M3
 # checkpoints. Builds first when the runner is missing or stale.
 #
-#   sh tests/c/game.sh                 # build if needed, run 2500 ticks
+#   sh tests/c/game.sh                 # build if needed, run 3600 ticks
 #   sh tests/c/game.sh --no-build      # use build/c/yt2game as it is
 #   sh tests/c/game.sh --build         # force a rebuild
-#   sh tests/c/game.sh --ticks 3200    # run longer (needs more transfers)
+#   sh tests/c/game.sh --ticks 4000    # run longer (needs more transfers)
 #   sh tests/c/game.sh --ppm           # also write last.ppm/last.png
 #
 # Artifacts land in build/runs/game/<stamp>/; exits non-zero on any mismatch.
@@ -15,7 +15,7 @@ BUILD="$ROOT/build/c"
 STAMP=$(date +%Y%m%d-%H%M%S)-$$
 RUN="$ROOT/build/runs/game/$STAMP"
 GAME="$BUILD/yt2game"
-TICKS=2500
+TICKS=3600
 TRANSFERS=100000000
 DO_BUILD=auto
 WRITE_PPM=0

@@ -84,6 +84,16 @@ typedef struct yt2_machine {
     uint32_t delay_calls;
     uint64_t cycles;
     uint64_t tick_at;
+
+    /* Guest clock (--cycles-per-ms) and the times derived from it: one
+       18.2 Hz BIOS tick, one 70.086 Hz VGA frame, its 1.2 ms retrace window,
+       and the 60 Hz slot at which the client display samples a frame.  The
+       default is the game's 3,000 cycles/ms design target. */
+    uint32_t cycles_per_ms;
+    uint64_t cycles_per_tick;
+    uint32_t vga_frame_cycles;
+    uint32_t vga_retrace_cycles;
+    uint32_t present_gap_cycles;
     jmp_buf abort_jmp;
     int abort_armed;
 
@@ -122,16 +132,20 @@ typedef struct yt2_machine {
        palette/delay hooks, so a hash per present gives the same frame
        sequence as a stream recording.  Only frames that changed are logged.
        present_tick/present_passes mirror the seam's three-passes-per-BIOS-tick
-       gate, so a palette fade cannot flood the client. */
+       gate; present_cycles is the emulated time of the last emitted frame, so
+       a pending frame is sampled once per 60 Hz slot and a transient is
+       sampled across its whole life instead of at its first three flushes. */
     FILE *present_log;
     unsigned long long present_frames;
     uint64_t present_last_fb;
     uint64_t present_last_pal;
     int present_have_last;
     int video_dirty;
-    int present_force;        /* next pass bypasses the per-tick budget */
+    int present_force;        /* next pass bypasses the budget and the gap */
     uint32_t present_tick;
     unsigned present_passes;
+    uint64_t present_cycles;
+    int present_have_cycle;
     uint8_t present_frame[64000];
     uint8_t present_palette[768];
     char present_dir[512];
@@ -207,32 +221,54 @@ typedef struct yt2_machine {
 extern yt2_machine g_m;
 
 /*
- * Guest cycle model.  The oracle profile runs a 486 at a fixed 30 000
- * cycles/ms (DOSBox-X); one 18.2 Hz BIOS tick lasts 65536/1193182 s, i.e.
- * 1 647 765 cycles.  Instructions are charged a flat cost for now; the
- * exact per-opcode costs can follow once the title is up.
+ * Guest cycle model.  The default clock is 3 000 cycles/ms (DOSBox-X's
+ * `cycles` are instructions per millisecond): about a 286 at 20-25 MHz, the
+ * game's minimum class and the profile its intro/attract were designed for.
+ * --cycles-per-ms overrides it; 30 000 is roughly a 486DX2-66/DX4-100 and a
+ * useful high-speed comparison, not the target machine.  Times are derived
+ * from the clock at run time: one 18.2 Hz BIOS tick lasts 65536/1193182 s,
+ * one VGA frame 1/70.086 s, and the client samples a frame every 1/60 s.
+ * Instructions get a flat cost; repeated string instructions also charge
+ * their iterations (YT2_CYCLES_STRING_ITER), because a 64 KB REP MOVSW is
+ * milliseconds of real work on a slow clock.
  */
-#define YT2_CYCLES_PER_MS 30000u
-#define YT2_CYCLES_PER_TICK 1647765u
+#define YT2_CYCLES_PER_MS 3000u        /* default; --cycles-per-ms overrides */
 #define YT2_CYCLES_INSN 2u
-#define YT2_VGA_FRAME_CYCLES 428040u   /* 640x400 at 70.086 Hz */
-#define YT2_VGA_RETRACE_CYCLES 36000u  /* vertical retrace window */
+/* The cost is in guest cycles, independent of the clock: a 7D00h-word
+   REP MOVSW takes ~40k cycles (1.25 a word), measured on DOSBox-X's normal
+   core as 48 BIOS ticks for 2000 copies at 30 000 cycles/ms.  At the 3 000
+   cycles/ms default that is ~13 ms a screen, so the gate star's 52 flushes
+   descend over ~0.7 s.  The flat per-instruction cost alone would make a
+   64 KB flush free and collapse every string-paced effect into one tick. */
+#define YT2_CYCLES_STRING_ITER 5u      /* quarters of a cycle per iteration */
+#define YT2_PIT_HZ 1193182u            /* 8253 input clock */
+#define YT2_PRESENT_HZ 60u             /* client display sampling rate */
+#define YT2_VGA_FRAME_US 14268u        /* 1/70.086 s */
+#define YT2_VGA_RETRACE_US 1200u
 #define YT2_PASSES_PER_TICK 3u         /* SEAM_PASSES_PER_TICK */
 
 void yt2_cycles_slow(void);
 void yt2_pace_slow(void);
+void yt2_game_present(yt2_machine *machine);
 
 static inline void yt2_cycles(uint32_t cycles)
 {
     g_m.cycles += cycles;
     if (g_m.cycles >= g_m.tick_at) {
         yt2_cycles_slow();
-    } else if (g_m.pace && g_m.cycles >= g_m.pace_at) {
-        yt2_pace_slow();
+    } else {
+        if (g_m.video_dirty && g_m.present_have_cycle &&
+            g_m.cycles >= g_m.present_cycles + g_m.present_gap_cycles) {
+            yt2_game_present(&g_m);
+        }
+        if (g_m.pace && g_m.cycles >= g_m.pace_at) {
+            yt2_pace_slow();
+        }
     }
 }
 
 void yt2_game_init(yt2_machine *machine, const char *root);
+void yt2_game_set_clock(yt2_machine *machine, uint32_t cycles_per_ms);
 void yt2_game_load(yt2_machine *machine);
 int yt2_game_run(yt2_machine *machine, unsigned long max_transfers);
 void yt2_game_shutdown(yt2_machine *machine);
@@ -259,8 +295,6 @@ void yt2_machine_call(yt2_machine *machine, uint16_t segment, uint16_t offset);
 int yt2_machine_call_safe(const yt2_machine *machine);
 
 void yt2_game_dispatch(uint16_t seg, uint16_t off);
-
-void yt2_game_present(yt2_machine *machine);
 
 void yt2_go(uint16_t cs, uint16_t ip);
 void yt2_push16(uint16_t value);

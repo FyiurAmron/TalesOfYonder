@@ -95,10 +95,15 @@ static void yt2_usage(const char *program)
             "usage: %s [--game DIR] [--transfers N] [--ticks N] [--trace-api] [--dump DIR]\n"
             "          [--ppm FILE] [--present-log FILE] [--present-dir DIR]\n"
             "          [--live|--link] [--no-pace] [--trace-input]\n"
+            "          [--cycles-per-ms N]\n"
             "\n"
             "  --live     play: folder link (OUTPUT.BIN/INPUT.BIN) and real-time pacing\n"
             "  --link     folder link only, as fast as the host runs\n"
-            "  --no-pace  with --live, run the link without the 30,000 cycles/ms clock\n"
+            "  --no-pace  with --live, run the link without the guest clock\n"
+            "  --cycles-per-ms N  guest speed in DOSBox-X cycles (default 3000,\n"
+            "                     about a 286 at 20-25 MHz and the game's\n"
+            "                     minimum class; 30000 is roughly a\n"
+            "                     486DX2-66/DX4-100)\n"
             "  --transfers N  dispatch cap (default 0 = unlimited)\n",
             program);
 }
@@ -112,6 +117,7 @@ int main(int argc, char **argv)
     const char *present_dir = NULL;
     unsigned long transfers = 0;
     unsigned long limit_ticks = 0;
+    unsigned long cycles_per_ms = YT2_CYCLES_PER_MS;
     int trace = 0;
     int trace_input = 0;
     int link = 0;
@@ -126,6 +132,8 @@ int main(int argc, char **argv)
             transfers = strtoul(argv[++index], NULL, 0);
         } else if (strcmp(argv[index], "--ticks") == 0 && index + 1 < argc) {
             limit_ticks = strtoul(argv[++index], NULL, 0);
+        } else if (strcmp(argv[index], "--cycles-per-ms") == 0 && index + 1 < argc) {
+            cycles_per_ms = strtoul(argv[++index], NULL, 0);
         } else if (strcmp(argv[index], "--dump") == 0 && index + 1 < argc) {
             dump = argv[++index];
         } else if (strcmp(argv[index], "--ppm") == 0 && index + 1 < argc) {
@@ -155,6 +163,11 @@ int main(int argc, char **argv)
     }
 
     yt2_game_init(&g_m, game);
+    if (cycles_per_ms == 0u || cycles_per_ms > 1000000u) {
+        fprintf(stderr, "yt2: --cycles-per-ms needs a value in 1..1000000\n");
+        return 2;
+    }
+    yt2_game_set_clock(&g_m, (uint32_t)cycles_per_ms);
     if (link && yt2_link_open(&g_m) != YT2_OK) {
         return 2;
     }
