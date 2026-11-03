@@ -23,6 +23,12 @@
 #define YT2_SENTINEL_SEG 0xF000u
 #define YT2_SENTINEL_IRET 0x0000u
 #define YT2_SENTINEL_RESUME 0x0001u
+/* The game's EMS probe compares the local "EMMXXXX0" copy at DGROUP:0CA0h
+   with the device name at int 67h vector:000Ah.  The emulated manager has no
+   separate driver segment, so the sentinel paragraph carries the name at that
+   offset and the int 21h 35h answer points there. */
+#define YT2_EMS_VECTOR_SEG YT2_SENTINEL_SEG
+#define YT2_EMS_VECTOR_NAME 0x000Au
 #define YT2_EMS_FRAME_SEG 0xE000u
 #define YT2_EMS_PAGE_BYTES 0x4000u
 #define YT2_EMS_HANDLES 16u
@@ -34,6 +40,14 @@
 
 #define YT2_SCREEN_SEG 0xA000u
 #define YT2_VBE_BANKS 5u
+
+/* BIOS data area: the 18.2 Hz tick count and its midnight-rollover flag. */
+#define YT2_BIOS_TICK_COUNT 0x046Cu
+#define YT2_BIOS_MIDNIGHT 0x0470u
+
+/* A VBE call answers AL = 4Fh; AH carries the status (00h success, 01h fail). */
+#define YT2_VBE_OK 0x004Fu
+#define YT2_VBE_FAIL 0x014Fu
 
 /* The game's DGROUP frame: S1DEA in the original layout. */
 #define YT2_DGROUP_SEG (YT2_LOAD_SEG + 0x1DEAu)
@@ -190,7 +204,7 @@ typedef struct yt2_machine {
 
     /* Real-time pacing: guest cycles against the host's monotonic PIT clock. */
     int pace;
-    uint32_t pace_at;
+    uint64_t pace_at;
     int pace_started;
     uint32_t pace_wall_start;
     uint64_t pace_cycle_start;
@@ -228,23 +242,28 @@ extern yt2_machine g_m;
  * useful high-speed comparison, not the target machine.  Times are derived
  * from the clock at run time: one 18.2 Hz BIOS tick lasts 65536/1193182 s,
  * one VGA frame 1/70.086 s, and the client samples a frame every 1/60 s.
- * Instructions get a flat cost; repeated string instructions also charge
- * their iterations (YT2_CYCLES_STRING_ITER), because a 64 KB REP MOVSW is
- * milliseconds of real work on a slow clock.
+ * Instructions get one cycle each, which is what DOSBox-X's normal core
+ * charges: its run loop decrements CPU_Cycles once per instruction and once
+ * more per repeated-string iteration.  Repeated string instructions
+ * therefore also charge their iterations (YT2_CYCLES_STRING_ITER), because
+ * a 64 KB REP MOVSW is milliseconds of real work on a slow clock.
  */
 #define YT2_CYCLES_PER_MS 3000u        /* default; --cycles-per-ms overrides */
-#define YT2_CYCLES_INSN 2u
-/* The cost is in guest cycles, independent of the clock: a 7D00h-word
-   REP MOVSW takes ~40k cycles (1.25 a word), measured on DOSBox-X's normal
-   core as 48 BIOS ticks for 2000 copies at 30 000 cycles/ms.  At the 3 000
-   cycles/ms default that is ~13 ms a screen, so the gate star's 52 flushes
-   descend over ~0.7 s.  The flat per-instruction cost alone would make a
-   64 KB flush free and collapse every string-paced effect into one tick. */
-#define YT2_CYCLES_STRING_ITER 5u      /* quarters of a cycle per iteration */
+#define YT2_CYCLES_INSN 1u
+/* One cycle per repeated-string iteration, the same unit the normal core
+   decrements inside DoString.  The instruction dispatch already charged the
+   extra cycle above, so a REP MOVSW of N words costs N+1, as it does in
+   DOSBox-X. */
+#define YT2_CYCLES_STRING_ITER 1u
 #define YT2_PIT_HZ 1193182u            /* 8253 input clock */
 #define YT2_PRESENT_HZ 60u             /* client display sampling rate */
-#define YT2_VGA_FRAME_US 14268u        /* 1/70.086 s */
-#define YT2_VGA_RETRACE_US 1200u
+#define YT2_VGA_FRAME_US 14268u        /* mode 13h: 449 lines at 31.47 kHz */
+/* Port 3DAh bit 3 is the vertical sync pulse itself, not the whole vertical
+   blanking interval: the VGA CRTC's retrace-end register ends two scanlines
+   after the start (DOSBox-X computes the same window from the CRTC).  The
+   game's fades and frame waits poll this bit, so a wider window would let a
+   second palette pass through each retrace and shorten every fade. */
+#define YT2_VGA_RETRACE_US 64u         /* 2 scanlines at 31.47 kHz */
 #define YT2_PASSES_PER_TICK 3u         /* SEAM_PASSES_PER_TICK */
 
 void yt2_cycles_slow(void);

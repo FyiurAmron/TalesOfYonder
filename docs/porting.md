@@ -1920,10 +1920,11 @@ emulator-hook demo, not this port).
   - the C port now charges string instructions per iteration: DOSBox-X's
     normal core at the oracle's 30,000 cycles/ms took 48 BIOS ticks for 2000
     `REP MOVSW` of `7D00h` words, i.e. ~39.5k cycles (~1.32 ms) per 64 KB
-    screen copy, 1.25 cycles a word.  The flat per-instruction charge had
-    made `fn_1A6B5` almost free, which collapsed every string-paced effect
-    into one tick.  `yt2_string_cost` charges after the copy, so a tick that
-    falls due presents the completed flush;
+    screen copy, 1.25 cycles a word (the final model charges one cycle a
+    word while the copy runs; see 2026-11-03).  The flat per-instruction
+    charge had made `fn_1A6B5` almost free, which collapsed every
+    string-paced effect into one tick.  `yt2_string_cost` charged after the
+    copy; a tick that falls due presents the completed flush;
   - the present gate still allows the seam's three passes per BIOS tick, but
     takes at most one per 60 Hz client slot (`YT2_PRESENT_GAP_CYCLES`,
     500,000 cycles) since the last emitted frame.  The passes are spread
@@ -2019,3 +2020,129 @@ emulator-hook demo, not this port).
   - docs: `engine/c/README.md` and `docs/client.md` no longer say the C server
     is mode-13h-only; `docs/protocol.md` records that both builds use codec 1
     and corrects the worst-case encoded row size (647 bytes for 640 pixels).
+- 2026-11-03 - M4 timing: the DOSBox-X normal-core cycle model and sub-tick
+  string charging:
+  - **per-instruction cost**: the oracle profile runs `core=normal`, whose
+    `CPU_Core_Normal_Run` loop decrements `CPU_Cycles` once per instruction
+    and `DoString` once more per repeated-string iteration.  The C port was
+    charging a flat two cycles per emitted instruction, i.e. running the
+    guest at half the oracle's instruction rate.  `YT2_CYCLES_INSN` is now
+    one, and `YT2_CYCLES_STRING_ITER` one cycle per iteration;
+  - **retrace window**: DOSBox-X computes port 3DAh bit 3 from the CRTC
+    retrace start/end; the mode-13h mode set programs start = display end +
+    12 (412) and end = start + 2, so the bit is the two-scanline sync pulse
+    (~63.5 us), not the whole vertical blanking interval.  `YT2_VGA_RETRACE_US`
+    moves from 1,200 to 64.  The game's fades poll this bit before every DAC
+    pass, so the old wide window let two passes through each frame and made
+    the fades about twice as fast as the recorded 63-step ramps.  The
+    recorded fades now run one pass per frame (~16.4 ticks for 63 passes);
+  - **sub-tick scheduling**: repeated-string helpers charge one cycle per
+    iteration *inside* the copy rather than the whole REP afterwards, so a
+    BIOS tick, a present pass or a link poll can fall between two copied
+    words at the cycle the original takes it.  The special full-screen
+    `REP MOVSW` flush still presents at its end, so the gate star keeps its
+    52 visible steps;
+  - **clock constants**: 65,536 PIT counts is 164,776 cycles at the default
+    3,000 cycles/ms (the earlier 1,647,765 figure was the 30,000 profile);
+    the new unit test pins the instruction/string costs, the 164,776-cycle
+    tick, the 42,804-cycle mode-13h frame, the 192-cycle (64 us) retrace and
+    the 50,000-cycle 60 Hz present slot, and proves a present inside a
+    100-word `REP MOVSW` sees a prefix of the copy;
+  - **scene holds**: the tick ISR reloads the scene countdowns `v_50EA`
+    and `v_50EC` with `5Bh` (91 ticks), and the four attract checkpoints
+    hold 93 ticks (the countdown plus the two ticks to the next presented
+    frame).  The C port already matched that; the stream recording's
+    ~137-tick holds are not an oracle, because the seam present runs
+    inside the ISR before the countdown and makes it lose BIOS ticks.
+    `tests/c/game_checkpoints.txt` now pins the four attract holds at
+    93 +/- 2 ticks, so a presentation or scheduling regression cannot
+    stretch them silently;
+  - **known delta**: the intro's waits that test the sound driver status
+    (`v_0C2C`) still run long because SBFMDRV is not resident yet (M6).
+    A clean DOSBox-X run reaches the story/gate scenes in about 26 s of
+    guest time; the C port lands on `story-sleep` at tick 1368 (75 s).
+    That is the M6 dependency, not a cycle-model error.  No assembly
+    changed;
+  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star,
+    VBE, link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
+    `tests/replay/run.sh` are green.  The game run still matches the seven
+    checkpoints (webfoot at tick 105 held 64 ticks; attract holds 93 ticks)
+    and the star descends over 52 steps (30 samples, gaps 1..4).
+    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-04 - M4 hardening: string-instruction semantics, EMS probe, module
+  boundary tests:
+  - **CMPS source segment**: Capstone orders `CMPS` as `[si]` then `es:[di]`,
+    unlike `MOVS`, but the emitter took operand 1 as the source.  Every
+    generated `repe cmpsb` compared `ES:SI` with `ES:DI`; the EMS probe only
+    appeared to pass because both sides were zero.  The emitter now uses
+    operand 0, so the four sites read `DS:SI` (with any segment override);
+  - **CMPS flag order**: the helper subtracted destination minus source.
+    `CMPS` sets flags from `DS:SI - ES:DI`; equality happened to work, but an
+    ordered compare would have been inverted.  The helper now subtracts in
+    the x86 order, and the test checks CF/SF for `'A'` vs `'B'`;
+  - **zero-count REP**: `REP MOVS/STOS/LODS/CMPS/SCAS/OUTS` with `CX=0` are
+    no-ops on x86.  The helpers used a do/while body and moved one element;
+    a zero-length copy could corrupt the next byte.  All six helpers return
+    before the body when the prefix is present and `CX=0`, charging no
+    string iteration;
+  - **EMS probe**: int 21h 35h for vector 67h pointed at `E000:000Ah`, which
+    held zeroes, not the `EMMXXXX0` device name the game compares.  The
+    sentinel paragraph now carries the name at offset 0Ah and the vector
+    answer points there; the real `repe cmpsb` path now passes on the name,
+    not on zeroed memory;
+  - **long-run pacing**: `pace_at` was 32-bit while the guest clock is
+    64-bit.  At 3,000 cycles/ms it wrapped after about 24 minutes and the
+    real-time pacer ran on every instruction until the next tick; the
+    deadline is now 64-bit and a unit test crosses the old boundary;
+  - **shift/divide flags**: the shared shift helper tested bit 15 for every
+    width and applied the SHL overflow rule to SHR/SAR.  A masked count of
+    zero now leaves the flags untouched; SHL compares the new sign with the
+    carry, SHR keeps the original sign and SAR clears OF, for 8/16/32-bit
+    forms.  IDIV16 rejects `INT32_MIN / -1` as a divide overflow instead of
+    hitting C's undefined signed division;
+  - **DOS file shim**: the case-insensitive open fallback used to lowercase the
+    whole host path, so a mixed-case `--game` root stopped resolving on Linux;
+    it now lowercases only the guest's DOS name.  A failed `ftell` after a
+    successful seek returns DOS error 1 instead of a garbage DX:AX offset;
+  - **payload boundaries**: `yt2_payload_video_rect_rle` compared
+    `9 + encoded_length` before checking the length, so a 32-bit wrap could
+    pass the bound; `yt2_payload_control_error` allowed a text of
+    `YT2_MAX_PAYLOAD - 2` and wrote one byte past its caller's 2,048-byte
+    buffer.  Both now compare against the remaining capacity first, with
+    tests at the largest legal size and one byte over;
+  - **module tests**: `yt2game-tests` now pins EMS allocate/map/flush/load/
+    unmap/free and the 83h/8Ah/8Bh errors, the DOS arena's first-fit,
+    coalescing, largest-free and resize paths, plus the string edge cases;
+  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star,
+    VBE, link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
+    `tests/replay/run.sh` are green; the sanitizer build and the 3,600-tick
+    game run are clean.  The checkpoints are unchanged (webfoot tick 105,
+    attract holds 93 ticks; star 52 steps).  No assembly changed;
+    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-04 - M4 hardening: clock, mouse and VBE boundary answers:
+  - **BIOS clock**: the tick handler reset the count at midnight without
+    raising the BIOS 24-hour flag, and `int 1Ah` answered from the internal
+    counter instead of `0040:006Ch`, so AL was always zero.  The tick now
+    sets `0040:0070h` on the wrap, and `int 1Ah AH=00h` returns the BDA
+    count, reports the flag in AL and clears it, matching DOSBox-X's
+    `INT1A_Handler`;
+  - **VBE answers**: `4F02h` reported AX=004Fh for every mode, including
+    unsupported ones, and `4F05h` left AX holding the call number even on
+    success.  Both now answer AL=4Fh with AH status (00h success, 01h
+    failure), the bank switch validates the window selector (DOSBox-X reads
+    BL) and the mode's bank count, and `4F03h` returns the current mode in
+    BX;
+  - **mouse position**: `int 33h 04h` clamped unsigned, so -1 landed on the
+    right/bottom edge; DOSBox-X (and the seam shim) read the coordinates as
+    signed, so -1 now clamps to 0.  Protocol absolute positions keep their
+    unsigned range;
+  - **tests**: `yt2game-tests` pins the palette block's 6-bit masking, its
+    8-bit register wrap and its DGROUP copy; the midnight rollover and the
+    BDA answer; the 4F02/4F03/4F05 success and failure answers; and the
+    mouse ratio/counter/button/position paths;
+  - **verification**: `tests/c/run.sh` (7 checkpoints, holds 93, star 52
+    steps, VBE), `tests/c/live.sh` (206 frames, 0 dropped) and
+    `tests/c/intro.sh` (35 fade steps, 201 palette entries) are green, as
+    is `tests/replay/run.sh`.  The ASan/UBSan build, its unit tests and the
+    3,600-tick link run are clean.  No assembly changed; `SWREG.EXE`
+    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.

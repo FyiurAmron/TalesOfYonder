@@ -13,7 +13,7 @@ folder link (`--live`).
 | `include/yt2/` | the public core headers: memory, CPU flags/ALU, protocol, service, transports, video, `game.h` |
 | `src/` | the core implementation and the `yt2stub` headless program |
 | `src/game/` | the hand-written boundary for the transliterated game (machine, services, `yt2game`) |
-| `tests/` | unit tests for memory, ALU/flags, framing/parsing, the service callbacks, video deltas and the game's string-instruction semantics |
+| `tests/` | unit tests for memory, ALU/flags, framing/parsing, the service callbacks, video deltas, string-instruction semantics, EMS mappings and the DOS arena |
 | `tools/build.sh`, `tools/build.bat` | build entry points (gcc/clang and MSVC) |
 
 The game code itself is emitted at build time into `build/c/generated/` by `tools/port/`
@@ -51,9 +51,18 @@ C compiler; the M2-only targets need just the compiler.
 
     sh engine/c/tools/build.sh
     build/c/yt2core-tests
-    build/c/yt2game-tests   # string-instruction pointer semantics
+    build/c/yt2game-tests   # emitted-code boundary semantics
     sh tests/c/run.sh
     sh tests/c/game.sh       # game run + M3 checkpoints (builds if stale)
+
+`yt2game-tests` pins the parts of the CPU/DOS boundary the emitted code depends
+on: `CMPS` reads `DS:SI` and subtracts `ES:DI` (the emitter's Capstone operand
+order is easy to invert), a prefixed string op with `CX=0` is a no-op, the
+shift helpers leave flags alone for count zero and apply the per-width
+SHL/SHR/SAR overflow rule, IDIV reports `INT32_MIN / -1` as overflow, the
+int 67h vector exposes the `EMMXXXX0` name the EMS probe compares, and the
+EMS and DOS paragraph arenas allocate, map, coalesce and resize as the game
+expects.
 
 The gate builds both binaries under `build/c/`, runs the unit tests, re-emits
 `tests/data/sample-video.bin` through the C folder backend and requires the unwrapped C
@@ -82,7 +91,8 @@ C builders and checking each payload is byte-identical; it is the ASM/C seam-par
 `tools/port/emit_c.py`, which emits one dispatch unit per `(segment, offset)` into
 `build/c/generated/`. The boundary in `src/game/` boots the relocated original image at
 `YT2_LOAD_SEG`, services DOS/BIOS/EMS/mouse/clock calls, runs the INT 1Ch handler nested
-through an IRET sentinel and advances the BIOS tick word from the emitted cycle clock.
+through an IRET sentinel and advances the BIOS tick word and midnight flag from the
+emitted cycle clock.
 
     mkdir -p build/tmp/game build/tmp/checkpoint
     cp _ref/orig-bin/CURGAME _ref/orig-bin/WORLD.DAT _ref/orig-bin/PICTURES.VGA \
@@ -168,11 +178,16 @@ rows and the pan rules.
   title as it does in the oracle run.
 - SBFMDRV is not resident yet (M6): the game's sound calls are accepted but no OPL
   stream is produced.
-- The cycle model is a flat 2 cycles per emitted instruction plus the VGA retrace
-  window; exact per-opcode costs and sub-tick scheduling wait for M4. The intro's early
-  Webfoot-to-title palette cross-fade therefore lands on a different loop iteration,
-  while the settled checkpoint frames match.
-- INPUT timestamps are validated as envelopes but applied when polled; timed scheduling of
-  the C engine's own clock is part of M4.
+- The cycle model is DOSBox-X's `core=normal`: one cycle per instruction and one per
+  REP iteration, charged while the copy runs, with the vertical sync pulse (two
+  scanlines) as the port 3DAh retrace window. The intro's later waits still run long
+  because the original's sound driver reports idle and cuts them short; SBFMDRV is not
+  resident yet (M6). The settled checkpoint frames match, the four attract holds follow
+  the original's 91-tick scene countdown (93 settled-to-next-change ticks, pinned in
+  `tests/c/game_checkpoints.txt`), and the fade rate and the gate star are pinned by the
+  timing model.
+- INPUT timestamps are transport boundary time: the engine applies input when it polls
+  the folder link, as the asm server does. Paced replay and timed input scheduling are the
+  client's job (`--replay-input`); the engine's own clock stays logical and deterministic.
 - No SDL3 dependency. The existing C# client is the host; a direct SDL3 backend can be added
   behind the same transport/service pair later.

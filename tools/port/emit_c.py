@@ -504,7 +504,11 @@ class Emitter:
             return [f"yt2_string_lods(&g_m, {size}, {source_seg}, {repeat});"]
         if mnemonic in ("cmps", "cmpsb", "cmpsw"):
             size = 1 if mnemonic == "cmpsb" else 2
-            source_seg = self.segment_expr(cs.operands[1], "g_m.r.ds")
+            # Capstone orders CMPS as [si] (source) then es:[di] (destination),
+            # unlike MOVS.  Taking operand 1 compared ES:SI with ES:DI and
+            # ignored the DS override; the EMS probe only passed because both
+            # sides were zero.
+            source_seg = self.segment_expr(cs.operands[0], "g_m.r.ds")
             return [f"yt2_string_cmps(&g_m, {size}, {source_seg}, {repeat});"]
         if mnemonic in ("scas", "scasb", "scasw"):
             size = 1 if mnemonic == "scasb" else 2

@@ -299,7 +299,7 @@ void yt2_pace_slow(void)
     uint32_t now;
 
     /* Re-arm first: everything below may run inside nested guest code. */
-    g_m.pace_at = (uint32_t)(g_m.cycles + 65536u);
+    g_m.pace_at = g_m.cycles + 65536u;
     if (!g_m.pace || g_m.in_tick || g_m.nested) {
         return;
     }
@@ -340,12 +340,18 @@ void yt2_machine_tick(yt2_machine *machine)
 {
     uint32_t count;
 
-    machine->ticks = (machine->ticks + 1u) % 0x1800B0u;
+    machine->ticks++;
+    if (machine->ticks >= 0x1800B0u) {
+        machine->ticks = 0;
+        /* The BIOS sets the 24-hour flag when the count wraps; int 1Ah 00h
+           returns it in AL and clears it, exactly like DOSBox-X. */
+        machine->mem.bytes[YT2_BIOS_MIDNIGHT] = 1u;
+    }
     count = machine->ticks;
-    machine->mem.bytes[0x46C] = (uint8_t)(count & 0xFFu);
-    machine->mem.bytes[0x46D] = (uint8_t)((count >> 8) & 0xFFu);
-    machine->mem.bytes[0x46E] = (uint8_t)((count >> 16) & 0xFFu);
-    machine->mem.bytes[0x46F] = (uint8_t)((count >> 24) & 0xFFu);
+    machine->mem.bytes[YT2_BIOS_TICK_COUNT + 0u] = (uint8_t)(count & 0xFFu);
+    machine->mem.bytes[YT2_BIOS_TICK_COUNT + 1u] = (uint8_t)((count >> 8) & 0xFFu);
+    machine->mem.bytes[YT2_BIOS_TICK_COUNT + 2u] = (uint8_t)((count >> 16) & 0xFFu);
+    machine->mem.bytes[YT2_BIOS_TICK_COUNT + 3u] = (uint8_t)((count >> 24) & 0xFFu);
 
     if (machine->in_tick || machine->nested) {
         return;
@@ -708,7 +714,7 @@ int yt2_cpu_idiv16(yt2_registers *r, uint16_t value)
     int32_t quotient;
     int32_t remainder;
 
-    if (divisor == 0) {
+    if (divisor == 0 || (dividend == INT32_MIN && divisor == -1)) {
         return 0;
     }
     quotient = dividend / divisor;
@@ -726,19 +732,21 @@ static uint8_t yt2_shift_count(unsigned count)
     return (uint8_t)(count & 0x1Fu);
 }
 
+/* A shift count masked to zero changes no flags.  OF is defined only for a
+   count of one, and differs per operation: SHL compares the new sign bit with
+   the carry, SHR keeps the original sign bit, SAR clears it. */
 static uint16_t yt2_shift_flags(yt2_registers *r, uint16_t value, uint8_t count,
-                                int last_carry)
+                                int last_carry, int overflow)
 {
+    if (count == 0u) {
+        return value;
+    }
     r->flags &= (uint16_t)~(YT2_FLAG_CF | YT2_FLAG_OF);
-    if (count != 0u) {
-        if (last_carry) {
-            r->flags |= YT2_FLAG_CF;
-        }
-        if (count == 1u) {
-            if (((value & 0x8000u) != 0u) != (last_carry != 0)) {
-                r->flags |= YT2_FLAG_OF;
-            }
-        }
+    if (last_carry) {
+        r->flags |= YT2_FLAG_CF;
+    }
+    if (overflow) {
+        r->flags |= YT2_FLAG_OF;
     }
     return value;
 }
@@ -748,12 +756,16 @@ uint8_t yt2_cpu_shl8(yt2_registers *r, uint8_t value, unsigned count)
     unsigned n = yt2_shift_count(count);
     uint8_t result = value;
     int carry = 0;
+    int overflow = 0;
     unsigned i;
     for (i = 0; i < n; i++) {
         carry = (result & 0x80u) != 0u;
         result = (uint8_t)(result << 1);
     }
-    return (uint8_t)yt2_shift_flags(r, result, (uint8_t)n, carry);
+    if (n == 1u) {
+        overflow = ((result & 0x80u) != 0u) != (carry != 0);
+    }
+    return (uint8_t)yt2_shift_flags(r, result, (uint8_t)n, carry, overflow);
 }
 
 uint16_t yt2_cpu_shl16(yt2_registers *r, uint16_t value, unsigned count)
@@ -761,12 +773,16 @@ uint16_t yt2_cpu_shl16(yt2_registers *r, uint16_t value, unsigned count)
     unsigned n = yt2_shift_count(count);
     uint16_t result = value;
     int carry = 0;
+    int overflow = 0;
     unsigned i;
     for (i = 0; i < n; i++) {
         carry = (result & 0x8000u) != 0u;
         result = (uint16_t)(result << 1);
     }
-    return yt2_shift_flags(r, result, (uint8_t)n, carry);
+    if (n == 1u) {
+        overflow = ((result & 0x8000u) != 0u) != (carry != 0);
+    }
+    return yt2_shift_flags(r, result, (uint8_t)n, carry, overflow);
 }
 
 uint32_t yt2_cpu_shl32(yt2_registers *r, uint32_t value, unsigned count)
@@ -774,17 +790,16 @@ uint32_t yt2_cpu_shl32(yt2_registers *r, uint32_t value, unsigned count)
     unsigned n = yt2_shift_count(count);
     uint32_t result = value;
     int carry = 0;
+    int overflow = 0;
     unsigned i;
     for (i = 0; i < n; i++) {
         carry = (result & 0x80000000u) != 0u;
         result <<= 1;
     }
-    r->flags &= (uint16_t)~(YT2_FLAG_CF | YT2_FLAG_OF);
-    if (n != 0u) {
-        if (carry) {
-            r->flags |= YT2_FLAG_CF;
-        }
+    if (n == 1u) {
+        overflow = ((result & 0x80000000u) != 0u) != (carry != 0);
     }
+    (void)yt2_shift_flags(r, 0u, (uint8_t)n, carry, overflow);
     return result;
 }
 
@@ -793,12 +808,13 @@ uint8_t yt2_cpu_shr8(yt2_registers *r, uint8_t value, unsigned count)
     unsigned n = yt2_shift_count(count);
     uint8_t result = value;
     int carry = 0;
+    int overflow = (n == 1u) ? ((value & 0x80u) != 0u) : 0;
     unsigned i;
     for (i = 0; i < n; i++) {
         carry = (result & 1u) != 0u;
         result = (uint8_t)(result >> 1);
     }
-    return (uint8_t)yt2_shift_flags(r, result, (uint8_t)n, carry);
+    return (uint8_t)yt2_shift_flags(r, result, (uint8_t)n, carry, overflow);
 }
 
 uint16_t yt2_cpu_shr16(yt2_registers *r, uint16_t value, unsigned count)
@@ -806,23 +822,27 @@ uint16_t yt2_cpu_shr16(yt2_registers *r, uint16_t value, unsigned count)
     unsigned n = yt2_shift_count(count);
     uint16_t result = value;
     int carry = 0;
+    int overflow = (n == 1u) ? ((value & 0x8000u) != 0u) : 0;
     unsigned i;
     for (i = 0; i < n; i++) {
         carry = (result & 1u) != 0u;
         result = (uint16_t)(result >> 1);
     }
-    return yt2_shift_flags(r, result, (uint8_t)n, carry);
+    return yt2_shift_flags(r, result, (uint8_t)n, carry, overflow);
 }
 
 uint32_t yt2_cpu_shr32(yt2_registers *r, uint32_t value, unsigned count)
 {
-    (void)r;
     unsigned n = yt2_shift_count(count);
     uint32_t result = value;
+    int carry = 0;
+    int overflow = (n == 1u) ? ((value & 0x80000000u) != 0u) : 0;
     unsigned i;
     for (i = 0; i < n; i++) {
+        carry = (result & 1u) != 0u;
         result >>= 1;
     }
+    (void)yt2_shift_flags(r, 0u, (uint8_t)n, carry, overflow);
     return result;
 }
 
@@ -836,7 +856,8 @@ uint8_t yt2_cpu_sar8(yt2_registers *r, uint8_t value, unsigned count)
         carry = (result & 1) != 0;
         result = (int8_t)(result >> 1);
     }
-    return (uint8_t)yt2_shift_flags(r, (uint16_t)(uint8_t)result, (uint8_t)n, carry);
+    return (uint8_t)yt2_shift_flags(r, (uint16_t)(uint8_t)result, (uint8_t)n,
+                                    carry, 0);
 }
 
 uint16_t yt2_cpu_sar16(yt2_registers *r, uint16_t value, unsigned count)
@@ -849,18 +870,20 @@ uint16_t yt2_cpu_sar16(yt2_registers *r, uint16_t value, unsigned count)
         carry = (result & 1) != 0;
         result = (int16_t)(result >> 1);
     }
-    return yt2_shift_flags(r, (uint16_t)result, (uint8_t)n, carry);
+    return yt2_shift_flags(r, (uint16_t)result, (uint8_t)n, carry, 0);
 }
 
 uint32_t yt2_cpu_sar32(yt2_registers *r, uint32_t value, unsigned count)
 {
-    (void)r;
     unsigned n = yt2_shift_count(count);
     int32_t result = (int32_t)value;
+    int carry = 0;
     unsigned i;
     for (i = 0; i < n; i++) {
+        carry = (result & 1) != 0;
         result >>= 1;
     }
+    (void)yt2_shift_flags(r, 0u, (uint8_t)n, carry, 0);
     return (uint32_t)result;
 }
 
@@ -962,20 +985,26 @@ static void yt2_write16(yt2_machine *m, uint16_t seg, uint16_t off, uint16_t val
 /* A repeated string instruction is not one instruction's worth of work: the
    game's frame flush is a 7D00h-word REP MOVSW and the screen clears are
    REP STOSW of the same size.  DOSBox-X's normal core charges every
-   iteration (see YT2_CYCLES_STRING_ITER), and those 1.3 ms copies are what
-   pace the attract gate star.  Charge after the copy, so a tick that falls
-   due presents the completed flush. */
-static void yt2_string_cost(unsigned iterations)
+   iteration *as it runs* (see YT2_CYCLES_STRING_ITER), and those 1.3 ms
+   copies are what pace the attract gate star.  Charging per iteration is
+   also what lets a BIOS tick, a present pass or a link poll fall between two
+   copied words at the cycle the original would take it; charging the whole
+   REP afterwards moved all of them to the end of the copy. */
+static void yt2_string_cost(void)
 {
-    yt2_cycles((uint32_t)iterations * YT2_CYCLES_STRING_ITER / 4u);
+    yt2_cycles(YT2_CYCLES_STRING_ITER);
 }
 
 void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
     uint16_t start_cx = m->r.cx;
-    unsigned iterations = 0u;
 
+    /* A prefixed REP with CX=0 copies, compares or scans nothing: the
+       instruction only charges its own cycle, never one body iteration. */
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
         if (size == 1u) {
             yt2_write8(m, m->r.es, m->r.di, yt2_read8(m, source_seg, m->r.si));
@@ -983,13 +1012,13 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
             yt2_write16(m, m->r.es, m->r.di, yt2_read16(m, source_seg, m->r.si));
         }
         yt2_string_step(m, size, 1, 1);
-        iterations++;
         if (repeat == 0u) {
+            yt2_string_cost();
             break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
     } while (m->r.cx != 0u);
-    yt2_string_cost(iterations);
 
     /* fn_1A6B5 copies the whole work buffer into the VGA aperture with one
        REP MOVSW.  That is the game's frame flush: on a real card the new
@@ -1005,8 +1034,9 @@ void yt2_string_movs(yt2_machine *m, unsigned size, uint16_t source_seg,
 
 void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)
 {
-    unsigned iterations = 0u;
-
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
         if (size == 1u) {
             yt2_write8(m, m->r.es, m->r.di, (uint8_t)(m->r.ax & 0xFFu));
@@ -1014,20 +1044,21 @@ void yt2_string_stos(yt2_machine *m, unsigned size, unsigned repeat)
             yt2_write16(m, m->r.es, m->r.di, m->r.ax);
         }
         yt2_string_step(m, size, 0, 1);
-        iterations++;
         if (repeat == 0u) {
+            yt2_string_cost();
             break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
     } while (m->r.cx != 0u);
-    yt2_string_cost(iterations);
 }
 
 void yt2_string_lods(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
-    unsigned iterations = 0u;
-
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
         if (size == 1u) {
             yt2_r8_set(&m->r, YT2_R8_AL, yt2_read8(m, source_seg, m->r.si));
@@ -1035,38 +1066,41 @@ void yt2_string_lods(yt2_machine *m, unsigned size, uint16_t source_seg,
             m->r.ax = yt2_read16(m, source_seg, m->r.si);
         }
         yt2_string_step(m, size, 1, 0);
-        iterations++;
         if (repeat == 0u) {
+            yt2_string_cost();
             break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
     } while (m->r.cx != 0u);
-    yt2_string_cost(iterations);
 }
 
 void yt2_string_cmps(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
-    unsigned iterations = 0u;
-
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
-        uint16_t left;
-        uint16_t right;
+        uint16_t source;
+        uint16_t destination;
         if (size == 1u) {
-            left = yt2_read8(m, m->r.es, m->r.di);
-            right = yt2_read8(m, source_seg, m->r.si);
-            yt2_cpu_sub8(&m->r, (uint8_t)left, (uint8_t)right, 0u);
+            source = yt2_read8(m, source_seg, m->r.si);
+            destination = yt2_read8(m, m->r.es, m->r.di);
+            /* CMPS subtracts the destination from the source: DS:SI - ES:DI. */
+            yt2_cpu_sub8(&m->r, (uint8_t)source, (uint8_t)destination, 0u);
         } else {
-            left = yt2_read16(m, m->r.es, m->r.di);
-            right = yt2_read16(m, source_seg, m->r.si);
-            yt2_cpu_sub16(&m->r, left, right, 0u);
+            source = yt2_read16(m, source_seg, m->r.si);
+            destination = yt2_read16(m, m->r.es, m->r.di);
+            yt2_cpu_sub16(&m->r, source, destination, 0u);
         }
         yt2_string_step(m, size, 1, 1);
-        iterations++;
         if (repeat == 0u) {
+            yt2_string_cost();
             break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
         if (repeat == 1u && !yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
             break;
         }
@@ -1074,13 +1108,13 @@ void yt2_string_cmps(yt2_machine *m, unsigned size, uint16_t source_seg,
             break;
         }
     } while (m->r.cx != 0u);
-    yt2_string_cost(iterations);
 }
 
 void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
 {
-    unsigned iterations = 0u;
-
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
         uint16_t memory_value;
         if (size == 1u) {
@@ -1091,11 +1125,12 @@ void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
             yt2_cpu_sub16(&m->r, m->r.ax, memory_value, 0u);
         }
         yt2_string_step(m, size, 0, 1);
-        iterations++;
         if (repeat == 0u) {
+            yt2_string_cost();
             break;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
         if (repeat == 1u && !yt2_cpu_get_flag(&m->r, YT2_FLAG_ZF)) {
             break;
         }
@@ -1103,12 +1138,14 @@ void yt2_string_scas(yt2_machine *m, unsigned size, unsigned repeat)
             break;
         }
     } while (m->r.cx != 0u);
-    yt2_string_cost(iterations);
 }
 
 void yt2_string_outs(yt2_machine *m, unsigned size, uint16_t source_seg,
                      unsigned repeat)
 {
+    if (repeat != 0u && m->r.cx == 0u) {
+        return;
+    }
     do {
         if (size == 1u) {
             yt2_port_out8(m->r.dx, yt2_read8(m, source_seg, m->r.si));
@@ -1117,9 +1154,11 @@ void yt2_string_outs(yt2_machine *m, unsigned size, uint16_t source_seg,
         }
         yt2_string_step(m, size, 1, 0);
         if (repeat == 0u) {
+            yt2_string_cost();
             return;
         }
         m->r.cx = (uint16_t)(m->r.cx - 1u);
+        yt2_string_cost();
     } while (m->r.cx != 0u);
 }
 
@@ -1258,8 +1297,8 @@ void yt2_game_set_clock(yt2_machine *machine, uint32_t cycles_per_ms)
     }
     machine->tick_at = (machine->cycles / machine->cycles_per_tick + 1u) *
                        machine->cycles_per_tick;
-    machine->pace_at = (uint32_t)(machine->cycles +
-                                  (uint64_t)cycles_per_ms * 2u);
+    machine->pace_at = machine->cycles +
+                       (uint64_t)cycles_per_ms * 2u;
 }
 
 void yt2_game_init(yt2_machine *machine, const char *root)
@@ -1276,6 +1315,12 @@ void yt2_game_init(yt2_machine *machine, const char *root)
     yt2_game_set_clock(machine, YT2_CYCLES_PER_MS);
     machine->int1c_cs = YT2_SENTINEL_SEG;
     machine->int1c_ip = YT2_SENTINEL_IRET;
+    /* The EMS driver probe reads the device name through the int 67h vector.
+       Keep it at the sentinel segment's unused name slot; the int 67h handler
+       itself is dispatched directly, so nothing executes this paragraph. */
+    memcpy(machine->mem.bytes + ((uint32_t)YT2_EMS_VECTOR_SEG << 4) +
+               YT2_EMS_VECTOR_NAME,
+           "EMMXXXX0", 9);
     machine->mouse_x = 0x00E6u;
     machine->mouse_y = 0x00B4u;
     machine->mouse_ratio_x = 8u;
