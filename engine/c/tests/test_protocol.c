@@ -93,6 +93,21 @@ int test_protocol(void)
     CHECK(memcmp(payload + 9, runs, 4) == 0);
     CHECK(yt2_payload_video_rect_rle(payload, 0, 0, 320, 1, runs,
                                      YT2_MAX_PAYLOAD) == YT2_ERR);
+    {
+        uint8_t big[YT2_MAX_PAYLOAD];
+
+        /* The largest legal payload is 9 + (YT2_MAX_PAYLOAD - 9); one byte
+           more must fail before the copy, and a wrapped 32-bit length must
+           not slip through the old 9 + length comparison. */
+        memset(big, 0x5Au, sizeof(big));
+        CHECK(yt2_payload_video_rect_rle(payload, 0, 0, 320, 1, big,
+                                         YT2_MAX_PAYLOAD - 9u) ==
+              (int)YT2_MAX_PAYLOAD);
+        CHECK(yt2_payload_video_rect_rle(payload, 0, 0, 320, 1, big,
+                                         YT2_MAX_PAYLOAD - 8u) == YT2_ERR);
+        CHECK(yt2_payload_video_rect_rle(payload, 0, 0, 320, 1, big,
+                                         0xFFFFFFFFu) == YT2_ERR);
+    }
 
     length = yt2_payload_video_frame_end(payload);
     CHECK(length == 1 && payload[0] == 3u);
@@ -106,6 +121,23 @@ int test_protocol(void)
     length = yt2_payload_control_error(payload, 2, "bad message");
     CHECK(length == 14 && payload[0] == 2u && payload[1] == 2u && payload[2] == 0u);
     CHECK(memcmp(payload + 3, "bad message", 11) == 0);
+    {
+        char text[YT2_MAX_PAYLOAD];
+
+        /* 1 type byte + 2 code bytes leave YT2_MAX_PAYLOAD - 3 for text.
+           The old -2 bound accepted this text and wrote one byte past the
+           service's payload buffer. */
+        memset(text, 'e', sizeof(text));
+        text[YT2_MAX_PAYLOAD - 3u] = '\0';
+        CHECK(yt2_payload_control_error(payload, 2, text) ==
+              (int)YT2_MAX_PAYLOAD);
+        text[YT2_MAX_PAYLOAD - 3u] = 'e';
+        text[YT2_MAX_PAYLOAD - 2u] = '\0';
+        CHECK(yt2_payload_control_error(payload, 2, text) == YT2_ERR);
+        text[YT2_MAX_PAYLOAD - 2u] = 'e';
+        text[YT2_MAX_PAYLOAD - 1u] = '\0';
+        CHECK(yt2_payload_control_error(payload, 2, text) == YT2_ERR);
+    }
     length = yt2_payload_control_debug(payload, 'x', a, 4);
     CHECK(length == 6 && payload[0] == 3u && payload[1] == 'x');
     CHECK(memcmp(payload + 2, a, 4) == 0);

@@ -81,21 +81,37 @@ static const char *yt2_host_path(yt2_machine *machine, const char *dos_name,
     return buffer;
 }
 
+/* DOS names are case-insensitive; the host may not be.  Lowercase only the
+   guest's name, never the root: a mixed-case --game directory would stop
+   resolving on Linux if the fallback rewrote the whole path. */
+static void yt2_dos_lower_name(const char *dos_name, char *buffer, size_t size)
+{
+    size_t index = 0;
+
+    while (index + 1u < size && dos_name[index] != '\0') {
+        char value = dos_name[index];
+
+        if (value >= 'A' && value <= 'Z') {
+            value = (char)(value - 'A' + 'a');
+        }
+        buffer[index] = value;
+        index++;
+    }
+    buffer[index] = '\0';
+}
+
 static FILE *yt2_open_host(yt2_machine *machine, const char *dos_name, const char *mode,
                            int write_mode)
 {
     char path[1024];
+    char lower[256];
     FILE *stream;
 
     yt2_host_path(machine, dos_name, path, sizeof(path));
     stream = fopen(path, mode);
     if (stream == NULL && write_mode == 0) {
-        size_t index;
-        for (index = 0; path[index] != '\0'; index++) {
-            if (path[index] >= 'A' && path[index] <= 'Z') {
-                path[index] = (char)(path[index] - 'A' + 'a');
-            }
-        }
+        yt2_dos_lower_name(dos_name, lower, sizeof(lower));
+        yt2_host_path(machine, lower, path, sizeof(path));
         stream = fopen(path, mode);
     }
     return stream;
@@ -197,8 +213,11 @@ int yt2_video_int10(yt2_machine *machine)
         break;
     case 0x4Fu:
         if (al == 0x02u) {
-            machine->r.ax = 0x004Fu;
+            /* Only the two packed-pixel intro modes exist at this boundary;
+               an unsupported mode must report AH = 01h, not claim success
+               with the old mode still up. */
             if (machine->r.bx == 0x0100u || machine->r.bx == 0x0101u) {
+                machine->r.ax = YT2_VBE_OK;
                 machine->vbe_mode = 1;
                 machine->video_mode = machine->r.bx;
                 memset(machine->vbe_bank, 0, sizeof(machine->vbe_bank));
@@ -214,14 +233,27 @@ int yt2_video_int10(yt2_machine *machine)
                 /* Blank the client now.  The decoder writes the hidden banks
                    first and loads the palette last; the rows wait for it. */
                 yt2_game_present(machine);
+            } else {
+                machine->r.ax = YT2_VBE_FAIL;
             }
+        } else if (al == 0x03u) {
+            /* Get current mode: AX = 004Fh, BX = the mode in force. */
+            machine->r.ax = YT2_VBE_OK;
+            machine->r.bx = (uint16_t)machine->video_mode;
         } else if (al == 0x05u) {
-            uint16_t bank = machine->r.dx;
-            if (machine->vbe_mode) {
+            /* Window A only.  DOSBox-X reads the window selector from BL and
+               fails any other window; the bank must fit the mode's aperture. */
+            machine->r.ax = YT2_VBE_OK;
+            if ((machine->r.bx & 0xFFu) != 0u) {
+                machine->r.ax = YT2_VBE_FAIL;
+            } else if (machine->vbe_mode) {
+                uint16_t bank = machine->r.dx;
                 uint32_t screen = (uint32_t)YT2_SCREEN_SEG << 4;
                 unsigned banks = machine->video_mode == 0x0101u ? 5u : 4u;
 
-                if (bank < banks) {
+                if (bank >= banks) {
+                    machine->r.ax = YT2_VBE_FAIL;
+                } else {
                     if (machine->vbe_bank_active >= 0 &&
                         machine->vbe_bank_active < (int)YT2_VBE_BANKS) {
                         memcpy(machine->vbe_bank[machine->vbe_bank_active],
@@ -247,13 +279,22 @@ int yt2_video_int10(yt2_machine *machine)
 int yt2_clock_int1a(yt2_machine *machine)
 {
     if ((uint8_t)(machine->r.ax >> 8) == 0x00u) {
-        uint32_t count = machine->ticks % 0x1800B0u;
+        /* DOSBox-X answers from the BIOS data area, not from an internal
+           counter: AH = 0, AL = the 24-hour flag (cleared by the read), and
+           CX:DX = the tick count.  The tick handler owns those bytes. */
+        uint32_t count =
+            (uint32_t)machine->mem.bytes[YT2_BIOS_TICK_COUNT + 0u] |
+            ((uint32_t)machine->mem.bytes[YT2_BIOS_TICK_COUNT + 1u] << 8) |
+            ((uint32_t)machine->mem.bytes[YT2_BIOS_TICK_COUNT + 2u] << 16) |
+            ((uint32_t)machine->mem.bytes[YT2_BIOS_TICK_COUNT + 3u] << 24);
+
         machine->r.cx = (uint16_t)(count >> 16);
         machine->r.dx = (uint16_t)(count & 0xFFFFu);
-        machine->r.ax = 0;
+        machine->r.ax = machine->mem.bytes[YT2_BIOS_MIDNIGHT] != 0u ? 1u : 0u;
+        machine->mem.bytes[YT2_BIOS_MIDNIGHT] = 0;
         if (machine->trace_api) {
             fprintf(stderr, "yt2: int 1Ah tick=%u dx=%04X int1c=%04X:%04X\n",
-                    machine->ticks, machine->r.dx,
+                    (unsigned)count, machine->r.dx,
                     machine->int1c_cs, machine->int1c_ip);
         }
     }
@@ -264,14 +305,24 @@ int yt2_clock_int1a(yt2_machine *machine)
 /* Mouse                                                                    */
 /* ------------------------------------------------------------------------ */
 
-static uint16_t yt2_mouse_clamp_x(uint16_t x)
+/* INT 33h coordinates are signed words: the driver clamps a negative position
+   to the minimum edge, which an unsigned compare would turn into the maximum
+   (DOSBox-X casts through int16_t).  Protocol absolute positions are unsigned
+   screen pixels; they take the same upper bound. */
+static uint16_t yt2_mouse_clamp_x(int32_t x)
 {
-    return x > 319u ? 319u : x;
+    if (x < 0) {
+        return 0u;
+    }
+    return x > 319 ? 319u : (uint16_t)x;
 }
 
-static uint16_t yt2_mouse_clamp_y(uint16_t y)
+static uint16_t yt2_mouse_clamp_y(int32_t y)
 {
-    return y > 199u ? 199u : y;
+    if (y < 0) {
+        return 0u;
+    }
+    return y > 199 ? 199u : (uint16_t)y;
 }
 
 static uint16_t yt2_mouse_dgroup_get(uint16_t offset)
@@ -405,8 +456,8 @@ int yt2_mouse_int33(yt2_machine *machine)
         machine->r.dx = machine->mouse_y;
         break;
     case 0x0004u:
-        machine->mouse_x = yt2_mouse_clamp_x(machine->r.cx);
-        machine->mouse_y = yt2_mouse_clamp_y(machine->r.dx);
+        machine->mouse_x = yt2_mouse_clamp_x((int16_t)machine->r.cx);
+        machine->mouse_y = yt2_mouse_clamp_y((int16_t)machine->r.dx);
         break;
     case 0x000Bu:
         machine->r.cx = (uint16_t)machine->mouse_dx;
@@ -964,6 +1015,11 @@ static void yt2_dos_seek(yt2_machine *machine)
     }
     {
         long position = ftell(file->stream);
+
+        if (position < 0) {
+            yt2_dos_result(machine, 1u, 1);
+            return;
+        }
         machine->r.ax = (uint16_t)((uint32_t)position & 0xFFFFu);
         machine->r.dx = (uint16_t)(((uint32_t)position >> 16) & 0xFFFFu);
         yt2_cpu_set_flag(&machine->r, YT2_FLAG_CF, 0);
@@ -986,14 +1042,19 @@ static void yt2_dos_close(yt2_machine *machine)
 static void yt2_dos_delete(yt2_machine *machine)
 {
     char name[256];
+    char lower[256];
     char path[1024];
     yt2_dos_string(machine, machine->r.ds, machine->r.dx, name, sizeof(name));
     yt2_host_path(machine, name, path, sizeof(path));
     if (remove(path) != 0) {
-        yt2_dos_result(machine, 2u, 1);
-    } else {
-        yt2_dos_result(machine, 0u, 0);
+        yt2_dos_lower_name(name, lower, sizeof(lower));
+        yt2_host_path(machine, lower, path, sizeof(path));
+        if (remove(path) != 0) {
+            yt2_dos_result(machine, 2u, 1);
+            return;
+        }
     }
+    yt2_dos_result(machine, 0u, 0);
 }
 
 int yt2_dos_int21(yt2_machine *machine)
@@ -1070,7 +1131,7 @@ int yt2_dos_int21(yt2_machine *machine)
             machine->r.es = machine->int1c_cs;
         } else if (al == 0x67u) {
             machine->r.bx = 0;
-            machine->r.es = 0xE000u;
+            machine->r.es = YT2_EMS_VECTOR_SEG;
         } else if (al == 0x33u) {
             /* The game probes for a mouse driver and rejects a null vector
                or an IRET stub; the sentinel paragraph starts with zeroes. */

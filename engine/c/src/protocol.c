@@ -101,8 +101,10 @@ int yt2_payload_video_rect_rle(uint8_t *destination, uint16_t x, uint16_t y,
                                const uint8_t *encoded,
                                uint32_t encoded_length)
 {
+    /* Compare before adding: a hostile encoded_length can wrap 9 + length
+       back under YT2_MAX_PAYLOAD and turn the copy below into an overflow. */
     if (width == 0u || height == 0u ||
-        9u + encoded_length > YT2_MAX_PAYLOAD) {
+        encoded_length > YT2_MAX_PAYLOAD - 9u) {
         return YT2_ERR;
     }
     destination[0] = (uint8_t)YT2_VIDEO_RECT;
@@ -154,7 +156,10 @@ int yt2_payload_control_error(uint8_t *destination, uint16_t code,
 {
     size_t length = strlen(text);
 
-    if (length > (size_t)(YT2_MAX_PAYLOAD - 2u)) {
+    /* 1 type byte + 2 code bytes, so the text may fill at most
+       YT2_MAX_PAYLOAD - 3.  The old -2 bound let a 2046-byte text write one
+       byte past the service's payload buffer. */
+    if (length > (size_t)(YT2_MAX_PAYLOAD - 3u)) {
         return YT2_ERR;
     }
     destination[0] = (uint8_t)YT2_CONTROL_ERROR;

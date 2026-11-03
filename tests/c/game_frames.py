@@ -11,9 +11,11 @@ scenes the original displayed in that order with the same hashes.
 
 The checker requires every checkpoint pair to appear in order and to stay on
 screen for `--min-hold` engine ticks before the next change (the last one may
-run to the end of the log).  With `--dump` it also verifies that the raw
-framebuffer/palette dump at the end of the run hashes to the final checkpoint
-and that the settled game globals match the DOSBox-X save states.
+run to the end of the log).  A checkpoint file may also pin a hold with a
+fourth field; the observed hold must then stay within `--hold-tolerance` ticks
+of it.  With `--dump` it also verifies that the raw framebuffer/palette dump at
+the end of the run hashes to the final checkpoint and that the settled game
+globals match the DOSBox-X save states.
 """
 
 import argparse
@@ -44,9 +46,16 @@ def read_checkpoints(path):
         if not line:
             continue
         parts = line.split()
-        if len(parts) != 3:
+        if len(parts) not in (3, 4):
             raise SystemExit(f"game: bad checkpoint line {number}: {line!r}")
-        items.append((parts[0], parts[1].lower(), parts[2].lower()))
+        hold = None
+        if len(parts) == 4 and parts[3] != "-":
+            try:
+                hold = int(parts[3])
+            except ValueError:
+                raise SystemExit(
+                    f"game: bad checkpoint hold line {number}: {line!r}")
+        items.append((parts[0], parts[1].lower(), parts[2].lower(), hold))
     if not items:
         raise SystemExit(f"game: no checkpoints in {path}")
     return items
@@ -65,10 +74,10 @@ def read_log(path):
     return rows
 
 
-def check_sequence(rows, checkpoints, min_hold):
+def check_sequence(rows, checkpoints, min_hold, tolerance):
     cursor = 0
     matched = []
-    for name, fb, pal in checkpoints:
+    for name, fb, pal, expected_hold in checkpoints:
         found = None
         for index in range(cursor, len(rows)):
             if rows[index][2] == fb and rows[index][3] == pal:
@@ -93,7 +102,12 @@ def check_sequence(rows, checkpoints, min_hold):
                     f"game: checkpoint {name} at frame {rows[found][0]} "
                     f"(tick {rows[found][1]}) lasts only {hold} ticks "
                     f"(need {min_hold})")
-        matched.append((name, rows[found], hold))
+            if expected_hold is not None and abs(hold - expected_hold) > tolerance:
+                raise SystemExit(
+                    f"game: checkpoint {name} at frame {rows[found][0]} "
+                    f"(tick {rows[found][1]}) holds {hold} ticks, expected "
+                    f"{expected_hold} +/- {tolerance}")
+        matched.append((name, rows[found], hold, expected_hold))
         cursor = found + 1
     return matched
 
@@ -126,14 +140,19 @@ def main():
     ap.add_argument("checkpoints")
     ap.add_argument("--min-hold", type=int, default=60,
                     help="ticks a checkpoint must stay on screen (default 60)")
+    ap.add_argument("--hold-tolerance", type=int, default=2,
+                    help="ticks a pinned hold may differ (default 2)")
     ap.add_argument("--dump", help="checkpoint dump directory from --dump")
     args = ap.parse_args()
 
     rows = read_log(args.log)
     checkpoints = read_checkpoints(args.checkpoints)
-    matched = check_sequence(rows, checkpoints, args.min_hold)
-    for name, row, hold in matched:
+    matched = check_sequence(rows, checkpoints, args.min_hold,
+                             args.hold_tolerance)
+    for name, row, hold, expected in matched:
         held = "to the end" if hold is None else f"{hold} ticks"
+        if expected is not None and hold is not None:
+            held += f", expected {expected}"
         print(f"game: {name:<14} frame {row[0]:>4} tick {row[1]:>4} "
               f"({held})")
     if args.dump:
