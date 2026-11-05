@@ -92,6 +92,11 @@ typedef struct yt2_machine {
     int halted;
     int trace_api;
     int trace_input;
+    /* Harness clock pin: int 21h AH=2Ch answers DX=pin_dos_time.  The oracle
+       runs the game with a TSR returning the same time, so fn_1797C's
+       clock-seeded RNG starts from an identical value in both. */
+    uint16_t pin_dos_time;
+    int has_pin_dos_time;
     uint32_t steps;
     uint32_t limit_ticks;
     int stop_requested;
@@ -150,6 +155,17 @@ typedef struct yt2_machine {
        a pending frame is sampled once per 60 Hz slot and a transient is
        sampled across its whole life instead of at its first three flushes. */
     FILE *present_log;
+
+    /* Scripted input for the link harness (--input-script): one event per
+       poll, released when the guest tick count reaches its stamp.  The events
+       use the same delivery path as the live link's input callbacks. */
+    FILE *input_script;
+    int script_pending;
+    uint32_t script_tick;
+    int script_kind;
+    int script_a;
+    int script_b;
+
     unsigned long long present_frames;
     uint64_t present_last_fb;
     uint64_t present_last_pal;
@@ -291,6 +307,15 @@ void yt2_game_set_clock(yt2_machine *machine, uint32_t cycles_per_ms);
 void yt2_game_load(yt2_machine *machine);
 int yt2_game_run(yt2_machine *machine, unsigned long max_transfers);
 void yt2_game_shutdown(yt2_machine *machine);
+
+/* Test harness: a tick-stamped input script applied one event per link poll. */
+enum {
+    YT2_SCRIPT_KEY = 0,
+    YT2_SCRIPT_ABS = 1,
+    YT2_SCRIPT_MOVE = 2,
+    YT2_SCRIPT_BUTTON = 3
+};
+int yt2_game_load_script(yt2_machine *machine, const char *path);
 
 /* Live folder link (game_link.c). */
 int yt2_link_open(yt2_machine *machine);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the transliterated game's presented frames against M3 checkpoints.
+"""Check the transliterated game's presented frames against checkpoints.
 
     python3 tests/c/game_frames.py PRESENT.txt tests/c/game_checkpoints.txt
     python3 tests/c/game_frames.py PRESENT.txt tests/c/game_checkpoints.txt \
@@ -7,15 +7,17 @@
 
 The present log comes from `yt2game --present-log`: one line per distinct
 frame, `<frame> <tick> <fnv-fb> <fnv-palette>`.  The checkpoint file lists the
-scenes the original displayed in that order with the same hashes.
+scenes the original displayed in that order with the same hashes; `*` in the
+palette column matches any palette for an animated screen.
 
 The checker requires every checkpoint pair to appear in order and to stay on
 screen for `--min-hold` engine ticks before the next change (the last one may
 run to the end of the log).  A checkpoint file may also pin a hold with a
 fourth field; the observed hold must then stay within `--hold-tolerance` ticks
 of it.  With `--dump` it also verifies that the raw framebuffer/palette dump at
-the end of the run hashes to the final checkpoint and that the settled game
-globals match the DOSBox-X save states.
+the end of the run hashes to the final checkpoint and, with `--globals`, that
+the settled state matches (the M3 attract globals by default, the M5 party
+state with `--globals m5`).
 """
 
 import argparse
@@ -30,6 +32,16 @@ FNV_PRIME = 0x100000001B3
 GLOBALS = (("v_94F1", 0x94F1, 0x01E0),
            ("v_94D7", 0x94D7, 0x0005),
            ("v_50F6", 0x50F6, 0x8000))
+
+# Settled state at the end of the M5 slice, from the original's memory dump
+# after the same script (worker-ant fight lost, back at the Chapter II menu).
+# The party record in slot 0 carries the typed name.
+M5_GLOBALS = (("v_94E7", 0x94E7, 0x00AF),   # party x
+              ("v_94E9", 0x94E9, 0x0025),   # party y
+              ("v_94E5", 0x94E5, 0x1000),   # facing east
+              ("v_5062", 0x5062, 0x0000),   # combat state clear
+              ("v_5064", 0x5064, 0x0001))   # back at the menu
+M5_STRINGS = (("slot0-name", 0x9643, b"CONAN"),)
 
 
 def fnv1a64(data, value=FNV_OFFSET):
@@ -55,7 +67,10 @@ def read_checkpoints(path):
             except ValueError:
                 raise SystemExit(
                     f"game: bad checkpoint hold line {number}: {line!r}")
-        items.append((parts[0], parts[1].lower(), parts[2].lower(), hold))
+        palette = parts[2].lower()
+        if palette in ("*", "-"):
+            palette = None
+        items.append((parts[0], parts[1].lower(), palette, hold))
     if not items:
         raise SystemExit(f"game: no checkpoints in {path}")
     return items
@@ -80,7 +95,7 @@ def check_sequence(rows, checkpoints, min_hold, tolerance):
     for name, fb, pal, expected_hold in checkpoints:
         found = None
         for index in range(cursor, len(rows)):
-            if rows[index][2] == fb and rows[index][3] == pal:
+            if rows[index][2] == fb and (pal is None or rows[index][3] == pal):
                 found = index
                 break
         if found is None:
@@ -124,14 +139,18 @@ def check_dump(directory, last):
     return video, palette
 
 
-def check_globals(directory):
+def check_globals(directory, table=GLOBALS, strings=()):
     with open(f"{directory}/dgroup.bin", "rb") as stream:
         dgroup = stream.read()
-    for name, offset, expected in GLOBALS:
+    for name, offset, expected in table:
         value = struct.unpack_from("<H", dgroup, offset)[0]
         if value != expected:
             raise SystemExit(f"game: {name} is {value:04X}, expected "
                              f"{expected:04X}")
+    for name, offset, expected in strings:
+        value = dgroup[offset:offset + len(expected)]
+        if value != expected:
+            raise SystemExit(f"game: {name} is {value!r}, expected {expected!r}")
 
 
 def main():
@@ -143,6 +162,9 @@ def main():
     ap.add_argument("--hold-tolerance", type=int, default=2,
                     help="ticks a pinned hold may differ (default 2)")
     ap.add_argument("--dump", help="checkpoint dump directory from --dump")
+    ap.add_argument("--globals", choices=("m3", "m5", "none"), default="m3",
+                    help="settled state to check when the run ends on the "
+                         "last checkpoint (default m3)")
     args = ap.parse_args()
 
     rows = read_log(args.log)
@@ -157,9 +179,15 @@ def main():
               f"({held})")
     if args.dump:
         check_dump(args.dump, rows[-1])
-        if (rows[-1][2], rows[-1][3]) == (checkpoints[-1][1],
-                                          checkpoints[-1][2]):
-            check_globals(args.dump)
+        last = checkpoints[-1]
+        if rows[-1][2] == last[1] and (last[2] is None or
+                                       rows[-1][3] == last[2]):
+            if args.globals == "m3":
+                check_globals(args.dump)
+            elif args.globals == "m5":
+                check_globals(args.dump, M5_GLOBALS, M5_STRINGS)
+            else:
+                print("game: globals not checked")
         else:
             print("game: run ends past the last checkpoint; "
                   "globals not checked")

@@ -2,6 +2,7 @@
 #include "game_segments.h"
 #include "yt2/platform.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1416,6 +1417,10 @@ void yt2_game_shutdown(yt2_machine *machine)
     unsigned index;
 
     yt2_link_close(machine);
+    if (machine->input_script != NULL) {
+        fclose(machine->input_script);
+        machine->input_script = NULL;
+    }
     for (index = 0; index < YT2_DOS_FILES; index++) {
         if (machine->files[index].used && machine->files[index].stream != NULL) {
             fclose(machine->files[index].stream);
@@ -1425,4 +1430,22 @@ void yt2_game_shutdown(yt2_machine *machine)
     }
     free(machine->ems_pool);
     machine->ems_pool = NULL;
+}
+
+int yt2_game_load_script(yt2_machine *machine, const char *path)
+{
+    FILE *script;
+
+    if (machine->input_script != NULL) {
+        fclose(machine->input_script);
+        machine->input_script = NULL;
+    }
+    script = fopen(path, "r");
+    if (script == NULL) {
+        fprintf(stderr, "yt2: cannot read %s: %s\n", path, strerror(errno));
+        return YT2_ERR;
+    }
+    machine->input_script = script;
+    machine->script_pending = 0;
+    return YT2_OK;
 }

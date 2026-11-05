@@ -89,6 +89,83 @@ int yt2_link_open(yt2_machine *machine)
     return YT2_OK;
 }
 
+static void yt2_link_read_script(yt2_machine *machine)
+{
+    char line[128];
+
+    while (machine->input_script != NULL) {
+        unsigned long tick = 0;
+        char kind[16];
+        int a = 0;
+        int b = 0;
+
+        if (fgets(line, sizeof(line), machine->input_script) == NULL) {
+            fclose(machine->input_script);
+            machine->input_script = NULL;
+            return;
+        }
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r' ||
+            line[0] == '\0') {
+            continue;
+        }
+        if (sscanf(line, "%lu %15s %i %i", &tick, kind, &a, &b) != 4) {
+            fprintf(stderr, "yt2: bad input script line: %s", line);
+            continue;
+        }
+        machine->script_tick = (uint32_t)tick;
+        if (strcmp(kind, "key") == 0) {
+            machine->script_kind = YT2_SCRIPT_KEY;
+        } else if (strcmp(kind, "abs") == 0) {
+            machine->script_kind = YT2_SCRIPT_ABS;
+        } else if (strcmp(kind, "move") == 0) {
+            machine->script_kind = YT2_SCRIPT_MOVE;
+        } else if (strcmp(kind, "button") == 0) {
+            machine->script_kind = YT2_SCRIPT_BUTTON;
+        } else {
+            fprintf(stderr, "yt2: unknown input script kind %s\n", kind);
+            continue;
+        }
+        machine->script_a = a;
+        machine->script_b = b;
+        machine->script_pending = 1;
+        return;
+    }
+}
+
+/* One scripted event per poll, released at its guest tick.  The script is a
+   test harness for the gameplay gates (the live link's client writes its
+   records in real time); the callbacks are the same ones the link uses. */
+static void yt2_link_apply_script(yt2_machine *machine)
+{
+    if (!machine->script_pending) {
+        yt2_link_read_script(machine);
+    }
+    if (!machine->script_pending || machine->ticks < machine->script_tick) {
+        return;
+    }
+    switch (machine->script_kind) {
+    case YT2_SCRIPT_KEY:
+        yt2_key_push(machine, (uint8_t)machine->script_a,
+                     (uint8_t)machine->script_b);
+        break;
+    case YT2_SCRIPT_ABS:
+        yt2_mouse_abs(machine, (uint16_t)machine->script_a,
+                      (uint16_t)machine->script_b);
+        break;
+    case YT2_SCRIPT_MOVE:
+        yt2_mouse_move(machine, (int16_t)machine->script_a,
+                       (int16_t)machine->script_b);
+        break;
+    case YT2_SCRIPT_BUTTON:
+        yt2_mouse_button(machine, (uint8_t)machine->script_a,
+                         (uint8_t)machine->script_b);
+        break;
+    default:
+        break;
+    }
+    machine->script_pending = 0;
+}
+
 void yt2_link_poll(yt2_machine *machine)
 {
     if (!machine->link_ready) {
@@ -104,6 +181,7 @@ void yt2_link_poll(yt2_machine *machine)
     if (!yt2_machine_call_safe(machine)) {
         return;
     }
+    yt2_link_apply_script(machine);
     if (yt2_service_poll(&machine->service) != YT2_OK) {
         /* The input file is a live document: a bad or half-written record
            while the client recreates it is not a reason to stop presenting.

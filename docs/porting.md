@@ -2146,3 +2146,48 @@ emulator-hook demo, not this port).
     is `tests/replay/run.sh`.  The ASan/UBSan build, its unit tests and the
     3,600-tick link run are clean.  No assembly changed; `SWREG.EXE`
     remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-05 - M5 gameplay slice: scripted creation, walking and combat:
+  - **the seam's poll hook clobbered SI**: the file-backend oracle recorded
+    the name editor as "MEAT" after CONAN was typed.  `fn_PollInput` and
+    `fn_WaitKey` replace their `call fn_MusicService` with
+    `fn_SeamPresentMusic`, which presented and drained audio without saving
+    SI; the editor keeps its write pointer in SI across polls, so the typed
+    name was written to the wrong address.  The hook now saves and restores
+    the full register set before `fn_MusicService` runs.  With the fix the
+    original stores `CONAN` in DGROUP:9643 and displays the same preview as
+    the port (`6cf1cc7f08f0000e`); the earlier "MEAT" was a harness artifact,
+    not game behaviour;
+  - **deterministic harness**: `yt2game --input-script FILE` applies
+    tick-stamped key/mouse events through the live link's input path, and
+    `--pin-dos-time N` answers `int 21h AH=2Ch` with a fixed value so the
+    game's clock-seeded RNG (`fn_1797C`) and the oracle's `TIMEFIX.COM` start
+    from the same seed.  `--dump` also writes the object table and map
+    segment for state comparisons;
+  - **M5 route**: title, class `FIGHTER`, portrait 1, the picked items,
+    name `CONAN` (the typed stages `C`/`CO`/`CON`/`CONA`/`CONAN` all match),
+    preview, keep, roster, game start, the 24-step walk from the starting
+    room to the garden and the two-worker-ant fight.  With this script the
+    solo fighter loses; the original and the port both return to the
+    Chapter II menu at tick 8743.  Mid-fight the oracle's memory dump has
+    the party at (175,37) facing east and `v_5062=0004`, `v_5064=B001`,
+    `v_50F6=F000`; the port's combat state matches.  The full-route end
+    dumps agree on the position, facing and `v_5062=0`, `v_5064=0001` (that
+    oracle script typed AN because it skipped the name-screen N); the
+    fixed-seam CONAN run confirms the typed name reaches slot 0, where the
+    port's gate also requires it;
+  - **gate**: `tests/c/game-m5.sh` runs the committed
+    `tests/c/m5_input.txt` and requires 21 checkpoint pairs from the fixed-
+    seam recordings: the static creation/name/preview screens and the room
+    pin both hashes; the six combat idle frames pin both hashes across the
+    palette cycle (107 common pairs); the attack-flash frames and the final
+    menu pin the framebuffer only, because their palette phase depends on
+    when the buffered attack keys land.  `game_frames.py` accepts `*` as a
+    palette wildcard and a `--globals m3|m5` state table; the M5 table also
+    checks the typed name in slot 0.  `tests/c/run.sh` now runs the M5 gate;
+  - **verification**: `sh tests/c/game-m5.sh` -> 21 checkpoints match, M5
+    globals and `CONAN` slot 0 OK; `tests/c/game.sh --no-build` still
+    matches all 7 M3 checkpoints (holds 93 ticks); `yt2core-tests` and
+    `yt2game-tests` pass.  No `swreg.asm` change; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982` and the oracle build is byte-
+    identical.  The seam variants were rebuilt (`file`) for the oracle
+    recordings.

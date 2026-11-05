@@ -1215,7 +1215,7 @@ int yt2_dos_int21(yt2_machine *machine)
         break;
     case 0x2Cu:
         machine->r.cx = 0;
-        machine->r.dx = 0;
+        machine->r.dx = machine->has_pin_dos_time ? machine->pin_dos_time : 0;
         break;
     case 0x3Du:
         yt2_dos_open(machine);
