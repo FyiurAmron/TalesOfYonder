@@ -1,9 +1,10 @@
 #!/bin/sh
-# M2/M3/M4 video gate: build the C core, run its unit tests, replay the asm fixture
-# through the folder backend byte-for-byte, exercise the stub's folder/stream
-# inputs, render its output with both the client and the Python decoder, then
-# run the transliterated game to the title/attract and match the original's
-# settled frames and globals.
+# M2/M3/M4/M5 video gate: build the C core, run its unit tests, replay the asm
+# fixture through the folder backend byte-for-byte, exercise the stub's
+# folder/stream inputs, render its output with both the client and the Python
+# decoder, then run the transliterated game to the title/attract and through
+# the scripted M5 gameplay slice, matching the original's settled frames,
+# globals and party state.
 #
 #   sh tests/c/run.sh [--no-build]
 #
@@ -215,6 +216,9 @@ timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 3600 \
 grep -q 'exited=0' "$RUN/checkpoint/stderr.log"
 python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
     "$ROOT/tests/c/game_checkpoints.txt" --dump "$RUN/checkpoint"
+
+echo "c: game M5 gameplay"
+sh "$ROOT/tests/c/game-m5.sh" --no-build
 
 echo "c: game shooting star"
 sh "$ROOT/tests/c/star.sh" --no-build

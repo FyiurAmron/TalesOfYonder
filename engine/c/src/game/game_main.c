@@ -37,6 +37,34 @@ static void yt2_dump_checkpoint(yt2_machine *machine, const char *directory)
         fclose(stream);
     }
 
+    {
+        uint16_t object_seg = 0;
+        uint16_t map_seg = 0;
+
+        memcpy(&object_seg, machine->mem.bytes + base + dgroup_start + 0x0CF4u,
+               sizeof(object_seg));
+        memcpy(&map_seg, machine->mem.bytes + base + dgroup_start + 0x0CFCu,
+               sizeof(map_seg));
+        if (object_seg != 0) {
+            snprintf(path, sizeof(path), "%s/objects.bin", directory);
+            stream = fopen(path, "wb");
+            if (stream != NULL) {
+                fwrite(machine->mem.bytes + ((uint32_t)object_seg << 4), 1,
+                       0x10000u, stream);
+                fclose(stream);
+            }
+        }
+        if (map_seg != 0) {
+            snprintf(path, sizeof(path), "%s/map.bin", directory);
+            stream = fopen(path, "wb");
+            if (stream != NULL) {
+                fwrite(machine->mem.bytes + ((uint32_t)map_seg << 4), 1,
+                       0xBE30u, stream);
+                fclose(stream);
+            }
+        }
+    }
+
     snprintf(path, sizeof(path), "%s/video.bin", directory);
     stream = fopen(path, "wb");
     if (stream != NULL) {
@@ -94,12 +122,20 @@ static void yt2_usage(const char *program)
     fprintf(stderr,
             "usage: %s [--game DIR] [--transfers N] [--ticks N] [--trace-api] [--dump DIR]\n"
             "          [--ppm FILE] [--present-log FILE] [--present-dir DIR]\n"
+            "          [--input-script FILE] [--pin-dos-time N]\n"
             "          [--live|--link] [--no-pace] [--trace-input]\n"
             "          [--cycles-per-ms N]\n"
             "\n"
             "  --live     play: folder link (OUTPUT.BIN/INPUT.BIN) and real-time pacing\n"
             "  --link     folder link only, as fast as the host runs\n"
             "  --no-pace  with --live, run the link without the guest clock\n"
+            "  --input-script FILE  tick-stamped input for the link harness\n"
+            "                     (requires --link; <tick> key <scan> <ascii> |\n"
+            "                      abs <x> <y> | move <dx> <dy> | button <button> <down>)\n"
+            "  --pin-dos-time N   answer int 21h AH=2Ch with DX=N (and CX=0) so\n"
+            "                     the game's clock-seeded RNG (fn_1797C) starts\n"
+            "                     from a fixed value; the oracle harness loads a\n"
+            "                     TSR that returns the same time\n"
             "  --cycles-per-ms N  guest speed in DOSBox-X cycles (default 3000,\n"
             "                     about a 286 at 20-25 MHz and the game's\n"
             "                     minimum class; 30000 is roughly a\n"
@@ -115,9 +151,12 @@ int main(int argc, char **argv)
     const char *ppm = NULL;
     const char *present_log = NULL;
     const char *present_dir = NULL;
+    const char *input_script = NULL;
     unsigned long transfers = 0;
     unsigned long limit_ticks = 0;
     unsigned long cycles_per_ms = YT2_CYCLES_PER_MS;
+    unsigned long pin_dos_time = 0;
+    int have_pin_dos_time = 0;
     int trace = 0;
     int trace_input = 0;
     int link = 0;
@@ -132,6 +171,9 @@ int main(int argc, char **argv)
             transfers = strtoul(argv[++index], NULL, 0);
         } else if (strcmp(argv[index], "--ticks") == 0 && index + 1 < argc) {
             limit_ticks = strtoul(argv[++index], NULL, 0);
+        } else if (strcmp(argv[index], "--pin-dos-time") == 0 && index + 1 < argc) {
+            pin_dos_time = strtoul(argv[++index], NULL, 0);
+            have_pin_dos_time = 1;
         } else if (strcmp(argv[index], "--cycles-per-ms") == 0 && index + 1 < argc) {
             cycles_per_ms = strtoul(argv[++index], NULL, 0);
         } else if (strcmp(argv[index], "--dump") == 0 && index + 1 < argc) {
@@ -142,6 +184,8 @@ int main(int argc, char **argv)
             present_log = argv[++index];
         } else if (strcmp(argv[index], "--present-dir") == 0 && index + 1 < argc) {
             present_dir = argv[++index];
+        } else if (strcmp(argv[index], "--input-script") == 0 && index + 1 < argc) {
+            input_script = argv[++index];
         } else if (strcmp(argv[index], "--live") == 0) {
             link = 1;
             pace = 1;
@@ -185,7 +229,14 @@ int main(int argc, char **argv)
     g_m.trace_api = trace;
     g_m.trace_input = trace_input;
     g_m.limit_ticks = (uint32_t)limit_ticks;
+    if (input_script != NULL && yt2_game_load_script(&g_m, input_script) != YT2_OK) {
+        return 2;
+    }
     yt2_game_load(&g_m);
+    if (have_pin_dos_time) {
+        g_m.pin_dos_time = (uint16_t)pin_dos_time;
+        g_m.has_pin_dos_time = 1;
+    }
 
     (void)yt2_game_run(&g_m, transfers);
 

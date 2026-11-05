@@ -1,0 +1,32 @@
+# M5 gameplay checkpoints from the original's recordings.
+#
+# Each line: <name> <framebuffer-hash> <palette-hash or *> [<hold>]
+# The creation, name and preview pairs were taken from the original with the
+# fixed-seam file build typing CONAN; the room, combat and menu frames from a
+# full run of the M5 route.  See docs/porting.md section 9 for the provenance.
+# The static screens pin both hashes; a * means the original displayed that
+# exact framebuffer with several palette phases during an animation, so only
+# the pixels are pinned there.  The palette animation itself is covered by
+# the static checkpoints and the combat idle frames.
+#
+class          68b68bd0939ce8c2 e3275ee3ae459fb5
+portrait       7df6e7761a531e5a 6a73095f0603c453
+sheet          33163413d78bf902 890cbb6393cd3413
+items          548a553c24cfec18 0857301d3eea3973
+name-prompt    1820676ecbd9410f 6a73095f0603c453
+name-C         f4730cbbe451ab8b 0857301d3eea3973
+name-CO        94b7ed8969e41e4b 0857301d3eea3973
+name-CON       015c43aa6420f54f 0857301d3eea3973
+name-CONA      3c89e9c7b0dc5267 0857301d3eea3973
+name-CONAN     1947dc038a6781cb 0857301d3eea3973
+preview        6cf1cc7f08f0000e 0857301d3eea3973
+room           fdfb98da95704599 ea991cb49988ba23
+combat-idle-a  9f8473e353be595f 1ec116708e25284b
+combat-idle-b  21e5997108036cce 1125387955da9743
+combat-idle-c  70043cc675f739b5 1ec116708e25284b
+combat-idle-d  a112c79116e13b5f 1125387955da9743
+combat-idle-e  c2217b9a8513d766 1ec116708e25284b
+combat-idle-f  8802b23d86a14041 1125387955da9743
+combat-hit-1   04ac7f3d57153c12 *
+combat-hit-2   8596af8eb0f853ab *
+menu           ddb51818a027ff2e *
