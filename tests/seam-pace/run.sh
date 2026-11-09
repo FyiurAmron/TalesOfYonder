@@ -14,7 +14,7 @@
 # Why the budget and not a finer clock: the BIOS tick is 55 ms and a pass per
 # tick limited the client to 18.2 pictures a second, but SBFMDRV reprograms PIT
 # channel 0 to about 64 Hz, so its counter reloads every 15.6 ms and cannot
-# time a pass interval; see docs/sbfmdrv.md and the progress log.
+# time a pass interval; see docs/sbfmdrv.md and docs/progress.md.
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK=$ROOT/build/runs/seam-pace/$(date +%Y%m%d-%H%M%S)

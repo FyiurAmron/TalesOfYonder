@@ -6,8 +6,8 @@
 # The hashes are FNV-1a 64 over the 320x200 mode-13h index buffer and the
 # 6-bit DAC values.  They were taken from the fixed-seam file recording
 # (build/tmp/or3, SWREG.EXE c0df060c455ca6ee390c6871392d4974) driven through
-# tests/c/m5_input.txt by the seam INPUT.BIN messages.  See docs/porting.md
-# section 9 for the provenance.
+# tests/c/m5_input.txt by the seam INPUT.BIN messages.  See docs/progress.md
+# (2026-11-09) for the provenance.
 #
 # The static screens pin both hashes.  A * means the original displayed that
 # exact framebuffer with several palette phases during an animation (the fight

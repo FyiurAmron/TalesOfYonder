@@ -12,7 +12,8 @@ mirrors the screen in a window and forwards keys, and the Linux/Windows bundles 
 away. M2 is done too: `engine/c/` now has the C11 core (flat memory, 16-bit ALU/flags, v0
 protocol), the service boundary, `null`/raw-recording/folder backends, and a deterministic
 headless stub that writes timed `OUTPUT.BIN` and consumes `INPUT.BIN`. The existing client
-remains the SDL3 host. `docs/porting.md` §9 is the live progress log.
+remains the SDL3 host. `docs/progress.md` is the live progress log; `docs/roadmap.md`
+has the milestones and next steps.
 
 ## Quick start
 
@@ -55,7 +56,7 @@ Windows bundle (self-contained, no .NET install on the target):
 | `client/` | the C# companion client (SDL3) and platform bundle files |
 | `tools/` | host tooling, including the `publish-*.sh` bundle publishers |
 | `tests/` | committed gates (the list is in `tests/README.md`) and fixtures |
-| `docs/` | plan, protocol, disassembly/client/stream notes |
+| `docs/` | plan, roadmap, progress log, protocol, disassembly/client/stream notes |
 | `_ref/` | read-only reference: the original distribution, the frozen disassembly, the mining project |
 | `build/` | every output (gitignored): `swreg/<variant>`, `sbfmdrv/`, `client/`, `runs/<kind>/<stamp>`, `dist/`, `tmp/` |
 
@@ -63,7 +64,9 @@ Windows bundle (self-contained, no .NET install on the target):
 
 ## Docs
 
-- `docs/porting.md` — the plan: assets, strategy, milestones, risks, progress log (§9).
+- `docs/porting.md` — the plan: assets, strategy, stages, verification, risks.
+- `docs/roadmap.md` — milestones, open items and the next steps.
+- `docs/progress.md` — the dated progress log.
 - `docs/protocol.md` — the engine ↔ client protocol (v0).
 - `docs/disassembly.md` — building and verifying the asm; source conventions.
 - `docs/client.md` — the C# client, the seam link, the Windows bundle.
