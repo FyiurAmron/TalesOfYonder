@@ -1,32 +1,50 @@
-# M5 gameplay checkpoints from the original's recordings.
+# M5 gameplay checkpoints from the original's recording of the extended slice:
+# character creation (CONAN with sling and dagger), roster 1/6/7/8, the walk
+# to the garden, the spider fight, and the chest loot.
 #
 # Each line: <name> <framebuffer-hash> <palette-hash or *> [<hold>]
-# The creation, name and preview pairs were taken from the original with the
-# fixed-seam file build typing CONAN; the room, combat and menu frames from a
-# full run of the M5 route.  See docs/porting.md section 9 for the provenance.
-# The static screens pin both hashes; a * means the original displayed that
-# exact framebuffer with several palette phases during an animation, so only
-# the pixels are pinned there.  The palette animation itself is covered by
-# the static checkpoints and the combat idle frames.
+# The hashes are FNV-1a 64 over the 320x200 mode-13h index buffer and the
+# 6-bit DAC values.  They were taken from the fixed-seam file recording
+# (build/tmp/or3, SWREG.EXE c0df060c455ca6ee390c6871392d4974) driven through
+# tests/c/m5_input.txt by the seam INPUT.BIN messages.  See docs/porting.md
+# section 9 for the provenance.
 #
-class          68b68bd0939ce8c2 e3275ee3ae459fb5
+# The static screens pin both hashes.  A * means the original displayed that
+# exact framebuffer with several palette phases during an animation (the fight
+# and the chest screens), so only the pixels are pinned there; the palette
+# animation itself is covered by the static checkpoints and the idle frames.
+#
+# The gate requires the pairs in this order, each held for at least one engine
+# tick; the checker measures the hold up to the next framebuffer change.
+class          68b68bd0939ce8c2 0857301d3eea3973
 portrait       7df6e7761a531e5a 6a73095f0603c453
-sheet          33163413d78bf902 890cbb6393cd3413
-items          548a553c24cfec18 0857301d3eea3973
-name-prompt    1820676ecbd9410f 6a73095f0603c453
-name-C         f4730cbbe451ab8b 0857301d3eea3973
-name-CO        94b7ed8969e41e4b 0857301d3eea3973
-name-CON       015c43aa6420f54f 0857301d3eea3973
-name-CONA      3c89e9c7b0dc5267 0857301d3eea3973
-name-CONAN     1947dc038a6781cb 0857301d3eea3973
-preview        6cf1cc7f08f0000e 0857301d3eea3973
-room           fdfb98da95704599 ea991cb49988ba23
-combat-idle-a  9f8473e353be595f 1ec116708e25284b
-combat-idle-b  21e5997108036cce 1125387955da9743
-combat-idle-c  70043cc675f739b5 1ec116708e25284b
-combat-idle-d  a112c79116e13b5f 1125387955da9743
-combat-idle-e  c2217b9a8513d766 1ec116708e25284b
-combat-idle-f  8802b23d86a14041 1125387955da9743
-combat-hit-1   04ac7f3d57153c12 *
-combat-hit-2   8596af8eb0f853ab *
-menu           ddb51818a027ff2e *
+sheet          33163413d78bf902 0857301d3eea3973
+items          548a553c24cfec18 6a73095f0603c453
+equipped       3d6a9d53cd5e369e 0857301d3eea3973
+name-prompt    4211a4e43662e9ba 6a73095f0603c453
+name-C         5cd354c7fff0f656 6a73095f0603c453
+name-CO        60b9078234abd696 0857301d3eea3973
+name-CON       93fd7535f94fb77a 0857301d3eea3973
+name-CONA      e0280273872b3de2 b89f38c28b04bf1b
+name-CONAN     381f10a8f8f6f816 6a73095f0603c453
+preview        5b9aafd86ceb1917 0857301d3eea3973
+keep           ad265445f7701a83 0857301d3eea3973
+roster         c73f70f7f6e0461a 9fa9e040e0eedf25
+roster-added   93c47e1de31e28fb 6a73095f0603c453
+slot1          720e882684fa343a 0857301d3eea3973
+slot6          119c488a71398663 0857301d3eea3973
+slot7          4325566ba01d17aa 6a73095f0603c453
+slot8          617f49fff490240f 0857301d3eea3973
+roster-done    c73f70f7f6e0461a 9fa9e040e0eedf25
+room           41ffb795bea6fe6a 9a8d2a31524f1233
+combat-idle-1  4fdbf3431f8b34b2 9170a922c7d0ddad
+combat-idle-2  c1f07de1983b640a 531c54cc0c7ad8e3
+combat-idle-3  c0ee3af62ae20092 25dc003683fca30f
+victory        14da317f5a7667a7 08e8d1c598a10710
+after-victory  e9997499b344caeb 1e65f44f9edf658a
+step-1         d871c3a42be9fb95 a19743b4cfaefcdd
+step-2         ea567582142cab86 0745680c5fdce3e1
+chest-view     9550372cfb48046f 0884e9a66e7740b7
+chest-prompt   c659e8ebfbbab36b *
+chest-open     fea322ac02e68df6 *
+chest-closed   23945c6ae98d094c *

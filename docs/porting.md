@@ -2191,3 +2191,38 @@ emulator-hook demo, not this port).
     `c3bdd3054e55a1e0b57c9780654dc982` and the oracle build is byte-
     identical.  The seam variants were rebuilt (`file`) for the oracle
     recordings.
+- 2026-11-09 - M5 extended slice: spider victory and chest loot:
+  - **route**: the script now wins the garden fight instead of losing to the
+    worker ants.  Title, class `FIGHTER`, portrait 1, the sling and dagger
+    picked and dropped, `CONAN`, keep, roster 1/6/7/8, game start, the walk
+    to the garden, three sling rounds and nine melee rounds; the party wins,
+    the victory message runs, the party walks to the chest, the first
+    portrait opens it, the loot appears, and the chest is closed.  The gate
+    pins 32 checkpoint frames from the original's fixed-seam recording;
+  - **oracle input**: the fixed-seam file build takes the mouse events from
+    `INPUT.BIN`; `tools/dosbox/drive.py` appends protocol-v0 `iabs`/`ibtn`
+    records at the right frames, and `tools/dosbox/mouse.py` stays for
+    XTEST/Xvfb runs.  `TIMEFIX.COM` pins `int 21h AH=2Ch` so the game's
+    clock-seeded RNG (`fn_1797C`) starts from the same seed in both runs.
+    `MOUSEFIX.COM` is not loaded: the seam's INT 33h shim owns the game's
+    `0Ch` handler, so the integration-device TSR cannot reach the game.  Its
+    source now documents the real limitation (XTEST under Xvfb produces no
+    usable relative motion, not that DOSBox-X ignores captured host motion)
+    and stays available for stock `SWREG.EXE` runs;
+  - **gate details**: `tests/c/m5_checkpoints.txt` pins the creation, name,
+    roster and chest screens and the combat idle frames.  `game_frames.py`
+    measures a checkpoint's hold up to the next *framebuffer* change, so the
+    palette phases of one image no longer count as a new screen, and it
+    accepts a `*` final checkpoint without comparing the end-dump palette,
+    which keeps cycling after the last present.  `tests/c/m5_input.txt` is
+    the extended script; the gate default is 9000 ticks;
+  - **end state**: the original's save state at the chest screen
+    (`build/tmp/orstate/saves/1.sav`) and the port's end dump agree:
+    `v_94E7=00A1`, `v_94E9=0022`, `v_94E5=4000` (facing south),
+    `v_5062=0644`, `v_5064=0001`, and slot 0 holds `CONAN`;
+  - **verification**: `sh tests/c/game-m5.sh --no-build` -> 32 checkpoints
+    match, M5 globals and `CONAN` slot 0 OK.  The oracle recording is
+    `build/tmp/or3` (file build MD5 `c0df060c455ca6ee390c6871392d4974`).
+    No `swreg.asm` change; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`, and the seam build is intentionally
+    not byte-identical.
