@@ -1,17 +1,19 @@
 # Contributing
 
 This repository is a recreation of *Yendorian Tales Book I, Chapter 2* (`SWREG.EXE`, 1996,
-SW Games / Spectrum Pacific Publishing) for modern systems. Two documents define the project —
-read them in order:
+SW Games / Spectrum Pacific Publishing) for modern systems. The project is defined by these
+documents — read them in order:
 
-- **`docs/porting.md`** — the plan: assets, strategy, stages, milestones, risks, progress log.
+- **`docs/porting.md`** — the plan: assets, strategy, stages, verification, risks.
+- **`docs/roadmap.md`** — milestones, open items and the next steps.
+- **`docs/progress.md`** — the dated progress log.
 - **`docs/protocol.md`** — the companion protocol (engine ↔ client/host), v0 draft.
 
 ## Repository layout
 
 | Path | What |
 |---|---|
-| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly), `oracle.md` (DOSBox-X harness), `asm-style.md` (annotation rules), `layout.md` (this tree) |
+| `docs/` | project docs in lowercase kebab-case: `porting.md` (plan), `roadmap.md` (milestones + next), `progress.md` (dated log), `protocol.md` (companion protocol), `disassembly.md` (working SWREG disassembly), `oracle.md` (DOSBox-X harness), `asm-style.md` (annotation rules), `layout.md` (this tree) |
 | `AGENTS.md`, `CONTRIBUTING.md` | agent rules and this file — the only root-level markdown |
 | `_ref/` | **read-only reference** — original distribution, the frozen disassembly generation pipeline (incl. the historic MASM source), and the vendored mining project. Copy from it, never edit it. |
 | `engine/asm/swreg/` | the working `SWREG.EXE` disassembly: source in `engine/asm/swreg/src/`, build/verify machinery in `engine/asm/swreg/tools/` (outputs land in `build/swreg/oracle/`) |
@@ -42,7 +44,7 @@ read them in order:
    maintainer asks.
 5. **Don't rewrite published history** (amend/rebase/force-push) unless explicitly agreed. On
    local `dev`, the latest commit may be amended/squashed; any older commit needs agreement.
-6. **Docs live in `docs/`** as lowercase kebab-case files (`docs/porting.md`, `docs/protocol.md`);
+6. **Docs live in `docs/`** as lowercase kebab-case files (`docs/porting.md`, `docs/roadmap.md`, `docs/progress.md`, `docs/protocol.md`);
    only `README.md`, `AGENTS.md` and `CONTRIBUTING.md` stay at the root.
 
 ## Working on the disassembly (byte-exact asm)
@@ -124,7 +126,7 @@ The M8/M9 rules above still govern the product client.
 | `client/` | build, replay, timed session, audio and optional serial-link gates (see `tests/README.md`) |
 | `engine/c/` | `sh tests/c/run.sh`: unit tests, asm-fixture parity, client/Python render match, scripted/live input, stream + null backends |
 | Windows bundle | `tools/publish-win.sh --server asm` -> `yt2-win-x64.zip`; target smoke test |
-| docs | paths/links plausible; `docs/porting.md` progress log updated for milestones |
+| docs | paths/links plausible; `docs/progress.md` updated for milestones and `docs/roadmap.md` next steps current |
 | C / C# (future) | unit tests + replay/checkpoint harness green |
 
 ## Environment setup

@@ -6,7 +6,7 @@ adds agent-specific operational rules.
 
 ## Start of session
 
-1. Read `CONTRIBUTING.md`, then `docs/porting.md` (plan + progress log) and `docs/protocol.md` (boundary spec).
+1. Read `CONTRIBUTING.md`, then `docs/porting.md` (design), `docs/roadmap.md` (milestones + next), `docs/progress.md` (dated log) and `docs/protocol.md` (boundary spec).
 2. Check `git status` and `git log --oneline -3`; work on `dev` (create it from `main` if absent),
    tree should be clean.
 3. Before touching the disassembly, read `docs/disassembly.md`.
@@ -41,7 +41,7 @@ adds agent-specific operational rules.
 ## Reporting
 
 - After asm work, state the verification result explicitly (`md5 OK`, `IDENTICAL`).
-- Keep the plan honest: add dated progress-log entries to `docs/porting.md` when milestones move.
+- Keep the plan honest: add dated progress-log entries to `docs/progress.md` when milestones move.
 - If a task needs a GUI or the user's machine (DOSBox-X runs, real hardware), say so and leave a
   runnable script plus expected output instead of guessing.
 - Keep commits small and feature-scoped, Conventional Commits style:
@@ -58,7 +58,7 @@ adds agent-specific operational rules.
 
 ## Where things are
 
-- Plan: `docs/porting.md` (§3 design, §4 verification, §7 risks, §9 progress log).
+- Plan: `docs/porting.md` (§3 design, §4 verification, §6 risks); roadmap: `docs/roadmap.md`; log: `docs/progress.md`.
 - Protocol: `docs/protocol.md` (service families, encoding policy, display state, recordings).
 - Disassembly notes: `docs/disassembly.md` (build/verify, source conventions).
 - Layout: `docs/layout.md` (the tree; `build/` mirrors it).
@@ -80,40 +80,5 @@ adds agent-specific operational rules.
 
 ## Current focus
 
-Check `docs/porting.md` §9 before acting. As of the last update: M1 is done — the EMS manager /
-picture cache, the DOS file service, the palette service and the video boundary (draw segment,
-mode sets, VBE bank switch) are annotated; `docs/asm-style.md` is in place and the byte gate is
-green after each batch. The optional M1b boundary spike is done as well: a `-DSTREAM` build
-streams mode-13h dirty rows and palette writes to `OUTPUT.BIN`, and `tools/stream/replay.py`
-replays them (see `docs/stream.md`). The M1 input wrappers are annotated too: keyboard
-poll/wait (`fn_PollInput`/`fn_WaitKey`, DOS int 21h 06h/0Ch) and the INT 33h mouse driver with
-its software cursor (`fn_MouseInit`/`fn_MouseHandler`, S13A0). The sound and tick wrappers are
-annotated as well: the SBFMDRV FM service (S187E: env parsing, "FMDRV" vector scan + self-patched
-`int 0`, music/SFX buffers, PC-speaker fallback) and the INT 1Ch game tick (install/restore,
-ISR stack/state, direct BIOS tick reads). SBFMDRV.COM itself is now disassembled byte-perfectly
-and documented in `docs/sbfmdrv.md`: installer/uninstaller, resident INT API, music state
-machine, checksum self-patch, and a DOSBox-X black-box harness (`engine/asm/sbfmdrv/test/`) are in place.
-The repository layout is settled (`docs/layout.md`): engine sources under `engine/`, host tooling
-under `tools/`, committed gates under `tests/`, and `build/` mirrors the tree
-(`build/swreg/<variant>`, `build/sbfmdrv/`, `build/client/`, `build/runs/<kind>/<stamp>`, `build/dist/`).
-M3 first light is done (2026-10-28): the emitted C reaches the Webfoot logo, both story screens
-and the attract vignettes, and `tests/c/run.sh` matches seven settled scene hashes and the settled
-globals against the oracle. M2 is done: `engine/c/` has the flat-memory/ALU core, v0
-protocol/service boundary, `null`/stream/folder backends and a deterministic headless stub;
-`tests/c/run.sh` pins it to the asm fixture byte-for-byte. The C port is playable (2026-10-28):
-`yt2game --live` runs the game at the guest clock (3,000 cycles/ms by default;
-`--cycles-per-ms N` overrides) and speaks the live folder link
-with keyboard/mouse input, and `sh tools/publish-linux.sh --server c` builds a bundle that runs
-without DOSBox-X (`sh tools/play-c.sh` plays from the tree). It presents mode 13h and the VBE
-screens (640x480 mode 101h and 640x400 mode 100h, 2026-10-30), and the link uses codec-1 rows
-and whole-screen scroll messages; audio is M6. M4's video slice is done (2026-10-30); the
-remaining M4 slices are timing (exact opcode costs, sub-tick scheduling, timed input) and the
-module order in §3. The SDL3 host stays the existing C# client;
-a direct host can follow behind the same service interface.
-The driver work is closed: real `WORLD.DAT`
-blocks play against the static walk (`test/run.sh music`, with `MUSIC_CAP=wav|dro|both`
-recordings), the game-level audio run is `tools/dosbox/audio.sh`, and `/U` refusing to
-remove the driver from under a later TSR is gated by `test/run.sh uninstall-late`.  The
-game-side `v_SoundEntry` question is resolved: the
-driver has no far dispatcher, the pointer is zero, and the far calls are vestigial (treat them
-as no-ops; the resident INT API is the real interface).
+Check `docs/roadmap.md` for the milestones, open items and next steps, and
+the tail of `docs/progress.md` for the latest state.

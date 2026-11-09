@@ -25,7 +25,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
     tests/                       committed gates: replay/ (offline), c/ (C core + C seam),
                                  session/ (timed full duplex), window/ (visible window), link/
                                  (obsolete serial), data/ (fixtures)
-    docs/                        the plan and the specs
+    docs/                        the plan, roadmap, progress log and the specs
     _ref/                        read-only reference material (never edited)
     build/                       every output, gitignored
 
@@ -68,6 +68,8 @@ Rules:
 | host scripts, profiles, X helpers | `tools/dosbox/` |
 | recording tools (decode, compare) | `tools/stream/` |
 | a new committed gate | `tests/<kind>/run.sh` (and a line in `tests/README.md`) |
+| the roadmap / next steps | `docs/roadmap.md` |
+| the dated progress log | `docs/progress.md` |
 | the protocol spec | `docs/protocol.md` (the source of truth for what crosses the boundary) |
 
 Both `engine/asm/swreg/src/swreg.asm` and `engine/asm/sbfmdrv/src/sbfmdrv.asm` are gated
