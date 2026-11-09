@@ -1,17 +1,17 @@
 #!/bin/sh
 # M5 gameplay gate: run the transliterated game through the scripted slice --
-# title, character creation (CONAN), keep/roster, game start, the walk to the
-# garden and the worker-ant fight -- and match the original's frames and the
-# settled party state.
+# title, character creation (CONAN with the sling and dagger), keep/roster,
+# game start, the walk to the garden, the spider fight, and the chest loot --
+# and match the original's frames and the settled party state.
 #
 #   sh tests/c/game-m5.sh                 # build if needed
 #   sh tests/c/game-m5.sh --no-build      # use build/c/yt2game as it is
 #   sh tests/c/game-m5.sh --ticks 9000    # run longer
 #
 # The script is tests/c/m5_input.txt; the expected frames are in
-# tests/c/m5_checkpoints.txt, taken from the original's recording
-# (build/tmp/m5/oc13) with the same key sequence.  Artifacts land in
-# build/runs/m5/<stamp>/; exits non-zero on any mismatch.
+# tests/c/m5_checkpoints.txt, taken from the original's fixed-seam recording
+# (build/tmp/or3) driven through the same key and mouse sequence.  Artifacts
+# land in build/runs/m5/<stamp>/; exits non-zero on any mismatch.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 BUILD="$ROOT/build/c"
@@ -74,7 +74,7 @@ if ! grep -q 'exited=0' "$RUN/checkpoint/stderr.log"; then
 fi
 
 python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
-    "$ROOT/tests/c/m5_checkpoints.txt" --min-hold 1 --globals m5 \
-    --dump "$RUN/checkpoint"
+    "$ROOT/tests/c/m5_checkpoints.txt" --min-hold 1 --hold-to frame \
+    --globals m5 --dump "$RUN/checkpoint"
 
 echo "m5: OK ($RUN)"
