@@ -9,7 +9,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
           tools/                 build.sh (variants), verify.sh, verify_asm.py, seam_pin.py, ...
         sbfmdrv/                 SBFMDRV.COM, the FM driver the game installs
           src/                   sbfmdrv.asm
-          tools/                 build.sh, verify.sh, generate.py, verify.py
+          tools/                 build.sh, verify.sh, generate.py, verify.py, tables.py
           test/                  DOSBox-X black-box harness (api / uninstall / music)
       c/                         stage 2: the C core, protocol/service boundary and headless stub
     client/                      the C# companion client (SDL3)

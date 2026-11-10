@@ -22,6 +22,9 @@ engine.  The game locates it by the "FMDRV" signature at resident offset 103h.
 - `tools/build.sh` - assemble `src/sbfmdrv.asm` into `build/sbfmdrv/`.
 - `tools/verify.sh` - build and byte-verify against `_ref/orig-bin/SBFMDRV.COM`.
 - `tools/verify.py` - exact size/MD5/per-byte comparison.
+- `tools/tables.py` - emits the C engine's `engine/c/src/game/sound_tables.h`
+  from the resident instrument/percussion/pitch tables (`--check` proves the
+  checked-in header is current).
 - `tools/SBFMDRV.COM.md5` - reference hash.
 
 ## Build and verify

@@ -696,6 +696,9 @@ void yt2_game_present(yt2_machine *machine)
     int forced = machine->present_force;
 
     machine->present_force = 0;
+    /* OPL/speaker messages are independent of the picture; drain them even
+       when this pass has no changed framebuffer. */
+    yt2_sound_flush(machine);
     /* The SEAM polls the link inside every present pass. */
     if (machine->link_ready) {
         yt2_link_poll(machine);
@@ -1138,8 +1141,16 @@ int yt2_dos_int21(yt2_machine *machine)
             machine->r.bx = 0;
             machine->r.es = YT2_SENTINEL_SEG;
         } else {
-            machine->r.bx = 0;
-            machine->r.es = 0;
+            uint16_t segment = 0;
+            uint16_t offset = 0;
+
+            if (yt2_sound_vector(machine, al, &segment, &offset)) {
+                machine->r.bx = offset;
+                machine->r.es = segment;
+            } else {
+                machine->r.bx = 0;
+                machine->r.es = 0;
+            }
         }
         break;
     case 0x48u: {

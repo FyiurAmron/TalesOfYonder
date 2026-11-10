@@ -54,7 +54,9 @@ for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
 done
 
 set +e
-timeout 300s "$GAME" --game "$RUN/game" --link --ticks "$TICKS" \
+# The resident SBFMDRV changes intro and script timing; this recording
+# pins the game's silent path so the scripted ticks stay aligned.
+timeout 300s "$GAME" --game "$RUN/game" --link --ticks "$TICKS" --no-sound \
     --transfers "$TRANSFERS" --pin-dos-time 0x1234 \
     --input-script "$ROOT/tests/c/m5_input.txt" \
     --present-log "$RUN/checkpoint/present.txt" \

@@ -253,11 +253,14 @@ def cmd_game_link(args) -> int:
     if not any(family == 1 and codec == 1 and payload and payload[0] == VIDEO_RECT
                for _, _, family, codec, _, payload in records):
         raise AssertionError("the live game never sent a codec-1 row")
+    audio = sum(1 for _, _, family, _, _, _ in records if family == 2)
+    if audio < 1:
+        raise AssertionError("the live game never sent an audio message")
     for _, _, family, _, _, _ in records:
-        if family not in (1, 5):
+        if family not in (1, 2, 5):
             raise AssertionError(f"unexpected live game family {family}")
     print(f"c game link: OK ({len(records)} records, {rects} RLE rows, "
-          f"{scrolls} scrolls, {ends} frames, modes {modes})")
+          f"{scrolls} scrolls, {ends} frames, {audio} audio, modes {modes})")
     return 0
 
 

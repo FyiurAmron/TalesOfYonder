@@ -14,7 +14,8 @@ The seam build is not byte-identical by design; the oracle build stays byte-perf
 `docs/stream.md`; the boundary contract is `docs/protocol.md`.
 The transliterated C engine speaks the same `OUTPUT.BIN`/`INPUT.BIN` link (`--live`) and
 is playable from the bundle with `--server c`; it streams mode 13h and the VBE intro
-modes, with run-length rows and scroll messages (OPL/speaker audio is M6).
+modes, with run-length rows, scroll messages and the resident SBFMDRV's OPL/speaker
+stream (`--sound`, the default; `--no-sound` keeps the silent path).
 
 ## Pieces
 
@@ -49,7 +50,8 @@ The transliterated C engine speaks the same link and needs no DOSBox-X:
 
 or, from the tree, `build/c/yt2game --game DIR --live` next to a client following
 `DIR/OUTPUT.BIN`. The C server presents mode 13h and the VBE intro modes, using the
-run-length rows and scroll messages above; audio waits for M6. See `engine/c/README.md`.
+run-length rows, scroll messages and OPL/speaker audio messages above. See
+`engine/c/README.md`.
 
 The client waits for `OUTPUT.BIN`, so the start order does not matter; on a video ring wrap the
 engine follows with a keyframe, so a client that starts late resynchronises. Both `.BIN` files carry
@@ -412,9 +414,10 @@ SBFMDRV is a music driver: the game's SFX path (`fn_PlaySFX`) normally needs
 does not provide.  The data path is still there: WORLD.DAT carries 80
 Creative Voice File records (8-bit unsigned PCM, 4–15 kHz, 0.1–5 s), indexed
 by the game's SFX pointer table at `DS:0CF51h` (`v_5160` = 80 entries).  The
-seam reports every `fn_PlaySFX` call instead: it replaces the first six-byte
-`TEST` with a far call plus nop, sends `AUDIO sample(id,offset,pit)` (type 5),
-and the client
+seam and the C server report every `fn_PlaySFX` call instead: the seam
+replaces the first six-byte `TEST` with a far call plus nop, and the emitted
+C calls `yt2_sound_sample` at the same instruction; both send
+`AUDIO sample(id,offset,pit)` (type 5), and the client
 reads the VOC record at `offset` from the WORLD.DAT next to `OUTPUT.BIN`
 (`--world` overrides the lookup).  The client resamples the record onto the
 same PIT timeline as the FM writes and mixes it with the OPL output, so the

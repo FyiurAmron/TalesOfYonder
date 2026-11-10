@@ -79,6 +79,30 @@ checkpoint frames and the settled globals with the original's recording.
 
     sh tests/c/game.sh [--no-build] [--ticks N]
 
+## `tests/c/audio.py`
+
+Compares a `yt2game --audio-log` capture with `tests/data/music-walk.dro`.
+The register state at the first note must match the capture's snapshot, every
+effective OPL write after it must match (both streams go through the DRO's
+last-value cache), and the note-ons must land on the driver's 96 Hz tick grid;
+the block duration and note count come from the capture. `tests/c/run.sh` runs
+it on a 700-tick game run.
+
+    python3 tests/c/audio.py AUDIO.LOG tests/data/music-walk.dro
+
+## `tests/c/sfx.sh`
+
+The sound-effect boundary check: runs the scripted opening with the resident
+driver on, then requires every `fn_PlaySFX` request in the audio log (`P pit
+id offset`, the seam's AUDIO sample pair) to point at a Creative Voice File
+record in WORLD.DAT.  This pins the emitted `fn_PlaySFX` hook, which is what
+puts the game's authored effects on the client; without it the C server only
+beeped for effect 3.
+
+    sh tests/c/sfx.sh [--no-build] [--ticks N]
+
+`tests/c/run.sh` runs it after the OPL music check.
+
 ## `tests/c/intro.sh`
 
 The intro presentation check: the logo fades must be ramps (one palette step

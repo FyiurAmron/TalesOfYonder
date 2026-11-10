@@ -834,8 +834,10 @@ DOSBox-X -- but the call is **not** a valid driver interface:
 The music path via the int API is functional (section 6).  The seam does
 **not** emulate the far entry: it hooks `fn_PlaySFX` itself, sends the effect
 id, WORLD.DAT offset and PIT stamp, and the client renders the VOC record
-directly (docs/client.md).  The reference build keeps the zero far entry and
-the effect-3 PC-speaker fallback.
+directly (docs/client.md).  The C port does the same from the emitted hook at
+`fn_PlaySFX`'s first `TEST` (`yt2_sound_sample`), which is what makes the
+authored effects audible when the resident driver is on.  The reference build
+keeps the zero far entry and the effect-3 PC-speaker fallback.
 
 ## 8. Open items
 

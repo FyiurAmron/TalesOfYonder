@@ -122,10 +122,13 @@ static void yt2_usage(const char *program)
     fprintf(stderr,
             "usage: %s [--game DIR] [--transfers N] [--ticks N] [--trace-api] [--dump DIR]\n"
             "          [--ppm FILE] [--present-log FILE] [--present-dir DIR]\n"
-            "          [--input-script FILE] [--pin-dos-time N]\n"
-            "          [--live|--link] [--no-pace] [--trace-input]\n"
-            "          [--cycles-per-ms N]\n"
+            "          [--input-script FILE] [--pin-dos-time N] [--audio-log FILE]\n"
+            "          [--sound|--no-sound] [--live|--link] [--no-pace]\n"
+            "          [--trace-input] [--cycles-per-ms N]\n"
             "\n"
+            "  --sound    export BLASTER/SOUND and emulate the resident SBFMDRV\n"
+            "             (default; the CH2.BAT path)\n"
+            "  --no-sound leave the environment empty, the game's no-sound path\n"
             "  --live     play: folder link (OUTPUT.BIN/INPUT.BIN) and real-time pacing\n"
             "  --link     folder link only, as fast as the host runs\n"
             "  --no-pace  with --live, run the link without the guest clock\n"
@@ -152,11 +155,13 @@ int main(int argc, char **argv)
     const char *present_log = NULL;
     const char *present_dir = NULL;
     const char *input_script = NULL;
+    const char *audio_log = NULL;
     unsigned long transfers = 0;
     unsigned long limit_ticks = 0;
     unsigned long cycles_per_ms = YT2_CYCLES_PER_MS;
     unsigned long pin_dos_time = 0;
     int have_pin_dos_time = 0;
+    int sound = 1;
     int trace = 0;
     int trace_input = 0;
     int link = 0;
@@ -186,6 +191,12 @@ int main(int argc, char **argv)
             present_dir = argv[++index];
         } else if (strcmp(argv[index], "--input-script") == 0 && index + 1 < argc) {
             input_script = argv[++index];
+        } else if (strcmp(argv[index], "--audio-log") == 0 && index + 1 < argc) {
+            audio_log = argv[++index];
+        } else if (strcmp(argv[index], "--sound") == 0) {
+            sound = 1;
+        } else if (strcmp(argv[index], "--no-sound") == 0) {
+            sound = 0;
         } else if (strcmp(argv[index], "--live") == 0) {
             link = 1;
             pace = 1;
@@ -207,6 +218,7 @@ int main(int argc, char **argv)
     }
 
     yt2_game_init(&g_m, game);
+    g_m.sound_enabled = sound;
     if (cycles_per_ms == 0u || cycles_per_ms > 1000000u) {
         fprintf(stderr, "yt2: --cycles-per-ms needs a value in 1..1000000\n");
         return 2;
@@ -232,6 +244,16 @@ int main(int argc, char **argv)
     if (input_script != NULL && yt2_game_load_script(&g_m, input_script) != YT2_OK) {
         return 2;
     }
+    if (audio_log != NULL) {
+        FILE *stream = fopen(audio_log, "w");
+
+        if (stream == NULL) {
+            fprintf(stderr, "yt2: cannot write %s: %s\n", audio_log,
+                    strerror(errno));
+            return 2;
+        }
+        yt2_sound_set_log(&g_m, stream);
+    }
     yt2_game_load(&g_m);
     if (have_pin_dos_time) {
         g_m.pin_dos_time = (uint16_t)pin_dos_time;
@@ -240,6 +262,9 @@ int main(int argc, char **argv)
 
     (void)yt2_game_run(&g_m, transfers);
 
+    if (g_m.sound.log != NULL) {
+        yt2_sound_flush(&g_m);
+    }
     if (dump != NULL) {
         yt2_dump_checkpoint(&g_m, dump);
     }

@@ -132,6 +132,8 @@ Platform layer (the only modern code):
   to the host/client;
 - clock: logical 18.2 Hz tick; `int 1Ah`/int 1Ch served from it → deterministic replay;
 - sound: OPL2/3 core + reimplemented `SBFMDRV` INT 00h protocol (see `docs/sbfmdrv.md`);
+  the game's WORLD.DAT effects go out as AUDIO sample records from the emitted
+  `fn_PlaySFX` hook, as in the seam;
 - record/replay + transport backends: the same service calls can be logged to a stream, replayed,
   or forwarded to a companion client (§5).
 
