@@ -1966,3 +1966,49 @@ items now live in `docs/roadmap.md`).
     No `swreg.asm` change; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`, and the seam build is intentionally
     not byte-identical.
+- 2026-11-10 - M6 sound: resident SBFMDRV and the audio boundary:
+  - **resident emulation**: `engine/c/src/game/game_sound.c` implements the
+    SBFMDRV 1.34 resident API from `docs/sbfmdrv.md` (the commands the game
+    uses plus pause/resume, volume and repeat, and the timer-ISR-driven
+    sequencer, voice/percussion allocation, PIT divisor handling).
+    `yt2_sound_init` installs
+    the `"FMDRV"` signature and the driver's own instrument, percussion, note,
+    F-number and velocity tables at their CS offsets in segment `F100`; the
+    game's INT 21h 35h scan finds the vector and patches its `int 0` stub as
+    usual.  The install leaves `reg 1 = 20h` (waveform select) and `reg 8 = 0`;
+    command 8 mirrors `sub_0D51` (stop, gate fill `101h`, instrument table
+    `CS:0159`, 96 Hz divisor `48D3h`, transpose 0), and the default-patch
+    loader keeps the shipped `[02CEh+voice]+voice` connection-register quirk.
+  - **boundary**: every OPL write leaves as an AUDIO `opl_batch_timed` message
+    with its 8253 channel-0 timebase; music start/stop emits the AUDIO control
+    byte, and port 61h gate edges emit speaker messages.  INT 80h is the only
+    driver interface: `v_SoundEntry` stays the vestigial zero far call and the
+    emitter turns its `lcall [0F7AEh]` into a no-op (`docs/sbfmdrv.md` §7).
+    Sound is on by default (`--sound`, the CH2.BAT path) and the game parses
+    `SOUND`/`BLASTER` from the PSP environment; `--no-sound` leaves the
+    environment empty.  The checkpoint gates pin `--no-sound` because the
+    resident driver changes intro/script timing.
+  - **PC speaker**: `game_machine.c` tracks the port 61h gate and PIT channel 2
+    divisors; `fn_SpeakerBeep` (S06E7) now produces the `S` gate/divisor pair
+    for the effect-3 fallback, and the new unit test drives it through the
+    dispatcher and requires divisor 662 and the four-tick on window.
+  - **disassembly fix**: `S187E:0314` is authored as a four-byte `db` plus a
+    relocated `dw S1DEA`; `tools/port/program.py`'s new `add_relocated_code`
+    merges the pair into one synthetic instruction so the port no longer
+    reports `bad entry at 187E:031C`.
+  - **verification**: `tests/c/audio.py` compares the engine's `--audio-log`
+    with `tests/data/music-walk.dro`: the register state at the first key-on
+    matches the capture snapshot, all 740 effective writes (after the DRO's
+    last-value cache) match, and 161 note-ons stop after 1119.0 ticks against
+    the reference's 96 Hz timeline (1118.976).  `tests/c/run.sh` includes the
+    audio gate, and the live-link check now accepts AUDIO records and requires
+    at least one.  `engine/asm/sbfmdrv/tools/tables.py`
+    regenerates `sound_tables.h` from the reference image (`--check` proves it
+    is current).
+  - **gates**: `sh tests/c/game.sh --no-build` (7 checkpoints),
+    `sh tests/c/game-m5.sh --no-build` (32 checkpoints) and
+    `sh tests/c/run.sh --no-build` are green; `yt2game-tests` covers the
+    speaker path.  No `swreg.asm` change: `engine/asm/swreg/tools/verify.sh`
+    still prints `SWREG.EXE: OK` + `IDENTICAL` (MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`); the SBFMDRV disassembly still
+    reassembles byte-identically (`0f679017d543b0947fc5a33456ba38a7`).

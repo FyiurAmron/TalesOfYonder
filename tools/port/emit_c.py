@@ -229,6 +229,16 @@ class Emitter:
 
     def emit_far_indirect(self, insn: model.Insn, ctx: Context) -> list[str]:
         op = insn.cs.operands[0]
+        if (insn.cs.mnemonic == "lcall" and op.type == X86_OP_MEM and
+                op.mem.base == 0 and op.mem.index == 0 and
+                (op.mem.disp & 0xFFFF) == 0xF7AE):
+            # v_SoundEntry is the game's vestigial far-call API.  SBFMDRV 1.34
+            # has no such entry point (docs/sbfmdrv.md section 7), so the
+            # original's zero/segment-only pointer lands in unrelated bytes.
+            # The port treats the call as a no-op; the detect call then leaves
+            # AX nonzero and the game disables the SFX half, keeping music on
+            # the resident INT API and the effect-3 PC-speaker fallback.
+            return ["/* v_SoundEntry: vestigial far API, no-op */"]
         local = Context()
         seg, ea = self.mem_ref(op, local)
         lines = [f"uint16_t off = YT2_MEM16({seg}, {ea});",

@@ -418,7 +418,11 @@ int yt2_machine_int(yt2_machine *machine, unsigned number)
             return 1;
         }
         return 0;
-    case 0x00u:
+    case 0x80u:
+        if (machine->sound_enabled) {
+            yt2_sound_int(machine);
+        }
+        return 0;
     case 0x03u:
         return 0;
     default:
@@ -1245,11 +1249,28 @@ void yt2_port_out8(uint16_t port, uint8_t value)
             }
         }
         break;
-    case 0x61u:
+    case 0x61u: {
+        uint8_t old_gate = (uint8_t)(g_m.port61 & 0x03u);
+        uint8_t new_gate = (uint8_t)(value & 0x03u);
+
         g_m.port61 = value;
+        if (old_gate != 0x03u && new_gate == 0x03u) {
+            yt2_sound_speaker(&g_m, 1u, g_m.pit42_divisor);
+        } else if (old_gate == 0x03u && new_gate != 0x03u) {
+            yt2_sound_speaker(&g_m, 0u, 0u);
+        }
         break;
+    }
     case 0x42u:
         g_m.pit42 = value;
+        if (!g_m.pit42_half) {
+            g_m.pit42_low = value;
+            g_m.pit42_half = 1;
+        } else {
+            g_m.pit42_divisor = (uint16_t)((uint16_t)g_m.pit42_low |
+                                           ((uint16_t)value << 8));
+            g_m.pit42_half = 0;
+        }
         break;
     default:
         break;
@@ -1308,12 +1329,14 @@ void yt2_game_init(yt2_machine *machine, const char *root)
     if (root != NULL) {
         snprintf(machine->root, sizeof(machine->root), "%s", root);
     }
+    machine->sound_enabled = 1;
     machine->dos_block_count = 1u;
     machine->dos_blocks[0].segment = YT2_DOS_HEAP_START;
     machine->dos_blocks[0].paragraphs = (uint16_t)(YT2_DOS_HEAP_END - YT2_DOS_HEAP_START);
     machine->dos_blocks[0].used = 0;
     machine->cycles = 0u;
     yt2_game_set_clock(machine, YT2_CYCLES_PER_MS);
+    yt2_sound_init(machine);
     machine->int1c_cs = YT2_SENTINEL_SEG;
     machine->int1c_ip = YT2_SENTINEL_IRET;
     /* The EMS driver probe reads the device name through the int 67h vector.
@@ -1358,6 +1381,24 @@ void yt2_game_load(yt2_machine *machine)
 
     psp = machine->mem.bytes + ((uint32_t)YT2_PSP_SEG << 4);
     memset(psp, 0, 0x100u);
+    /* CH2.BAT normally installs SBFMDRV and exports SOUND/BLASTER before
+       starting SWREG.  The resident driver is emulated, but the game still
+       parses these variables from the DOS environment; the PSP environment
+       pointer must be valid or fn_SoundParseEnv disables sound entirely. */
+    if (machine->sound_enabled) {
+        static const char environment[] =
+            "SOUND=CHAPTER2\0"
+            "BLASTER=A220 I7 D1 H5 T6\0"
+            "\0";
+        uint8_t *env = machine->mem.bytes + ((uint32_t)YT2_ENV_SEG << 4);
+
+        memcpy(env, environment, sizeof(environment) - 1u);
+        psp[0x2Cu] = (uint8_t)(YT2_ENV_SEG & 0xFFu);
+        psp[0x2Du] = (uint8_t)(YT2_ENV_SEG >> 8);
+    } else {
+        psp[0x2Cu] = 0;
+        psp[0x2Du] = 0;
+    }
     /* CH2.BAT runs "SWREG.EXE %1 %2 %3 %4 /W /B"; the game checks for /B. */
     psp[0x80] = 6;
     memcpy(psp + 0x81, " /W /B", 6);
@@ -1430,6 +1471,7 @@ void yt2_game_shutdown(yt2_machine *machine)
     }
     free(machine->ems_pool);
     machine->ems_pool = NULL;
+    yt2_sound_shutdown(machine);
 }
 
 int yt2_game_load_script(yt2_machine *machine, const char *path)

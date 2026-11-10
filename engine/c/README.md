@@ -156,7 +156,9 @@ The whole thing ships as a bundle without DOSBox-X:
     build/dist/yt2-linux-x64/play.sh
 
 The C server presents mode 13h and both VBE intro modes (640x480 mode 101h,
-640x400 mode 100h); the FM/PC-speaker stream waits for M6, so the engine is silent.
+640x400 mode 100h); the resident SBFMDRV path streams FM/PC-speaker audio by
+default, and `--no-sound` keeps the engine silent (the checkpoint gates pin it
+because the driver changes intro/script timing).
 The original intro and attract run about 5.5 minutes before the title menu; that pacing is
 the oracle's, not a stall. The menu accepts the mouse (the client maps the desktop pointer
 to game pixels) and the keyboard.
@@ -172,17 +174,22 @@ rows and the pan rules.
 ## Deliberate limits
 
 - VIDEO codec 1 (row runs) and whole-screen `scroll(dy)` detection are in place; LZ is
-  still future. The AUDIO payload encoders exist, but no sound engine emits them yet.
+  still future. AUDIO messages carry the driver's OPL register batches with PIT stamps,
+  its music control state and PC-speaker gate edges.
 - The stub scene is 320x200x8; the game's VBE intro modes are presented, and
   `LOGO.PCX` is absent from `_ref/orig-bin/`, so the intro falls through to the
   title as it does in the oracle run.
-- SBFMDRV is not resident yet (M6): the game's sound calls are accepted but no OPL
-  stream is produced.
+- SBFMDRV is emulated, not executed: `game_sound.c` implements the resident INT API,
+  timer ISR and sequencer from `docs/sbfmdrv.md`, and installs the signature and
+  tables the game's vector scan looks for. The installer, far entry and SB IRQ path
+  stay out of scope; the game's `v_SoundEntry` calls are no-ops (the driver has no
+  such entry point).
 - The cycle model is DOSBox-X's `core=normal`: one cycle per instruction and one per
   REP iteration, charged while the copy runs, with the vertical sync pulse (two
-  scanlines) as the port 3DAh retrace window. The intro's later waits still run long
-  because the original's sound driver reports idle and cuts them short; SBFMDRV is not
-  resident yet (M6). The settled checkpoint frames match, the four attract holds follow
+  scanlines) as the port 3DAh retrace window. The intro's later waits run long under
+  `--no-sound`; with the resident driver the music service cuts them short. The
+  checkpoint gates pin `--no-sound` so the scripted runs keep the recorded timing.
+  The settled checkpoint frames match, the four attract holds follow
   the original's 91-tick scene countdown (93 settled-to-next-change ticks, pinned in
   `tests/c/game_checkpoints.txt`), and the fade rate and the gate star are pinned by the
   timing model.

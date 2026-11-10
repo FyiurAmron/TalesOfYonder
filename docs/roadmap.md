@@ -15,7 +15,7 @@ rules are in `docs/porting.md`; the dated record is `docs/progress.md`.
 | M3 | ✓ | First light | emitted C reaches title/attract; checkpoint hashes match oracle on the no-input path; the same engine is playable through the live folder link (`yt2game --live`, mode 13h) |
 | M4 | ✓ | Subsystem migration | all non-sound modules ported + tested in dependency order (`docs/porting.md` §3); streams diff against TRACE builds |
 | M5 | ✓ | Gameplay slice | scripted char-creation → walking → combat session matches oracle; extended through the spider victory and chest loot |
-| M6 | — | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
+| M6 | ✓ | Sound | FM music audible; SFX path resolved (SBFMDRV carries music only in this chapter; the effect-3 PC-speaker fallback is streamed and rendered); port-write goldens match |
 | M7 | — | C code cleanup & packaging | typed structures, 16-bit artifacts removed; Linux/Windows builds; spec frozen |
 | M8 | — | Companion client | C core as a host-neutral library over direct/in-process, IPC (shared memory/socket) and record/replay transports; the SDL client renders, plays OPL and injects input on them (the folder link stays a debug backend); replay from recordings; input and audio scheduled on one boundary clock |
 | M9 | — | C# bootstrap | new solution; starts as stream client/front-end; mechanical translation of frozen C passes replay tests |
@@ -27,12 +27,8 @@ rules are in `docs/porting.md`; the dated record is `docs/progress.md`.
 
 ## Next
 
-- **M6 - sound (next).** Make the C engine's SBFMDRV path resident and
-  emit the original's OPL/PC-speaker stream; the client already synthesizes
-  it and `tests/audio` has the harness.  This also closes the intro's long
-  `v_0C2C` waits.
 - **Optional save/load button test.**  The save data already matches
   (`CURGAME`); a small UI regression test can save to a `SAVEGAMEX` slot,
   load it back and check the party state.
 - **M7 - C code cleanup and packaging.**  Typed structures, 16-bit artifacts removed,
-  Linux/Windows builds and the frozen spec, after M6.
+  Linux/Windows builds and the frozen spec.

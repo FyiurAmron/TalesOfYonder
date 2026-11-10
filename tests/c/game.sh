@@ -58,7 +58,9 @@ else
     set --
 fi
 set +e
-timeout 300s "$GAME" --game "$RUN/game" --ticks "$TICKS" \
+# The resident SBFMDRV changes intro and script timing; these checkpoints
+# pin the game's silent path so the scripted ticks stay aligned.
+timeout 300s "$GAME" --game "$RUN/game" --ticks "$TICKS" --no-sound \
     --transfers "$TRANSFERS" --present-log "$RUN/checkpoint/present.txt" \
     --dump "$RUN/checkpoint" "$@" \
     >"$RUN/checkpoint/stdout.log" 2>"$RUN/checkpoint/stderr.log"

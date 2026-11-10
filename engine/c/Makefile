@@ -22,7 +22,8 @@ LIB_SOURCES := \
 GAME_SOURCES := \
 	src/game/game_link.c \
 	src/game/game_machine.c \
-	src/game/game_services.c
+	src/game/game_services.c \
+	src/game/game_sound.c
 
 GAME_MAIN_SOURCE := src/game/game_main.c
 

@@ -1,5 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "test.h"
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "yt2/game.h"
@@ -1079,6 +1082,81 @@ static void test_divide_overflow(void)
     CHECK(g_m.r.ax == 3u && g_m.r.dx == 1u);
 }
 
+/* Run the game's own fn_SpeakerBeep (S06E7) through the dispatcher and check
+   the PC-speaker fallback: PIT channel 2 divisor 662 (~1.8 kHz), a gate-on
+   edge, four BIOS ticks of delay, and the matching gate-off edge.  The log
+   is the same AUDIO boundary the client consumes, so the line format is part
+   of what M6 checks. */
+static void test_speaker_beep(void)
+{
+    char *buffer = NULL;
+    size_t size = 0;
+    FILE *log = open_memstream(&buffer, &size);
+    uint16_t saved_ss = g_m.r.ss;
+    uint16_t saved_sp = g_m.r.sp;
+    uint16_t saved_next_cs = g_m.next_cs;
+    uint16_t saved_next_ip = g_m.next_ip;
+    int saved_pending = g_m.next_pending;
+    uint32_t on_pit = 0;
+    uint32_t off_pit = 0;
+    unsigned on_divisor = 0;
+    int on = 0;
+    int off = 0;
+
+    CHECK(log != NULL);
+    if (log == NULL) {
+        return;
+    }
+    yt2_sound_set_log(&g_m, log);
+    /* The generated code fetches the INT number from the instruction stream
+       at CS:IP-1, so the game image must be mapped for fn_DelayTicks. */
+    yt2_game_load(&g_m);
+    g_m.r.ss = YT2_LOAD_SEG;
+    g_m.r.sp = 0xFF00u;
+    yt2_push16(YT2_SENTINEL_SEG);
+    yt2_push16(YT2_SENTINEL_RESUME);
+    yt2_go((uint16_t)(YT2_LOAD_SEG + 0x06E7u), 0x0006u);
+    (void)yt2_game_run(&g_m, 2000000u);
+    yt2_sound_set_log(&g_m, NULL);
+    fflush(log);
+    fclose(log);
+    g_m.r.ss = saved_ss;
+    g_m.r.sp = saved_sp;
+    g_m.next_cs = saved_next_cs;
+    g_m.next_ip = saved_next_ip;
+    g_m.next_pending = saved_pending;
+
+    if (buffer != NULL) {
+        char *line = buffer;
+        while (line != NULL && *line != '\0') {
+            char *end = strchr(line, '\n');
+            unsigned pit;
+            unsigned gate;
+            unsigned divisor;
+            if (end != NULL) {
+                *end = '\0';
+            }
+            if (sscanf(line, "S %x %u %u", &pit, &gate, &divisor) == 3) {
+                if (gate != 0u) {
+                    on = 1;
+                    on_pit = pit;
+                    on_divisor = divisor;
+                } else {
+                    off = 1;
+                    off_pit = pit;
+                }
+            }
+            line = end != NULL ? end + 1 : NULL;
+        }
+    }
+    CHECK(on);
+    CHECK(off);
+    CHECK(on_divisor == 662u);
+    CHECK(off_pit > on_pit);
+    CHECK(off_pit - on_pit > 200000u && off_pit - on_pit < 330000u);
+    free(buffer);
+}
+
 int main(void)
 {
     yt2_game_init(&g_m, NULL);
@@ -1099,6 +1177,7 @@ int main(void)
     test_vbe_modes();
     test_clock_int1a();
     test_mouse_int33();
+    test_speaker_beep();
     yt2_game_shutdown(&g_m);
     if (test_failures != 0) {
         fprintf(stderr, "yt2game-tests: %d failure(s)\n", test_failures);

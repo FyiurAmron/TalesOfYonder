@@ -8,6 +8,7 @@
 #include "yt2/cpu.h"
 #include "yt2/memory.h"
 #include "yt2/service.h"
+#include "yt2/sound.h"
 #include "yt2/transport.h"
 #include "yt2/video.h"
 
@@ -20,6 +21,7 @@
 
 #define YT2_LOAD_SEG 0x1000u
 #define YT2_PSP_SEG (YT2_LOAD_SEG - 0x10u)
+#define YT2_ENV_SEG (YT2_LOAD_SEG - 0x100u)
 #define YT2_SENTINEL_SEG 0xF000u
 #define YT2_SENTINEL_IRET 0x0000u
 #define YT2_SENTINEL_RESUME 0x0001u
@@ -180,9 +182,17 @@ typedef struct yt2_machine {
     uint8_t present_palette[768];
     char present_dir[512];
 
+    /* Sound bring-up: the shipped game runs under CH2.BAT with BLASTER/SOUND
+       exported and SBFMDRV resident.  --no-sound leaves the environment empty
+       so the game takes its documented "no sound this run" path. */
+    int sound_enabled;
+
     /* Ports the game touches directly. */
     uint8_t port61;
     uint8_t pit42;
+    uint8_t pit42_low;
+    uint16_t pit42_divisor;
+    int pit42_half;
 
     /* DOS file service. */
     char root[512];
@@ -217,6 +227,7 @@ typedef struct yt2_machine {
     yt2_transport transport;
     yt2_service service;
     yt2_video video;
+    yt2_sound sound;
 
     /* Real-time pacing: guest cycles against the host's monotonic PIT clock. */
     int pace;
@@ -289,6 +300,10 @@ void yt2_game_present(yt2_machine *machine);
 static inline void yt2_cycles(uint32_t cycles)
 {
     g_m.cycles += cycles;
+    if (g_m.sound.installed && g_m.sound.tick_active &&
+        g_m.cycles >= g_m.sound.tick_at) {
+        yt2_sound_poll(&g_m);
+    }
     if (g_m.cycles >= g_m.tick_at) {
         yt2_cycles_slow();
     } else {

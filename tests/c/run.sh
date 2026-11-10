@@ -209,13 +209,25 @@ mkdir -p "$RUN/game" "$RUN/checkpoint"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
     cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
 done
-timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 3600 \
+timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 3600 --no-sound \
     --transfers 100000000 --present-log "$RUN/checkpoint/present.txt" \
     --dump "$RUN/checkpoint" >"$RUN/checkpoint/stdout.log" \
     2>"$RUN/checkpoint/stderr.log"
 grep -q 'exited=0' "$RUN/checkpoint/stderr.log"
 python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
     "$ROOT/tests/c/game_checkpoints.txt" --dump "$RUN/checkpoint"
+
+echo "c: game audio"
+mkdir -p "$RUN/audio/game"
+for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
+    cp "$ROOT/_ref/orig-bin/$file" "$RUN/audio/game/$file"
+done
+timeout 300s "$BUILD/yt2game" --game "$RUN/audio/game" --ticks 700 \
+    --audio-log "$RUN/audio/audio.log" >"$RUN/audio/stdout.log" \
+    2>"$RUN/audio/stderr.log"
+grep -q 'exited=0' "$RUN/audio/stderr.log"
+python3 "$ROOT/tests/c/audio.py" "$RUN/audio/audio.log" \
+    "$ROOT/tests/data/music-walk.dro"
 
 echo "c: game M5 gameplay"
 sh "$ROOT/tests/c/game-m5.sh" --no-build
