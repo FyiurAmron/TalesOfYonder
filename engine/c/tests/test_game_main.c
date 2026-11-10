@@ -1,11 +1,36 @@
-#define _POSIX_C_SOURCE 200809L
-
 #include "test.h"
 
 #include <stdlib.h>
 #include <string.h>
 
 #include "yt2/game.h"
+
+/* Read a diagnostic log back.  tmpfile() is C11 and works on both Linux and
+   Windows; the POSIX open_memstream this used to call does not exist on
+   Windows. */
+static char *test_read_log(FILE *log)
+{
+    long length;
+    char *data;
+
+    if (fflush(log) != 0 || fseek(log, 0, SEEK_END) != 0) {
+        return NULL;
+    }
+    length = ftell(log);
+    if (length < 0 || fseek(log, 0, SEEK_SET) != 0) {
+        return NULL;
+    }
+    data = malloc((size_t)length + 1u);
+    if (data == NULL) {
+        return NULL;
+    }
+    if (fread(data, 1, (size_t)length, log) != (size_t)length) {
+        free(data);
+        return NULL;
+    }
+    data[length] = '\0';
+    return data;
+}
 
 /*
  * Regression tests for the string instructions the emitted code leans on.
@@ -1090,8 +1115,7 @@ static void test_divide_overflow(void)
 static void test_speaker_beep(void)
 {
     char *buffer = NULL;
-    size_t size = 0;
-    FILE *log = open_memstream(&buffer, &size);
+    FILE *log = tmpfile();
     uint16_t saved_ss = g_m.r.ss;
     uint16_t saved_sp = g_m.r.sp;
     uint16_t saved_next_cs = g_m.next_cs;
@@ -1118,13 +1142,14 @@ static void test_speaker_beep(void)
     yt2_go((uint16_t)(YT2_LOAD_SEG + 0x06E7u), 0x0006u);
     (void)yt2_game_run(&g_m, 2000000u);
     yt2_sound_set_log(&g_m, NULL);
-    fflush(log);
+    buffer = test_read_log(log);
     fclose(log);
     g_m.r.ss = saved_ss;
     g_m.r.sp = saved_sp;
     g_m.next_cs = saved_next_cs;
     g_m.next_ip = saved_next_ip;
     g_m.next_pending = saved_pending;
+    CHECK(buffer != NULL);
 
     if (buffer != NULL) {
         char *line = buffer;
@@ -1166,8 +1191,7 @@ static void test_speaker_beep(void)
 static void test_play_sfx_sample(void)
 {
     char *buffer = NULL;
-    size_t size = 0;
-    FILE *log = open_memstream(&buffer, &size);
+    FILE *log = tmpfile();
     uint16_t saved_ss = g_m.r.ss;
     uint16_t saved_sp = g_m.r.sp;
     uint16_t saved_ds = g_m.r.ds;
@@ -1203,7 +1227,7 @@ static void test_play_sfx_sample(void)
     yt2_go((uint16_t)(YT2_LOAD_SEG + 0x187Eu), 0x019Cu);
     (void)yt2_game_run(&g_m, 2000000u);
     yt2_sound_set_log(&g_m, NULL);
-    fflush(log);
+    buffer = test_read_log(log);
     fclose(log);
     g_m.r.ss = saved_ss;
     g_m.r.sp = saved_sp;
@@ -1212,6 +1236,7 @@ static void test_play_sfx_sample(void)
     g_m.next_cs = saved_next_cs;
     g_m.next_ip = saved_next_ip;
     g_m.next_pending = saved_pending;
+    CHECK(buffer != NULL);
 
     if (buffer != NULL) {
         char *line = buffer;

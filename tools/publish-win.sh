@@ -1,13 +1,15 @@
 #!/bin/sh
-# Publish the self-contained Windows x64 client + asm server bundle.
+# Publish the self-contained Windows x64 client + engine server bundle.
 #
 #   sh tools/publish-win.sh [options]
 #
-#     --server KIND       asm (current) or c (future)
+#     --server KIND       asm (seam build) or c (the transliterated engine)
 #     --sdl3 PATH         use this SDL3.dll instead of downloading the pinned
 #                         release (its sha256 is still verified)
-#     --server-dir DIR    asm seam build to stage as server/game
-#                         (default: build/swreg/file, the folder-link build)
+#     --server-dir DIR    asm: seam build to stage as server/game
+#                         (default: build/swreg/file, the folder-link build);
+#                         c: the Windows x64 build holding yt2game.exe
+#                         (default: build/c-win, from build-mingw.sh)
 #     --out DIR           output root (default: build/dist)
 #     -n, --no-zip        leave the bundle directory unpacked only
 #
@@ -46,31 +48,43 @@ done
 
 SERVER=${SERVER:-asm}
 case "$SERVER" in
-    asm) SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file} ;;
+    asm)
+        SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file}
+        if [ ! -f "$SERVER_DIR/SWREG.EXE" ]; then
+            echo "publish-win: no seam build in $SERVER_DIR" >&2
+            echo "  build it first:  sh engine/asm/swreg/tools/build.sh --variant file" >&2
+            exit 1
+        fi
+        for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
+            if [ ! -f "$SERVER_DIR/$f" ]; then
+                echo "publish-win: $SERVER_DIR/$f is missing" >&2
+                exit 1
+            fi
+        done
+        ;;
     c)
-        echo "publish-win: the C server bundle needs a Windows yt2game.exe" >&2
-        echo "  build it on Windows first:  engine\\c\\tools\\build.bat (MSVC)" >&2
-        echo "  then pass --server-dir with a directory containing yt2game.exe;" >&2
-        echo "  the Windows launchers for the C engine are not wired yet" >&2
-        exit 2
+        SERVER_DIR=${SERVER_DIR:-$ROOT/build/c-win}
+        if [ ! -f "$SERVER_DIR/yt2game.exe" ]; then
+            echo "publish-win: no Windows C engine in $SERVER_DIR" >&2
+            echo "  build it first:  sh engine/c/tools/build-mingw.sh" >&2
+            exit 1
+        fi
+        if ! file "$SERVER_DIR/yt2game.exe" | grep -q 'PE32+.*x86-64'; then
+            echo "publish-win: $SERVER_DIR/yt2game.exe is not a 64-bit PE image" >&2
+            exit 1
+        fi
+        for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
+            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
+                echo "publish-win: _ref/orig-bin/$f is missing" >&2
+                exit 1
+            fi
+        done
         ;;
     *)
         echo "publish-win: --server must be asm or c" >&2
         exit 2
         ;;
 esac
-
-if [ ! -f "$SERVER_DIR/SWREG.EXE" ]; then
-    echo "publish-win: no seam build in $SERVER_DIR" >&2
-    echo "  build it first:  sh engine/asm/swreg/tools/build.sh --variant file" >&2
-    exit 1
-fi
-for f in CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
-    if [ ! -f "$SERVER_DIR/$f" ]; then
-        echo "publish-win: $SERVER_DIR/$f is missing" >&2
-        exit 1
-    fi
-done
 SAMPLE=$ROOT/tests/data/sample-timed-stream.bin
 if [ ! -f "$SAMPLE" ]; then
     echo "publish-win: $SAMPLE is missing (the timed BIN smoke-test stream)" >&2
@@ -119,23 +133,32 @@ CLIENT=$BUNDLE/client
 rm -rf "$BUNDLE"
 mkdir -p "$CLIENT" "$BUNDLE/sample" "$BUNDLE/server/game" "$BUNDLE/server/capture"
 
-echo "publish-win: publishing client+asm server bundle (win-x64, self-contained)"
+echo "publish-win: publishing client+$SERVER server bundle (win-x64, self-contained)"
 dotnet publish "$ROOT/client" -c Release -r win-x64 --self-contained true \
     -p:PublishSingleFile=true -p:DebugType=none -o "$CLIENT" >/dev/null
 cp "$DLL" "$CLIENT/SDL3.dll"
-cp "$PUBLISH_DIR/README.txt" "$BUNDLE/"
 cp "$PUBLISH_DIR/client-start.bat" "$BUNDLE/"
-cp "$PUBLISH_DIR/server-start.bat" "$BUNDLE/"
 cp "$PUBLISH_DIR/play.bat" "$BUNDLE/"
 cp "$PUBLISH_DIR/smoke-test.bat" "$BUNDLE/"
 cp "$SAMPLE" "$BUNDLE/sample/OUTPUT.BIN"
-for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
-    cp "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
-done
-# Windows profile, not the Linux oracle/CI one: it sets
-# "working directory option = noprompt" (DOSBox-X otherwise asks for a folder
-# on every start) and has no autosave/logging leftovers.
-cp "$PUBLISH_DIR/dosbox-x-server.conf" "$BUNDLE/server/dosbox-x.conf"
+if [ "$SERVER" = c ]; then
+    for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
+        cp "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+    done
+    cp "$SERVER_DIR/yt2game.exe" "$BUNDLE/server/game/yt2game.exe"
+    cp "$PUBLISH_DIR/server-start-c.bat" "$BUNDLE/server-start.bat"
+    cp "$PUBLISH_DIR/README-c.txt" "$BUNDLE/README.txt"
+else
+    for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
+        cp "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"
+    done
+    cp "$PUBLISH_DIR/server-start.bat" "$BUNDLE/server-start.bat"
+    cp "$PUBLISH_DIR/README.txt" "$BUNDLE/README.txt"
+    # Windows profile, not the Linux oracle/CI one: it sets
+    # "working directory option = noprompt" (DOSBox-X otherwise asks for a folder
+    # on every start) and has no autosave/logging leftovers.
+    cp "$PUBLISH_DIR/dosbox-x-server.conf" "$BUNDLE/server/dosbox-x.conf"
+fi
 
 # cmd.exe is unreliable with LF-only batch files; normalise every staged .bat
 # so an editor that writes LF cannot ship a broken launcher.
@@ -168,4 +191,4 @@ print("publish-win: %s (%.1f MB)" % (zpath, os.path.getsize(zpath) / 1e6))
 print("publish-win: sha256 %s" % hashlib.sha256(open(zpath, "rb").read()).hexdigest())
 PY
 fi
-echo "publish-win: client+asm server bundle in $BUNDLE"
+echo "publish-win: client+$SERVER server bundle in $BUNDLE"

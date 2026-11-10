@@ -1,49 +1,22 @@
 @echo off
-rem Build the C core, the stub and the unit tests with MSVC (C11).
-rem The M3 yt2game runner needs UASM and Python; use tools/build.sh for it.
+rem Build the transliterated C engine for Windows x64 with MinGW-w64.
+rem This is a thin wrapper around tools/build-mingw.sh (the same script the
+rem Linux tree cross-builds with); MSVC is not used.
+rem
+rem Requirements on PATH: an MSYS2/MinGW shell (sh, make), python3 and uasm.
+rem The game sources must already be emitted by tools/build.sh:
+rem
+rem   sh engine/c/tools/build.sh
+rem   engine\c\tools\build.bat
+rem
+rem Optional: set CC to another MinGW-w64 gcc (default:
+rem x86_64-w64-mingw32-gcc, falling back to a gcc whose target is mingw).
 setlocal
-set ROOT=%~dp0..\..
-set BUILD=%ROOT%\build\c
-if not exist "%BUILD%" mkdir "%BUILD%"
-pushd "%BUILD%"
-
-cl /nologo /std:c11 /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I"%ROOT%\engine\c\include" ^
-  "%ROOT%\engine\c\src\cpu.c" ^
-  "%ROOT%\engine\c\src\memory.c" ^
-  "%ROOT%\engine\c\src\platform.c" ^
-  "%ROOT%\engine\c\src\protocol.c" ^
-  "%ROOT%\engine\c\src\service.c" ^
-  "%ROOT%\engine\c\src\transport_folder.c" ^
-  "%ROOT%\engine\c\src\transport_null.c" ^
-  "%ROOT%\engine\c\src\transport_stream.c" ^
-  "%ROOT%\engine\c\src\video.c" ^
-  "%ROOT%\engine\c\src\stub.c" ^
-  /Fe:yt2stub.exe
-if errorlevel 1 goto fail
-
-cl /nologo /std:c11 /W4 /WX /D_CRT_SECURE_NO_WARNINGS /I"%ROOT%\engine\c\include" ^
-  "%ROOT%\engine\c\src\cpu.c" ^
-  "%ROOT%\engine\c\src\memory.c" ^
-  "%ROOT%\engine\c\src\platform.c" ^
-  "%ROOT%\engine\c\src\protocol.c" ^
-  "%ROOT%\engine\c\src\service.c" ^
-  "%ROOT%\engine\c\src\transport_folder.c" ^
-  "%ROOT%\engine\c\src\transport_null.c" ^
-  "%ROOT%\engine\c\src\transport_stream.c" ^
-  "%ROOT%\engine\c\src\video.c" ^
-  "%ROOT%\engine\c\tests\test_main.c" ^
-  "%ROOT%\engine\c\tests\test_memory.c" ^
-  "%ROOT%\engine\c\tests\test_cpu.c" ^
-  "%ROOT%\engine\c\tests\test_protocol.c" ^
-  "%ROOT%\engine\c\tests\test_service.c" ^
-  "%ROOT%\engine\c\tests\test_video.c" ^
-  /Fe:yt2core-tests.exe
-if errorlevel 1 goto fail
-
-echo build: c -^> %BUILD%
-popd
-exit /b 0
-
-:fail
-popd
-exit /b 1
+where sh >nul 2>nul
+if errorlevel 1 (
+    echo build: sh.exe was not found on PATH.
+    echo Run this from an MSYS2 MinGW64 shell, or use tools/build-mingw.sh.
+    exit /b 1
+)
+sh "%~dp0build-mingw.sh" %*
+exit /b %ERRORLEVEL%

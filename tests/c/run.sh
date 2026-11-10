@@ -232,6 +232,9 @@ python3 "$ROOT/tests/c/audio.py" "$RUN/audio/audio.log" \
 echo "c: game sound effects"
 sh "$ROOT/tests/c/sfx.sh" --no-build
 
+echo "c: game save/load panel"
+sh "$ROOT/tests/c/saveload.sh" --no-build
+
 echo "c: game M5 gameplay"
 sh "$ROOT/tests/c/game-m5.sh" --no-build
 
@@ -240,5 +243,8 @@ sh "$ROOT/tests/c/star.sh" --no-build
 
 echo "c: VBE publisher logo"
 sh "$ROOT/tests/c/vbe.sh" --no-build
+
+echo "c: Windows x64 cross-build"
+sh "$ROOT/tests/c/windows.sh"
 
 echo "c: OK (artifacts in $RUN)"

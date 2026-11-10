@@ -2,8 +2,12 @@
 
 #include "yt2/platform.h"
 
+#include <stdio.h>
+
 #if defined(_WIN32)
 #include <windows.h>
+#include <fcntl.h>
+#include <io.h>
 #else
 #include <time.h>
 #endif
@@ -37,6 +41,14 @@ uint32_t yt2_platform_pit_now(void)
     ticks = seconds * (uint64_t)YT2_PIT_RATE +
             (nanoseconds * (uint64_t)YT2_PIT_RATE) / 1000000000u;
     return (uint32_t)(ticks & 0xFFFFFFFFu);
+#endif
+}
+
+void yt2_platform_console_binary(void)
+{
+#if defined(_WIN32)
+    (void)_setmode(_fileno(stdout), _O_BINARY);
+    (void)_setmode(_fileno(stderr), _O_BINARY);
 #endif
 }
 

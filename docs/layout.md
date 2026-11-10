@@ -11,7 +11,9 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
           src/                   sbfmdrv.asm
           tools/                 build.sh, verify.sh, generate.py, verify.py, tables.py
           test/                  DOSBox-X black-box harness (api / uninstall / music)
-      c/                         stage 2: the C core, protocol/service boundary and headless stub
+      c/                         B1 pseudo-port/executable spec: emitted instruction-level
+                                 C, protocol/service boundary, headless stub, file/save
+                                 records and Windows x64 cross-build (not the product)
     client/                      the C# companion client (SDL3)
       publish/win/               static files that go into the Windows bundle
       publish/linux/             static files that go into the Linux bundle
@@ -35,7 +37,8 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
 |---|---|
 | `build/swreg/{oracle,serial,file,tee,log}/` | the seam variants, staged with the minimum game files so the directory runs as-is |
 | `build/sbfmdrv/`, `build/sbfmdrv/test/` | the driver build and its test COMs |
-| `build/c/` | the C core, `yt2stub` and `yt2core-tests` |
+| `build/c/` | the B1 pseudo-port, `yt2stub`, `yt2saveinfo` and the unit tests |
+| `build/c-win/` | the Windows x64 PE32+ B1 programs from `engine/c/tools/build-mingw.sh` |
 | `build/client/{bin,obj}/` | the C# client (`client/Directory.Build.props` redirects MSBuild here) |
 | `build/runs/<kind>/<stamp>/` | per-run artifacts: oracle, stream, link, replay, session, repro, sbfmdrv, server |
 | `build/dist/` | published bundles (the Windows zip, the Linux tar and their staging dirs) |
@@ -61,7 +64,8 @@ Rules:
 |---|---|
 | game/disassembly work | `engine/asm/swreg/src/` (comments and names only; the bytes are gated) |
 | seam work (protocol, backends, hooks) | `engine/asm/swreg/src/seam.asm` |
-| C core, protocol/service boundary, backends, stub | `engine/c/` (`src/`, `include/yt2/`, `tests/`) |
+| B1 pseudo-port, protocol/service boundary, backends, stub | `engine/c/` (`src/`, `include/yt2/`, `tests/`) |
+| B1 typed file/save/party/music records | `engine/c/include/yt2/data.h`, `engine/c/src/data.c`, `docs/structures.md` |
 | FM driver disassembly | `engine/asm/sbfmdrv/src/` |
 | client behaviour (decode, render, options) | `client/*.cs` |
 | bundle packaging | `tools/publish-*.sh` + `client/publish/{win,linux}/` |
@@ -70,7 +74,8 @@ Rules:
 | a new committed gate | `tests/<kind>/run.sh` (and a line in `tests/README.md`) |
 | the roadmap / next steps | `docs/roadmap.md` |
 | the dated progress log | `docs/progress.md` |
-| the protocol spec | `docs/protocol.md` (the source of truth for what crosses the boundary) |
+| the protocol spec | `docs/protocol.md` (frozen v0; the source of truth for what crosses the boundary) |
+| the data-model spec | `docs/structures.md` (frozen save/party layout; the C# reference) |
 
 Both `engine/asm/swreg/src/swreg.asm` and `engine/asm/sbfmdrv/src/sbfmdrv.asm` are gated
 byte-exactly; `swreg.asm` additionally pins its non-seam text (`swreg.pin`). See

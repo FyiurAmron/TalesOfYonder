@@ -56,14 +56,31 @@ int test_protocol(void)
 
     {
         uint8_t bin_header[16];
+        uint8_t encoded[16];
+        yt2_bin_header bin;
+
+        yt2_bin_header_init(&bin, 1);
+        CHECK(bin.version == YT2_BIN_VERSION && bin.header_size == 16u);
+        CHECK(bin.pit_rate == YT2_PIT_RATE && bin.direction == 1u);
+        yt2_bin_header_encode(&bin, encoded);
+        CHECK(memcmp(encoded, "YT2B", 4) == 0);
+        CHECK(yt2_le16(encoded + 4) == 1u);
+        CHECK(yt2_le16(encoded + 6) == 16u);
+        CHECK(yt2_le32(encoded + 8) == YT2_PIT_RATE);
+        CHECK(encoded[12] == 1u);
+        CHECK(encoded[13] == 0u && encoded[14] == 0u && encoded[15] == 0u);
 
         yt2_transport_bin_header(bin_header, 1);
-        CHECK(memcmp(bin_header, "YT2B", 4) == 0);
-        CHECK(yt2_le16(bin_header + 4) == 1u);
-        CHECK(yt2_le16(bin_header + 6) == 16u);
-        CHECK(yt2_le32(bin_header + 8) == YT2_PIT_RATE);
-        CHECK(bin_header[12] == 1u);
-        CHECK(bin_header[13] == 0u && bin_header[14] == 0u && bin_header[15] == 0u);
+        CHECK(memcmp(bin_header, encoded, sizeof(encoded)) == 0);
+        memset(&bin, 0, sizeof(bin));
+        CHECK(yt2_bin_header_decode(bin_header, sizeof(bin_header), &bin) ==
+              YT2_OK);
+        CHECK(bin.magic[0] == 'Y' && bin.magic[3] == 'B');
+        CHECK(bin.version == 1u && bin.header_size == 16u);
+        CHECK(bin.pit_rate == YT2_PIT_RATE && bin.direction == 1u);
+        CHECK(bin.reserved[0] == 0u && bin.reserved[1] == 0u &&
+              bin.reserved[2] == 0u);
+        CHECK(yt2_bin_header_decode(bin_header, 15, &bin) == YT2_ERR);
     }
 
     length = yt2_payload_video_set_mode(payload, 320, 200, 8);

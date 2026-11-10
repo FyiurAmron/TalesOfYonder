@@ -5,8 +5,10 @@
 
 /*
  * Protocol v0 framing and the message layouts from docs/protocol.md.
- * The same helpers serve the engine, the stub, the tests and the replay
- * harness; a transport only moves complete frames.
+ * v0 is frozen: ids, payload layouts and codec 1 never change in place; a
+ * new capability gets a new id or a new protocol version.  The same helpers
+ * serve the engine, the stub, the tests and the replay harness; a transport
+ * only moves complete frames.
  */
 
 #define YT2_FRAME_HEADER_SIZE 14u
@@ -15,6 +17,7 @@
 #define YT2_INPUT_MAX_PAYLOAD 32u
 #define YT2_PROTOCOL_MAGIC 0x5954u
 #define YT2_PROTOCOL_VERSION 0u
+_Static_assert(YT2_PROTOCOL_VERSION == 0u, "frozen v0 wire version");
 
 #define YT2_FLAG_COMPRESSED 0x01u
 #define YT2_FLAG_ACK 0x02u

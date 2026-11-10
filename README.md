@@ -2,18 +2,20 @@
 
 A staged recreation of the 1996 DOS game `SWREG.EXE` (SW Games / Spectrum Pacific Publishing) for
 modern systems. The rule is byte-exactness: the recreation starts from a disassembly that rebuilds
-the original executable bit for bit, then grows a C core and finally a C# front-end on top of a
-documented engine ↔ client protocol (`docs/protocol.md`).
+the original executable bit for bit, then passes through three deliberate stages — a quick
+pseudo-port as the executable spec, a real hand-written C port, and finally the forward-looking
+C# port — on top of a documented engine ↔ client protocol (`docs/protocol.md`).
 
-**Status.** M1 is done: the disassembly is annotated, byte-exact and pinned, and the integration
-seam (`engine/asm/swreg/src/seam.asm`) streams the live display through two files in a shared
-folder (`OUTPUT.BIN`/`INPUT.BIN`) and takes keyboard input back. The C# client (`client/`)
-mirrors the screen in a window and forwards keys, and the Linux/Windows bundles are one script
-away. M2 is done too: `engine/c/` now has the C11 core (flat memory, 16-bit ALU/flags, v0
-protocol), the service boundary, `null`/raw-recording/folder backends, and a deterministic
-headless stub that writes timed `OUTPUT.BIN` and consumes `INPUT.BIN`. The existing client
-remains the SDL3 host. `docs/progress.md` is the live progress log; `docs/roadmap.md`
-has the milestones and next steps.
+**Status.** M7, the B1 pseudo-port, is done: the disassembly is annotated, byte-exact and pinned;
+the C11 tree in `engine/c/` is a 100% C transcription of the annotated asm (instruction-level
+emitted C over a 16-bit guest model, with a segment:offset dispatcher) and runs the original to
+the title, through the scripted M5 gameplay slice, the save/load panel and the sound path. It
+speaks the frozen v0 protocol over the shared folder link (`OUTPUT.BIN`/`INPUT.BIN`), builds as
+64-bit Linux binaries and Windows x64 PE32+ images, and is the differential oracle. **It is a
+milestone, not the C deliverable.** The next milestone, M8/B2, is the real C port: a minimal,
+hand-written, idiomatic C engine with typed game state and no asm, guest CPU/memory or emulation
+glue in the product path. The C# port (M10) starts from B2. The C# client (`client/`) remains the
+SDL3 development host; `docs/progress.md` is the live log and `docs/roadmap.md` has the stages.
 
 ## Quick start
 
@@ -37,14 +39,17 @@ for fun; `docs/client.md` has both.
 Recordings and gates:
 
     sh tools/dosbox/stream.sh 45             # file backend, run + replay the capture to PNG
-    sh tests/c/run.sh                        # C core: unit, asm parity, client render, input backends
+    sh tests/c/run.sh                        # B1 pseudo-port gate: unit, asm parity, client render, input backends
+    sh engine/c/tools/build-mingw.sh         # Windows x64 PE32+ cross-build -> build/c-win/
+    sh tests/c/windows.sh                    # PE32+ check + Wine unit/parity runs (skips without mingw/wine)
     sh tests/replay/run.sh                   # client render == Python render, byte for byte
     sh tests/session/run.sh                  # timed BIN / YT2S capture, playback and input replay
     sh tests/link/run.sh                     # obsolete serial link check, kept for fun
 
 Windows bundle (self-contained, no .NET install on the target):
 
-    sh tools/publish-win.sh --server asm     # -> build/dist/yt2-win-x64.zip
+    sh tools/publish-win.sh --server asm     # DOSBox-X seam server -> build/dist/yt2-win-x64.zip
+    sh tools/publish-win.sh --server c       # native C engine server (build/c-win)
 
 ## Layout
 
@@ -52,7 +57,7 @@ Windows bundle (self-contained, no .NET install on the target):
 |---|---|
 | `engine/asm/swreg/` | the byte-perfect `SWREG.EXE` disassembly and its build/verify tools |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` (FM driver) disassembly and its black-box harness |
-| `engine/c/` | the C11 core and platform service layer (`yt2stub`, unit tests, folder/stream backends) |
+| `engine/c/` | the B1 pseudo-port (executable spec/oracle): emitted instruction-level C, platform service layer, `yt2game`/`yt2stub`/`yt2saveinfo`, Linux/Windows x64 builds; the B2 real C port replaces it as the product |
 | `client/` | the C# companion client (SDL3) and platform bundle files |
 | `tools/` | host tooling, including the `publish-*.sh` bundle publishers |
 | `tests/` | committed gates (the list is in `tests/README.md`) and fixtures |
@@ -67,7 +72,8 @@ Windows bundle (self-contained, no .NET install on the target):
 - `docs/porting.md` — the plan: assets, strategy, stages, verification, risks.
 - `docs/roadmap.md` — milestones, open items and the next steps.
 - `docs/progress.md` — the dated progress log.
-- `docs/protocol.md` — the engine ↔ client protocol (v0).
+- `docs/protocol.md` — the engine ↔ client protocol (frozen v0).
+- `docs/structures.md` — the B1 typed save/party/data records and their offsets.
 - `docs/disassembly.md` — building and verifying the asm; source conventions.
 - `docs/client.md` — the C# client, the seam link, the Windows bundle.
 - `docs/stream.md` — the seam builds and the recording format.

@@ -18,7 +18,7 @@ documents — read them in order:
 | `_ref/` | **read-only reference** — original distribution, the frozen disassembly generation pipeline (incl. the historic MASM source), and the vendored mining project. Copy from it, never edit it. |
 | `engine/asm/swreg/` | the working `SWREG.EXE` disassembly: source in `engine/asm/swreg/src/`, build/verify machinery in `engine/asm/swreg/tools/` (outputs land in `build/swreg/oracle/`) |
 | `engine/asm/sbfmdrv/` | the byte-perfect `SBFMDRV.COM` disassembly (`src/`, `tools/`) and its DOSBox-X black-box harness (`test/`) |
-| `engine/c/` | the C core and platform service layer: `build.sh`/`build.bat`, `yt2stub`, unit tests under `tests/` |
+| `engine/c/` | the B1 pseudo-port/executable spec and platform service layer: `build.sh`/`build.bat`, `yt2stub`, unit tests under `tests/`; B2 replaces it as the product |
 | `client/` | the C# companion client (SDL3) and `client/server.sh` for the obsolete serial link |
 | `tools/publish-*.sh` | platform bundle publishers (client + selected server) |
 | `tools/dosbox/` | DOSBox-X profiles and headless runners: oracle baseline (`baseline.sh`), audio/OPL capture (`audio.sh`), X11 helpers (`keys.py`, `snap.py`), the client link profile (`dosbox-x-client.conf`); outputs under `build/runs/` |
@@ -94,27 +94,45 @@ paragraph prefix 7, `EMMXXXX0` delta `0C99h`) and stages the minimum game files.
 
 ## Working on the C port / C# front-end
 
-The M2 C core and service layer are in `engine/c/`; the rules are in `docs/porting.md` §3 and
-`docs/protocol.md`:
+Stage B has two separate products; do not mix them. The rules are in
+`docs/porting.md` §3 and `docs/protocol.md`.
 
-- faithful first: exact 16-bit semantics, no UB, explicit widths;
-- platform access only through the service layer; the client/host boundary is `docs/protocol.md`;
-- C stays in a subset that transliterates cleanly to C#;
-- every module lands with tests before it is refactored.
+- **B1, the pseudo-port in `engine/c/` today**, is the executable
+  spec/oracle: emitted instruction-level C over a 16-bit guest model with
+  guest registers, flat memory and a segment:offset dispatcher. It is a
+  milestone, not the deliverable. Keep it working as an oracle; do not add
+  gameplay features to it.
+- **B2, the C deliverable (M8)**, is hand-written, minimal, idiomatic C:
+  typed game state and normal abstractions. It has no asm, no generated
+  instruction stream, no guest CPU/registers/flags, no flat `mem[]`, no
+  segment:offset dispatch and no DOS/BIOS/EMS emulation in the game logic.
+  Platform access goes through small service interfaces only.
+- B2 rules: explicit widths where the on-disk format demands them, no UB,
+  normal C control flow, and a style that translates cleanly to C#.
+- Every B2 module lands with differential tests against B1 and the DOS
+  oracle before the next slice starts; B1 is never linked into B2.
 
-`engine/c/tools/build.sh` (or `build.bat` on Windows) writes `yt2stub`, `yt2core-tests` and the
-objects under `build/c/`. The committed gate is `sh tests/c/run.sh`: it runs the unit tests,
-re-emits the asm fixture byte-for-byte through the C folder backend, renders the stub output with
-the C# client and the Python decoder, and drives the folder input (keyframe, key, quit, live
-append), stream and null backends. The stub is not the game yet; M3/M4 grow it from the
-transliterated routines.
+`engine/c/tools/build.sh` writes the Linux binaries under `build/c/`;
+`engine/c/tools/build-mingw.sh` (wrapped by `build.bat`) cross-builds the same programs for
+Windows x64 into `build/c-win/` with MinGW-w64.  MSVC is not part of the supported build.
+`tests/c/windows.sh` checks the PE32+ images and runs them under Wine, requiring byte-identical
+logs and dumps to the Linux build; it skips cleanly when the toolchain is absent. The committed
+B1 gate is `sh tests/c/run.sh`: it runs the unit tests (including the typed save model), re-emits
+the asm fixture byte-for-byte through the C folder backend, renders the stub output with the C#
+client and the Python decoder, and drives the folder input (keyframe, key, quit, live append),
+stream and null backends.  `yt2stub` remains a deterministic harness for the boundary itself
+(fixture replay, folder/stream/null inputs, keyframe and quit paths); the B1 game is `yt2game`,
+built from the emitted transliterated routines plus the hand-written DOS/BIOS/EMS services.
+The B1 file/save record model is `engine/c/include/yt2/data.h` (see `docs/structures.md`); the
+wire spec is frozen v0 in `docs/protocol.md`.  Neither is the B2 game-state model.
 
 The live client (`client/`, `docs/client.md`) is a **development harness for the boundary**, not the
-M8/M9 deliverable: it decodes VIDEO v0, renders, and gives the seam something to talk to.
+M9/M10 deliverable: it decodes VIDEO v0, renders, and gives the seam something to talk to.
 `tools/publish-win.sh` packages the client and selected server as a self-contained
-Windows bundle for trials. `--server asm` is available; `--server c` is reserved
-for the future C server.
-The M8/M9 rules above still govern the product client.
+Windows bundle for trials. `--server asm` stages the seam build; `--server c` stages the
+cross-built B1 `yt2game.exe` from `build/c-win` (no DOSBox-X); both are development
+bundles until B2/M9.
+The M9/M10 rules above still govern the product client.
 
 ## Testing & gates
 
@@ -124,8 +142,8 @@ The M8/M9 rules above still govern the product client.
 | seam builds | `build.sh --variant serial|file|tee|log` assemble with 0 warnings and pass `check_mz_layout.py` |
 | `tools/dosbox/` | `sh tools/dosbox/baseline.sh` completes: oracle md5 `OK`, snapshots + save states present |
 | `client/` | build, replay, timed session, audio and optional serial-link gates (see `tests/README.md`) |
-| `engine/c/` | `sh tests/c/run.sh`: unit tests, asm-fixture parity, client/Python render match, scripted/live input, stream + null backends |
-| Windows bundle | `tools/publish-win.sh --server asm` -> `yt2-win-x64.zip`; target smoke test |
+| `engine/c/` | `sh tests/c/run.sh`: unit tests, asm-fixture parity, client/Python render match, scripted/live input, stream + null backends; `tests/c/windows.sh` when MinGW-w64 and Wine are present |
+| Windows bundle | `tools/publish-win.sh --server asm` or `--server c` -> `yt2-win-x64.zip`; target smoke test |
 | docs | paths/links plausible; `docs/progress.md` updated for milestones and `docs/roadmap.md` next steps current |
 | C / C# (future) | unit tests + replay/checkpoint harness green |
 

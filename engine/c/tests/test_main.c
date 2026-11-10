@@ -3,6 +3,7 @@
 int test_failures;
 
 int test_memory(void);
+int test_data(void);
 int test_cpu(void);
 int test_protocol(void);
 int test_service(void);
@@ -14,6 +15,7 @@ int test_video_scroll(void);
 int main(void)
 {
     test_memory();
+    test_data();
     test_cpu();
     test_protocol();
     test_service();

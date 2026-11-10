@@ -5,6 +5,9 @@ rules are in `docs/porting.md`; the dated record is `docs/progress.md`.
 
 ## Milestones
 
+Stage mapping: **B1 = M7** (executable spec/oracle, done), **B2 = M8** (the C
+deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
+
 | # | Done | Deliverable | Done when |
 |---|---|---|---|
 | M0 | ✓ | Setup & baseline | git repo + ignores; UASM build verified on Linux (MD5); DOSBox-X profile runs the original; `verify_asm.py` works; style guide + stream format v0 drafted |
@@ -16,19 +19,22 @@ rules are in `docs/porting.md`; the dated record is `docs/progress.md`.
 | M4 | ✓ | Subsystem migration | all non-sound modules ported + tested in dependency order (`docs/porting.md` §3); streams diff against TRACE builds |
 | M5 | ✓ | Gameplay slice | scripted char-creation → walking → combat session matches oracle; extended through the spider victory and chest loot |
 | M6 | ✓ | Sound | FM music audible; the game's WORLD.DAT effects stream as VOC samples when sound is on (the effect-3 PC-speaker fallback stays); port-write goldens match |
-| M7 | — | C code cleanup & packaging | typed structures, 16-bit artifacts removed; Linux/Windows builds; spec frozen |
-| M8 | — | Companion client | C core as a host-neutral library over direct/in-process, IPC (shared memory/socket) and record/replay transports; the SDL client renders, plays OPL and injects input on them (the folder link stays a debug backend); replay from recordings; input and audio scheduled on one boundary clock |
-| M9 | — | C# bootstrap | new solution; starts as stream client/front-end; mechanical translation of frozen C passes replay tests |
+| M7 | ✓ | B1 pseudo-port (executable spec) | quick-and-dirty 100% C transcription of the annotated asm runs the original end-to-end and passes the gates; typed file/save records and frozen protocol; Linux/Windows x64 builds. **A milestone, not the deliverable.** |
+| M8 | — | B2 real C port | minimal-but-real, hand-written idiomatic C engine: typed game state/data and normal abstractions; no asm, no guest CPU/registers/memory, no segment:offset dispatch, no emulation glue in the product path; the B2-only build passes the differential gates. **This is the C deliverable.** |
+| M9 | — | Companion client / host boundary | C core as a host-neutral library over direct/in-process, IPC (shared memory/socket) and record/replay transports; the SDL client renders, plays OPL and injects input on them (the folder link stays a debug backend); replay from recordings; input and audio scheduled on one boundary clock |
+| M10 | — | C# port | new solution, written from B2 (not B1): starts as stream client/front-end, then takes over the engine; the same replay/differential gates run against it. **Starts the real forward effort.** |
 
 ## Open items
 
-- transport set for the product (in-process / shared memory / sockets) — decide at M8.
+- B2 state model and module boundaries — the first M8 task; the B2 tree must not link B1 code.
+- transport set for the product (in-process / shared memory / sockets) — decide at M9.
 - codec upgrade (LZSS/LZ4) timing — only if the video link needs the bytes.
 
 ## Next
 
-- **Optional save/load button test.**  The save data already matches
-  (`CURGAME`); a small UI regression test can save to a `SAVEGAMEX` slot,
-  load it back and check the party state.
-- **M7 - C code cleanup and packaging.**  Typed structures, 16-bit artifacts removed,
-  Linux/Windows builds and the frozen spec.
+- **M8 - B2 real C port.**  Start with the shared typed state model, the data
+  loaders and save/load, then the boot/menus slice; every slice is gated
+  differentially against B1 and the DOS oracle. B1 is frozen as the oracle.
+- M7 details: the pseudo-port is instruction-level emitted C over a 16-bit
+  guest model. It is the executable spec, not the product; no new gameplay
+  work goes into it.

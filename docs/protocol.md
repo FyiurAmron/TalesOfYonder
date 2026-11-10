@@ -1,4 +1,13 @@
-# YT2 companion protocol — v0 (draft)
+# YT2 companion protocol — v0 (frozen 2026-11-11)
+
+**Status: frozen.**  This document is the wire contract between the engine and the host/client.
+Both B1 (the executable spec) and B2 (the real C port) implement it; the C# port starts from the
+same messages.  The framing, family/message ids, payload layouts,
+codec 1, the `YT2B` timed-record header and the `YT2S` session header below do not change.
+A new capability gets a new message id or a new protocol version; v0 is never edited in place.
+`YT2_PROTOCOL_VERSION` in `engine/c/include/yt2/protocol.h` is `0`, and
+`engine/c/tests/test_protocol.c` pins every payload byte.  Both the Linux and the Windows x64
+build must decode the frozen v0 recordings identically (`tests/c/windows.sh`).
 
 The engine core and the client/host speak one message protocol. The same messages are used for
 in-process clients, IPC clients and **recordings**; the transport is a detail. Tests target this
@@ -327,7 +336,9 @@ INPUT (family 3), keys and mouse implemented in the seam build:
   `u16 header_bytes=16`, `u32 timebase=1,193,182` PIT counts per second,
   `u8 direction` (`0` engine-to-client, `1` client-to-engine), three zero
   reserved bytes. Each event is `u32 pit_stamp`, `u32 frame_bytes`, then one
-  complete v0 frame including its 14-byte header. Records are appended in
+  complete v0 frame including its 14-byte header.  The header and event have
+  typed C views (`yt2_bin_header`, `yt2_timed_record`) with compile-time size
+  asserts in `engine/c/include/yt2/transport.h`. Records are appended in
   order; the 32-bit PIT stamp wraps modulo 2^32 (about hourly), so readers use
   modular differences. Playback anchors the first event at time zero.
 - `OUTPUT.BIN` stamps are taken by the asm server on its monotonic PIT timeline
@@ -349,7 +360,8 @@ INPUT (family 3), keys and mouse implemented in the seam build:
   synchronization with DOSBox-X.
 - Session header (16 bytes): ASCII `YT2S`, `u16 format_version=1`,
   `u16 header_bytes=16`, `u64 timebase=1,000,000,000` (nanoseconds from the
-  first recorded event).
+  first recorded event).  Typed as `yt2_session_header`; each event as
+  `yt2_session_event`, both size-asserted in `yt2/transport.h`.
 - Each event is `u64 time_ns`, `u8 direction` (`0` engine-to-client, `1`
   client-to-engine), three zero reserved bytes, `u32 frame_bytes`, then a
   complete v0 frame including its 14-byte header. Events are appended in
@@ -422,9 +434,11 @@ The engine polls `INPUT.BIN` with a seek to its own position before each read: D
 flag set on a file that grows under it, and a seek is the portable way to clear it.  The file
 length is queried each poll, which is also the wrap check.
 
-The Stage B C core (`engine/c/`) implements the same folder files behind its service boundary.
-Its `tests/c/run.sh` gate re-emits `tests/data/sample-video.bin` through the C folder backend and
-requires every unwrapped v0 frame to be byte-identical to the asm recording.
+The B1 pseudo-port C core (`engine/c/`, the executable spec/oracle) implements the same folder
+files behind its service boundary.  Its `tests/c/run.sh` gate re-emits
+`tests/data/sample-video.bin` through the C folder backend and requires every unwrapped v0
+frame to be byte-identical to the asm recording.  The B2 real C port keeps the same wire
+contract.
 
 ## Non-goals
 

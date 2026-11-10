@@ -49,13 +49,16 @@ Needs `dotnet` and Python 3.
 
 ## `tests/c/run.sh`
 
-The M2 C gate. It builds `engine/c/` with warnings as errors, runs the memory/ALU/framing/
-service/video unit tests, then re-emits `tests/data/sample-video.bin` through the C folder
+The B1 pseudo-port gate (the executable-spec/oracle build). It builds `engine/c/` with
+warnings as errors, runs the memory/data-model/ALU/
+framing/service/video unit tests, then re-emits `tests/data/sample-video.bin` through the C folder
 backend and requires every unwrapped v0 frame to match the asm recording byte for byte (483
 frames, 150,360 bytes). The deterministic stub scene must render identically through the C#
 client and `tools/stream/replay.py`; scripted timed `INPUT.BIN` files exercise the keyframe
 path, a partial key-driven row delta, quit handling and a live append after start; the raw
-stream and null backends are checked as well. It also runs `tests/c/link-resync.sh`.
+stream and null backends are checked as well. It also runs `tests/c/link-resync.sh`, the
+save/load and M5 gates, and the Windows x64 cross-build when its toolchain is present.
+These are oracle gates: the B2 real C port must pass the same routes without B1 linked in.
 
     sh tests/c/run.sh [--no-build]
 
@@ -102,6 +105,40 @@ beeped for effect 3.
     sh tests/c/sfx.sh [--no-build] [--ticks N]
 
 `tests/c/run.sh` runs it after the OPL music check.
+
+## `tests/c/saveload.sh`
+
+The save/load button check: the M5 opening reaches the chest, then the
+game's own disk panel saves the state to slot 1 (`SAVGAME1`), the party
+walks four steps back and saves again to slot 2, the slot-1 save is loaded
+back and the restored state is saved to slot 3.  The checker requires the
+walk in slot 2, the whole party blob in slot 3 to match slot 1 from the
+first party record on, and the live `--dump` position to be the saved one.
+This exercises the game's serialization and the disk menu rather than the
+engine's file service alone; `CURGAME` is the same 77509-byte blob.  The gate
+also runs `build/c/yt2saveinfo` on slot 1, which parses the file through the
+typed model in `engine/c/include/yt2/data.h` (all seven chunks and every
+non-empty roster slot) rather than through the Python checker's offsets.
+
+    sh tests/c/saveload.sh [--no-build] [--ticks N]
+
+`tests/c/run.sh` runs it before the M5 gameplay check.
+
+## `tests/c/windows.sh`
+
+The Windows x64 packaging check: `engine/c/tools/build-mingw.sh` cross-builds
+all five programs with MinGW-w64, the gate verifies that each is a PE32+
+x86-64 image, runs the two unit binaries under Wine, and runs a deterministic
+700-tick game slice through both the Linux and Windows executables.  stdout,
+stderr, the audio log, the present log and the checkpoint dump must be
+byte-identical; `yt2saveinfo` must print the same thing from both builds on a
+real save.  `--full` also drives the whole M5 + save/load script through both
+binaries and compares `SAVGAME1..3` and the end dump.
+
+    sh tests/c/windows.sh [--no-build] [--full]
+
+Needs `x86_64-w64-mingw32-gcc` and `wine`; skips with a note (exit 0) when
+either is missing, so `tests/c/run.sh` stays runnable without them.
 
 ## `tests/c/intro.sh`
 

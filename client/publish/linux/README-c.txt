@@ -10,10 +10,11 @@ the client through the same folder link as the asm seam build:
 carries keyboard and mouse input.  Both files are timed `YT2B` pseudo-rings;
 the client follows the output file and appends input as it happens.
 
-This is the same engine that passes the M3 intro/attract checkpoint gate, now
-wired to the live display link.  Presentation is mode 13h (320x200x8); the VBE
-intro modes and the FM/PC-speaker audio stream arrive with M4/M6, so the C
-server is currently silent and skips VBE-only pictures.
+This is the same engine that passes the M3 intro/attract, M5 gameplay,
+save/load and sound gates, now wired to the live display link.  It presents
+the VBE intro modes and mode 13h, emulates the resident SBFMDRV for FM music
+and PC-speaker audio, and streams the game's WORLD.DAT effect records.  The
+client synthesises the audio.
 
 Contents
 --------

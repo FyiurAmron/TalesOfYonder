@@ -1,4 +1,5 @@
 #include "yt2/game.h"
+#include "yt2/platform.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -14,7 +15,7 @@ static void yt2_dump_checkpoint(yt2_machine *machine, const char *directory)
     static const uint32_t dgroup_end = 0x2D652u;
 
     snprintf(path, sizeof(path), "%s/state.txt", directory);
-    stream = fopen(path, "w");
+    stream = fopen(path, "wb");
     if (stream != NULL) {
         fprintf(stream, "transfers=%llu\n", (unsigned long long)machine->transfers);
         fprintf(stream, "ticks=%u\n", machine->ticks);
@@ -169,6 +170,7 @@ int main(int argc, char **argv)
     int no_pace = 0;
     int index;
 
+    yt2_platform_console_binary();
     for (index = 1; index < argc; index++) {
         if (strcmp(argv[index], "--game") == 0 && index + 1 < argc) {
             game = argv[++index];
@@ -229,7 +231,7 @@ int main(int argc, char **argv)
     }
     g_m.pace = no_pace ? 0 : pace;
     if (present_log != NULL) {
-        g_m.present_log = fopen(present_log, "w");
+        g_m.present_log = fopen(present_log, "wb");
         if (g_m.present_log == NULL) {
             fprintf(stderr, "yt2: cannot write %s: %s\n", present_log, strerror(errno));
             return 2;
@@ -245,7 +247,7 @@ int main(int argc, char **argv)
         return 2;
     }
     if (audio_log != NULL) {
-        FILE *stream = fopen(audio_log, "w");
+        FILE *stream = fopen(audio_log, "wb");
 
         if (stream == NULL) {
             fprintf(stderr, "yt2: cannot write %s: %s\n", audio_log,

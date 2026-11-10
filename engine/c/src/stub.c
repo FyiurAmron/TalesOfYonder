@@ -688,6 +688,7 @@ int main(int argc, char **argv)
     int input_from_start = 0;
     int index;
 
+    yt2_platform_console_binary();
     setvbuf(stdout, NULL, _IOLBF, 0);
     memset(stub, 0, sizeof(*stub));
     for (index = 1; index < argc; index++) {

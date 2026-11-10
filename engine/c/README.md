@@ -1,20 +1,28 @@
 # engine/c
 
-The Stage B C core and platform service layer. M2 and M3 (2026-10-28) are implemented: a
-C11 program speaks the same v0 / timed `YT2B` boundary as the asm seam and the existing
-C# client renders it, the transliterated original reaches the title/attract with
-checkpoint hashes matching the oracle, and the same engine is playable through the live
-folder link (`--live`).
+**This tree is B1, the pseudo-port / executable spec. It is a milestone, not the
+C deliverable.** The product engine will be B2: a hand-written, idiomatic C port with typed
+game state and no asm, guest CPU/memory, segment dispatcher or emulation glue. See
+`docs/porting.md` §3 and `docs/roadmap.md`.
+
+M2/M3 (2026-10-28) implemented the platform service layer and the first emitted code; B1 now
+runs the original to the title, the scripted M5 gameplay slice, save/load and sound, and
+speaks the frozen v0 / timed `YT2B` boundary.  M7 (2026-11-11) completed the B1 milestone:
+typed file/save records, protocol freeze and the Windows x64 cross-build.  The generated
+game code is instruction-level C: every original instruction becomes C statements over
+`g_m.r`, `g_m.mem` and a segment:offset dispatcher.  This is an emulator with the decode
+hoisted to build time, kept only because it is the executable specification and the
+differential oracle.
 
 ## What is here
 
 | Path | What |
 |---|---|
-| `include/yt2/` | the public core headers: memory, CPU flags/ALU, protocol, service, transports, video, `game.h` |
-| `src/` | the core implementation and the `yt2stub` headless program |
+| `include/yt2/` | the public core headers: memory, CPU flags/ALU, `data.h` (typed records), protocol, service, transports, video, `game.h` |
+| `src/` | the core implementation, `data.c`, `saveinfo.c` and the `yt2stub` headless program |
 | `src/game/` | the hand-written boundary for the transliterated game (machine, services, `yt2game`) |
-| `tests/` | unit tests for memory, ALU/flags, framing/parsing, the service callbacks, video deltas, string-instruction semantics, EMS mappings and the DOS arena |
-| `tools/build.sh`, `tools/build.bat` | build entry points (gcc/clang and MSVC) |
+| `tests/` | unit tests for memory, the typed data model, ALU/flags, framing/parsing, the service callbacks, video deltas, string-instruction semantics, EMS mappings and the DOS arena |
+| `tools/build.sh`, `tools/build-mingw.sh`, `tools/build.bat` | build entry points (Linux, Windows x64 cross-build, MinGW wrapper on Windows) |
 
 The game code itself is emitted at build time into `build/c/generated/` by `tools/port/`
 from the annotated UASM source; it is not part of this tree.
@@ -25,8 +33,9 @@ The layers, from the game outward:
   BIOS data area and the EMS window keep their original addresses. No bounds checks on
   purpose - the original code is the authority.
 - **cpu**: explicit 286 registers and a flags word, with the exact CF/PF/AF/ZF/SF/OF rules
-  for add/sub/inc/dec/logic/test/neg and the 16 condition codes. There is no interpreter;
-  the transliterated game functions do their own arithmetic through these helpers.
+  for add/sub/inc/dec/logic/test/neg and the 16 condition codes. There is no runtime opcode
+  decoder, but the emitted game functions are still the original instruction stream over
+  this guest model; that is B1-only and must not appear in B2.
 - **protocol**: v0 framing and payload builders/parsers for VIDEO, AUDIO, INPUT and CONTROL,
   plus the incremental INPUT parser (including the bare serial `'K'` keyframe request).
 - **service**: the seam. It owns the output sequence, builds complete frames, answers the
@@ -44,16 +53,38 @@ The layers, from the game outward:
   reader; a bad record makes the timed reader scan to the next plausible one (length plus
   the v0 frame magic) instead of failing, and a read error never disables the video link.
 
-## Build and run
+## Data model (B1 only)
 
-The full build needs `uasm` and `python3` with `capstone` (the game emission) besides the
-C compiler; the M2-only targets need just the compiler.
+`include/yt2/data.h` describes the original's on-disk records with fixed-width fields and
+compile-time layout asserts: the seven `CURGAME`/`SAVEGAMEn` chunks, the party header and
+nine 500-byte roster slots (including both 64-byte stat blocks, inventory, equipment and
+containers), the DOS file struct, the picture-cache classes, the `CTMF` music block/patch
+and the SFX table.  `src/data.c` owns the chunk table and the only file-bytes-to-struct
+copies (`yt2_party_block_parse`/`write`).  `build/c/yt2saveinfo SAVEGAME` prints a save
+through the model, and `tests/c/saveload.sh` runs it on the file the game's own disk panel
+wrote.  The field-level reference is `docs/structures.md`.  These structs document the
+file formats and feed the B1 tools; they are not the B2 game-state model, which B2 defines
+around live party, map, object and combat state.
+
+The host binaries are 64-bit on both Linux and Windows x64, but the B1 program state is
+still the 16-bit guest model.  B2 has no such model.
+
+## Build and run (B1)
+
+The full B1 build needs `uasm` and `python3` with `capstone` (the game emission) besides
+the C compiler; the core-only targets need just the compiler.
 
     sh engine/c/tools/build.sh
     build/c/yt2core-tests
     build/c/yt2game-tests   # emitted-code boundary semantics
     sh tests/c/run.sh
     sh tests/c/game.sh       # game run + M3 checkpoints (builds if stale)
+
+Windows x64 cross-build (MinGW-w64, no MSVC needed; outputs `build/c-win/*.exe`):
+
+    sh engine/c/tools/build-mingw.sh
+    sh tests/c/windows.sh              # PE32+ check, Wine unit tests, Linux parity
+    sh tests/c/windows.sh --full       # also the M5 + save/load run
 
 `yt2game-tests` pins the parts of the CPU/DOS boundary the emitted code depends
 on: `CMPS` reads `DS:SI` and subtracts `ES:DI` (the emitter's Capstone operand

@@ -6,6 +6,7 @@
 
 #include "yt2/core.h"
 #include "yt2/cpu.h"
+#include "yt2/data.h"
 #include "yt2/memory.h"
 #include "yt2/service.h"
 #include "yt2/sound.h"

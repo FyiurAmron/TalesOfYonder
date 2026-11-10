@@ -4,30 +4,79 @@
 
 #include <string.h>
 
-void yt2_transport_bin_header(uint8_t *destination, uint8_t direction)
+void yt2_bin_header_init(yt2_bin_header *header, uint8_t direction)
 {
-    destination[0] = 'Y';
-    destination[1] = 'T';
-    destination[2] = '2';
-    destination[3] = 'B';
-    yt2_put_le16(destination + 4, 1);
-    yt2_put_le16(destination + 6, 16);
-    yt2_put_le32(destination + 8, YT2_PIT_RATE);
-    destination[12] = direction;
-    destination[13] = 0;
-    destination[14] = 0;
-    destination[15] = 0;
+    header->magic[0] = 'Y';
+    header->magic[1] = 'T';
+    header->magic[2] = '2';
+    header->magic[3] = 'B';
+    header->version = YT2_BIN_VERSION;
+    header->header_size = YT2_BIN_HEADER_SIZE;
+    header->pit_rate = YT2_PIT_RATE;
+    header->direction = direction;
+    header->reserved[0] = 0;
+    header->reserved[1] = 0;
+    header->reserved[2] = 0;
 }
 
-static int yt2_folder_header_is_valid(const uint8_t *header, uint8_t direction)
+void yt2_bin_header_encode(const yt2_bin_header *header, uint8_t *destination)
 {
-    return header[0] == 'Y' && header[1] == 'T' &&
-           header[2] == '2' && header[3] == 'B' &&
-           yt2_le16(header + 4) == 1u &&
-           yt2_le16(header + 6) == 16u &&
-           yt2_le32(header + 8) == YT2_PIT_RATE &&
-           header[12] == direction &&
-           header[13] == 0u && header[14] == 0u && header[15] == 0u;
+    destination[0] = (uint8_t)header->magic[0];
+    destination[1] = (uint8_t)header->magic[1];
+    destination[2] = (uint8_t)header->magic[2];
+    destination[3] = (uint8_t)header->magic[3];
+    yt2_put_le16(destination + 4, header->version);
+    yt2_put_le16(destination + 6, header->header_size);
+    yt2_put_le32(destination + 8, header->pit_rate);
+    destination[12] = header->direction;
+    destination[13] = header->reserved[0];
+    destination[14] = header->reserved[1];
+    destination[15] = header->reserved[2];
+}
+
+int yt2_bin_header_decode(const uint8_t *source, uint32_t available,
+                          yt2_bin_header *header)
+{
+    if (available < YT2_BIN_HEADER_SIZE) {
+        return YT2_ERR;
+    }
+    header->magic[0] = (char)source[0];
+    header->magic[1] = (char)source[1];
+    header->magic[2] = (char)source[2];
+    header->magic[3] = (char)source[3];
+    header->version = yt2_le16(source + 4);
+    header->header_size = yt2_le16(source + 6);
+    header->pit_rate = yt2_le32(source + 8);
+    header->direction = source[12];
+    header->reserved[0] = source[13];
+    header->reserved[1] = source[14];
+    header->reserved[2] = source[15];
+    return YT2_OK;
+}
+
+void yt2_transport_bin_header(uint8_t *destination, uint8_t direction)
+{
+    yt2_bin_header header;
+
+    yt2_bin_header_init(&header, direction);
+    yt2_bin_header_encode(&header, destination);
+}
+
+static int yt2_folder_header_is_valid(const uint8_t *source, uint8_t direction)
+{
+    yt2_bin_header header;
+
+    if (yt2_bin_header_decode(source, YT2_BIN_HEADER_SIZE, &header) != YT2_OK) {
+        return 0;
+    }
+    return header.magic[0] == 'Y' && header.magic[1] == 'T' &&
+           header.magic[2] == '2' && header.magic[3] == 'B' &&
+           header.version == YT2_BIN_VERSION &&
+           header.header_size == YT2_BIN_HEADER_SIZE &&
+           header.pit_rate == YT2_PIT_RATE &&
+           header.direction == direction &&
+           header.reserved[0] == 0u && header.reserved[1] == 0u &&
+           header.reserved[2] == 0u;
 }
 
 static long yt2_folder_size(FILE *file)

@@ -12,10 +12,11 @@ normal server output file is directly replayable at its recorded pace.
 The seam build is not byte-identical by design; the oracle build stays byte-perfect
 (`sh engine/asm/swreg/tools/verify.sh` -> `SWREG.EXE: OK` + `IDENTICAL`). The seam itself is described in
 `docs/stream.md`; the boundary contract is `docs/protocol.md`.
-The transliterated C engine speaks the same `OUTPUT.BIN`/`INPUT.BIN` link (`--live`) and
-is playable from the bundle with `--server c`; it streams mode 13h and the VBE intro
-modes, with run-length rows, scroll messages and the resident SBFMDRV's OPL/speaker
-stream (`--sound`, the default; `--no-sound` keeps the silent path).
+The B1 pseudo-port engine (the executable-spec/oracle build, not the product) speaks the
+same `OUTPUT.BIN`/`INPUT.BIN` link (`--live`) and is playable from the bundle with
+`--server c`; it streams mode 13h and the VBE intro modes, with run-length rows, scroll
+messages and the resident SBFMDRV's OPL/speaker stream (`--sound`, the default;
+`--no-sound` keeps the silent path).
 
 ## Pieces
 
@@ -42,7 +43,8 @@ Without the bundle (same engine build, client from the tree):
     dotnet run --project client -c Release -- \
         --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN
 
-The transliterated C engine speaks the same link and needs no DOSBox-X:
+The B1 pseudo-port engine speaks the same link and needs no DOSBox-X (it is the
+executable spec/oracle until the B2 real C port replaces it):
 
     sh engine/c/tools/build.sh
     sh tools/publish-linux.sh --server c
@@ -114,11 +116,14 @@ sha256-checked; `--sdl3 PATH` uses a local DLL). The server side includes
 server when the client exits.
 
 `--server asm` selects the assembly server (the default). `--server c` stages the
-transliterated C engine (`build/c/yt2game`) with the original game data and a C
-`server-start.sh`, so the same bundle shape runs without DOSBox-X. `--server-dir` selects
+B1 pseudo-port engine (`build/c/yt2game`, the executable spec/oracle) with the original
+game data and a C `server-start.sh`, so the same bundle shape runs without DOSBox-X. `--server-dir` selects
 another build (asm: default `build/swreg/file`; c: default `build/c`); `--out` sets the
-output root, and `-n` or `--no-zip` skips the archive. The Windows C bundle waits for a
-Windows `yt2game.exe` build.
+output root, and `-n` or `--no-zip` skips the archive.  On Windows, `--server c` defaults
+to `build/c-win` and stages the cross-built `yt2game.exe` plus a native
+`server-start.bat`; build it with `sh engine/c/tools/build-mingw.sh` (MinGW-w64, not
+MSVC).  The bundle's `play.bat` and `client-start.bat` are the same for both server
+variants.
 
 `client/Sdl.cs` loads `SDL3.dll` on Windows, `libSDL3.so.0`/`libSDL3.so` on Linux and
 `libSDL3.dylib` on macOS, so the same sources run on every platform; only the runtime has to be

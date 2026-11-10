@@ -12,6 +12,54 @@
  * file pair, a raw recording, an in-process sink or (later) a socket.
  */
 
+/* The 16-byte YT2B record on the folder link (docs/stream.md).  The struct is
+   the in-memory view; encode/decode do the little-endian bytes explicitly, so
+   nothing depends on struct padding or host byte order. */
+#define YT2_BIN_VERSION 1u
+#define YT2_BIN_HEADER_SIZE 16u
+
+typedef struct yt2_bin_header {
+    char magic[4];              /* "YT2B" */
+    uint16_t version;           /* 1 */
+    uint16_t header_size;       /* 16 */
+    uint32_t pit_rate;          /* YT2_PIT_RATE */
+    uint8_t direction;          /* 0 output (engine), 1 input (client) */
+    uint8_t reserved[3];        /* 0 */
+} yt2_bin_header;
+
+/* One timed-folder event: the PIT stamp, then the complete v0 frame length. */
+typedef struct yt2_timed_record {
+    uint32_t pit_stamp;
+    uint32_t frame_bytes;
+} yt2_timed_record;
+
+/* The optional YT2S full-duplex capture (docs/protocol.md).  The engine does
+   not write it; the client does, and the Python tools decode it. */
+typedef struct yt2_session_header {
+    char magic[4];              /* "YT2S" */
+    uint16_t version;           /* 1 */
+    uint16_t header_size;       /* 16 */
+    uint64_t timebase;          /* 1,000,000,000 ns */
+} yt2_session_header;
+
+typedef struct yt2_session_event {
+    uint64_t time_ns;
+    uint8_t direction;          /* 0 engine->client, 1 client->engine */
+    uint8_t reserved[3];
+    uint32_t frame_bytes;
+} yt2_session_event;
+
+_Static_assert(sizeof(yt2_bin_header) == YT2_BIN_HEADER_SIZE,
+               "YT2B header size");
+_Static_assert(sizeof(yt2_timed_record) == 8, "YT2B timed record size");
+_Static_assert(sizeof(yt2_session_header) == 16, "YT2S header size");
+_Static_assert(sizeof(yt2_session_event) == 16, "YT2S event size");
+
+void yt2_bin_header_init(yt2_bin_header *header, uint8_t direction);
+void yt2_bin_header_encode(const yt2_bin_header *header, uint8_t *destination);
+int yt2_bin_header_decode(const uint8_t *source, uint32_t available,
+                          yt2_bin_header *header);
+
 typedef struct yt2_transport {
     void *context;
     int (*write_frame)(void *context, const uint8_t *frame, uint32_t length);

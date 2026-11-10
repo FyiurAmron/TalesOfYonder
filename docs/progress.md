@@ -2036,3 +2036,58 @@ items now live in `docs/roadmap.md`).
     decodes 11 samples over the 9000-tick run with `unknown=0`.  No assembly
     changed; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - save/load panel regression gate:
+  - **route**: the M5 opening runs through the chest loot, then the game's own
+    disk panel: save slot 1, walk four steps back, save slot 2, load slot 1
+    back and save the restored state to slot 3.
+  - **check**: `tests/c/saveload.sh` drives the disk keys and
+    `tests/c/saveload.py` reads the 77509-byte `MITHWARE PARTY` blob.  The
+    slot-1 team sits at `(A1h,22h)` facing `4000h`; slot 2 carries the
+    four-step walk `(A1h,1Eh)`; slot 3 restores slot 1 from the first party
+    record (`1F4h`) to the end of the blob, and the end-of-run `--dump` has
+    the live party back at `(A1h,22h)` with `CONAN` in slot 0.  Without the
+    load the walk stays in the live state, so the check is not blind.
+  - **verification**: `sh tests/c/run.sh --no-build` is `c: OK`
+    (`saveload: saved (00A1,0022), walked to (00A1,001E), load restored
+    (00A1,0022); 77009 party bytes match`).  No assembly changed;
+    `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M7/B1 milestone: typed file/save records, Windows x64 build and the B1 gates:
+  - **typed records**: `engine/c/include/yt2/data.h` describes the seven
+    `CURGAME`/`SAVEGAMEn` chunks, the party header, the nine 500-byte slots
+    (both stat blocks, pack, equipment, effects and containers), the DOS file
+    struct, picture-cache classes, `CTMF` music blocks and the SFX table, with
+    compile-time offset/size asserts; `src/data.c` owns the chunk table and the
+    only file-bytes-to-struct copies; `yt2saveinfo` reads a real save through
+    them.  The layout is documented in `docs/structures.md`.
+  - **protocol/session views**: `yt2_bin_header`, `yt2_timed_record`,
+    `yt2_session_header` and `yt2_session_event` are typed and size-asserted in
+    `yt2/transport.h`; protocol v0 and the data model are frozen.
+  - **Windows x64**: `engine/c/tools/build-mingw.sh` (`build.bat` wrapper)
+    cross-builds the core, stub, both test binaries, `yt2game` and
+    `yt2saveinfo` as PE32+; `tests/c/windows.sh` checks the images, runs the
+    unit tests under Wine and requires byte-identical 700-tick logs/dumps and
+    save-reader output to Linux.  `publish-win.sh --server c` stages the
+    Windows engine bundle.  Text-mode logs are opened `"wb"` and the console
+    streams are set binary, so Windows newlines cannot leak into the compared
+    output.
+  - **verification**: `sh tests/c/run.sh --no-build` -> `c: OK` (status 0),
+    including the save/load, M5, sound/star/VBE and the default Windows gate.
+    `sh tests/c/windows.sh --full` needs more than 10 minutes under Wine and
+    is kept as an optional slower check.  No assembly changed; `SWREG.EXE`
+    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - plan correction: B1 is the executable spec, B2 is the C deliverable:
+  - **what B1 is**: the emitted instruction-level C in `engine/c/` runs the
+    original over guest registers, guest memory and a segment:offset
+    dispatcher; the decode is hoisted to build time, but it is still an
+    emulator-shaped executable spec.  It is the M7 milestone and the
+    differential oracle, not the C port and not the deliverable.
+  - **three stages codified**: `docs/porting.md` now separates B1 (pseudo-port,
+    M7, done), B2 (minimal-but-real, hand-written, idiomatic C with typed game
+    state and no asm/guest CPU/memory/dispatch/emulation glue; M8, next) and
+    the C# port (M10, written from B2, the real forward effort).
+    `docs/roadmap.md`, `README.md`, `CONTRIBUTING.md`, `docs/layout.md`,
+    `docs/structures.md`, `docs/client.md`, `docs/protocol.md` and
+    `engine/c/README.md` are reframed to match.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
