@@ -1,22 +1,29 @@
 #!/bin/sh
-# Publish the Linux x64 client + engine server bundle (asm seam or C engine).
+# Publish the Linux x64 client + engine server bundle (asm seam, C engine or
+# B2 port player).
 #
 #   sh tools/publish-linux.sh [options]
 #
-#     --server KIND       asm (seam build) or c (the transliterated engine)
+#     --server KIND       asm (seam build), c (the transliterated engine) or
+#                         port (the B2 port player)
 #     --server-dir DIR    asm seam build to stage as server/game
 #                         (default: build/swreg/file, the folder-link build);
 #                         for c, the build tree holding yt2game
-#                         (default: build/c)
+#                         (default: build/c); for port, the build tree
+#                         holding yt2p-play (default: build/port)
 #     --out DIR           output root (default: build/dist)
 #     --framework         framework-dependent publish (needs .NET 11 on the
 #                         target); the default is self-contained
+#     --build             build the server first (the documented build
+#                         script for the selected kind, into its default
+#                         tree); refuses --server-dir, which names a
+#                         prebuilt tree instead
 #     -n, --no-zip        leave the bundle directory unpacked only
 #     --no-tar            alias for --no-zip
 #
 # The bundle is ready to run: server-start.sh starts the engine (DOSBox-X for
-# asm, yt2game for c), and client-start.sh (or play.sh, which starts both)
-# mirrors the game.  Output: build/dist/yt2-linux-x64/ and
+# asm, yt2game for c, yt2p-play for port), and client-start.sh (or play.sh,
+# which starts both) mirrors the game.  Output: build/dist/yt2-linux-x64/ and
 # yt2-linux-x64.tar.gz.  See docs/client.md.
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,16 +32,19 @@ PUBLISH_DIR=$ROOT/client/publish/linux
 
 SERVER=
 SERVER_DIR=
+SERVER_DIR_GIVEN=0
 OUT=$ROOT/build/dist
 TAR=1
 SELF_CONTAINED=1
+BUILD=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --server) SERVER=$2; shift 2 ;;
-        --server-dir) SERVER_DIR=$2; shift 2 ;;
+        --server-dir) SERVER_DIR=$2; SERVER_DIR_GIVEN=1; shift 2 ;;
         --out) OUT=$2; shift 2 ;;
         --framework) SELF_CONTAINED=0; shift ;;
+        --build) BUILD=1; shift ;;
         -n|--no-zip|--no-tar) TAR=0; shift ;;
         -h|--help) sed -n '2,/^set -e$/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "publish-linux: unknown option $1" >&2; exit 2 ;;
@@ -42,6 +52,18 @@ while [ $# -gt 0 ]; do
 done
 
 SERVER=${SERVER:-asm}
+if [ "$BUILD" = 1 ]; then
+    if [ "$SERVER_DIR_GIVEN" = 1 ]; then
+        echo "publish-linux: --build builds the default tree; drop --server-dir" >&2
+        exit 2
+    fi
+    case "$SERVER" in
+        asm) sh "$ROOT/engine/asm/swreg/tools/build.sh" --variant file ;;
+        c) sh "$ROOT/engine/c/tools/build.sh" ;;
+        port) sh "$ROOT/engine/port/tools/build.sh" ;;
+        *) echo "publish-linux: --server must be asm, c or port" >&2; exit 2 ;;
+    esac
+fi
 case "$SERVER" in
     asm)
         SERVER_DIR=${SERVER_DIR:-$ROOT/build/swreg/file}
@@ -71,8 +93,22 @@ case "$SERVER" in
             fi
         done
         ;;
+    port)
+        SERVER_DIR=${SERVER_DIR:-$ROOT/build/port}
+        if [ ! -x "$SERVER_DIR/yt2p-play" ]; then
+            echo "publish-linux: no B2 player in $SERVER_DIR" >&2
+            echo "  build it first:  sh engine/port/tools/build.sh" >&2
+            exit 1
+        fi
+        for f in WORLD.DAT PICTURES.VGA; do
+            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
+                echo "publish-linux: _ref/orig-bin/$f is missing" >&2
+                exit 1
+            fi
+        done
+        ;;
     *)
-        echo "publish-linux: --server must be asm or c" >&2
+        echo "publish-linux: --server must be asm, c or port" >&2
         exit 2
         ;;
 esac
@@ -120,6 +156,14 @@ if [ "$SERVER" = c ]; then
     chmod +x "$BUNDLE/server/game/yt2game"
     cp -f "$PUBLISH_DIR/server-start-c.sh" "$BUNDLE/server-start.sh"
     cp -f "$PUBLISH_DIR/README-c.txt" "$BUNDLE/README.txt"
+elif [ "$SERVER" = port ]; then
+    for f in WORLD.DAT PICTURES.VGA; do
+        cp -f "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+    done
+    cp -f "$SERVER_DIR/yt2p-play" "$BUNDLE/server/game/yt2p-play"
+    chmod +x "$BUNDLE/server/game/yt2p-play"
+    cp -f "$PUBLISH_DIR/server-start-port.sh" "$BUNDLE/server-start.sh"
+    cp -f "$PUBLISH_DIR/README-port.txt" "$BUNDLE/README.txt"
 else
     for f in SWREG.EXE CH2.BAT SBFMDRV.COM WORLD.DAT PICTURES.VGA CURGAME; do
         cp -f "$SERVER_DIR/$f" "$BUNDLE/server/game/$f"

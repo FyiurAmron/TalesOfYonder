@@ -1,5 +1,6 @@
 #include "yt2/world.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -125,18 +126,17 @@ const yt2_tile *yt2_world_tile(const yt2_world *world, unsigned int map_x,
                                unsigned int map_y, unsigned int tile_x,
                                unsigned int tile_y)
 {
-    unsigned int map;
-    unsigned int index;
+    unsigned int row;
+    unsigned int column;
 
     if (world == NULL || world->tiles == NULL || map_x >= YT2_WORLD_MAPS_X ||
         map_y >= YT2_WORLD_MAPS_Y || tile_x >= YT2_WORLD_MAP_TILES_X ||
         tile_y >= YT2_WORLD_MAP_TILES_Y) {
         return NULL;
     }
-    map = map_y * YT2_WORLD_MAPS_X + map_x;
-    index = map * YT2_WORLD_MAP_TILES_X * YT2_WORLD_MAP_TILES_Y +
-            tile_y * YT2_WORLD_MAP_TILES_X + tile_x;
-    return &world->tiles[index];
+    row = map_y * YT2_WORLD_MAP_TILES_Y + tile_y;
+    column = map_x * YT2_WORLD_MAP_TILES_X + tile_x;
+    return &world->tiles[row * YT2_WORLD_TILES_X + column];
 }
 
 const char *yt2_world_map_name(const yt2_world *world, const yt2_map *map)
@@ -148,6 +148,124 @@ const char *yt2_world_map_name(const yt2_world *world, const yt2_map *map)
     return world->names[map->name_index];
 }
 
+int yt2_world_map_display_name(const yt2_world *world, unsigned int map,
+                               char *buffer, size_t size)
+{
+    const yt2_map *descriptor;
+    const char *name;
+    int written;
+
+    if (world == NULL || buffer == NULL || size == 0u ||
+        map >= YT2_WORLD_MAPS_COUNT) {
+        return YT2_STATUS_ERROR;
+    }
+    descriptor = &world->maps[map];
+    name = yt2_world_map_name(world, descriptor);
+    if (name[0] == '\0') {
+        return YT2_STATUS_ERROR;
+    }
+
+    {
+        char trimmed[YT2_WORLD_MAP_NAME_LENGTH + 1u];
+        size_t length = strlen(name);
+
+        while (length > 0u && name[length - 1u] == ' ') {
+            length--;
+        }
+        memcpy(trimmed, name, length);
+        trimmed[length] = '\0';
+
+        if (descriptor->suffix[0] == '0' && descriptor->suffix[1] == ' ') {
+            written = snprintf(buffer, size, "%s", trimmed);
+        } else if (descriptor->suffix[0] == '0') {
+            written = snprintf(buffer, size, "%s MAP %c", trimmed,
+                               descriptor->suffix[1]);
+        } else {
+            written = snprintf(buffer, size, "%s LEVEL %c", trimmed,
+                               descriptor->suffix[0]);
+        }
+    }
+    if (written < 0 || (size_t)written >= size) {
+        return YT2_STATUS_ERROR;
+    }
+    return YT2_STATUS_OK;
+}
+
+int yt2_world_map_tile_visible(const yt2_world *world, unsigned int map,
+                               unsigned int tile_x, unsigned int tile_y)
+{
+    unsigned int map_x;
+    unsigned int map_y;
+    unsigned int row;
+    unsigned int byte;
+    unsigned int mask;
+
+    if (world == NULL || world->bytes == NULL || map >= YT2_WORLD_MAPS_COUNT ||
+        tile_x >= YT2_WORLD_MAP_TILES_X || tile_y >= YT2_WORLD_MAP_TILES_Y ||
+        world->size < YT2_WORLD_MAP_BITS_OFFSET + YT2_WORLD_MAP_BITS_SIZE) {
+        return 0;
+    }
+    map_x = map % YT2_WORLD_MAPS_X;
+    map_y = map / YT2_WORLD_MAPS_X;
+    row = map_y * YT2_WORLD_MAP_TILES_Y + tile_y;
+    byte = YT2_WORLD_MAP_BITS_OFFSET +
+           row * YT2_WORLD_MAP_BITS_ROW_BYTES +
+           map_x * (YT2_WORLD_MAP_TILES_X / 8u) + tile_x / 8u;
+    mask = 0x80u >> (tile_x % 8u);
+    return (world->bytes[byte] & mask) != 0u;
+}
+
+int yt2_world_legend_at(const yt2_world *world, unsigned int index,
+                        yt2_legend *legend)
+{
+    const uint8_t *entry;
+
+    if (world == NULL || world->bytes == NULL || legend == NULL ||
+        index >= YT2_WORLD_LEGEND_COUNT ||
+        world->size <
+            YT2_WORLD_LEGEND_OFFSET +
+                YT2_WORLD_LEGEND_COUNT * YT2_WORLD_LEGEND_ENTRY_SIZE) {
+        return YT2_STATUS_ERROR;
+    }
+    entry = world->bytes + YT2_WORLD_LEGEND_OFFSET +
+            index * YT2_WORLD_LEGEND_ENTRY_SIZE;
+    legend->map = (uint16_t)(entry[0] | (entry[1] << 8));
+    legend->x = (uint16_t)(entry[2] | (entry[3] << 8));
+    legend->y = (uint16_t)(entry[4] | (entry[5] << 8));
+    legend->line = (uint16_t)(entry[6] | (entry[7] << 8));
+    return YT2_STATUS_OK;
+}
+
+int yt2_world_legend_text(const yt2_world *world, unsigned int line,
+                          char *text, size_t size)
+{
+    const uint8_t *entry;
+    size_t offset;
+    size_t i = 0u;
+
+    if (world == NULL || world->bytes == NULL || text == NULL ||
+        size < YT2_WORLD_LEGEND_TEXT_SIZE + 1u ||
+        line >= YT2_WORLD_LEGEND_TEXT_COUNT) {
+        return YT2_STATUS_ERROR;
+    }
+    offset = YT2_WORLD_LEGEND_TEXT_OFFSET +
+             (size_t)line * YT2_WORLD_LEGEND_TEXT_LINE_SIZE;
+    if (world->size < offset + YT2_WORLD_LEGEND_TEXT_SIZE) {
+        return YT2_STATUS_ERROR;
+    }
+    entry = world->bytes + offset;
+    while (i < YT2_WORLD_LEGEND_TEXT_SIZE && entry[i] != 0u) {
+        text[i] = (char)entry[i];
+        i++;
+    }
+    while (i < YT2_WORLD_LEGEND_TEXT_SIZE) {
+        text[i] = ' ';
+        i++;
+    }
+    text[YT2_WORLD_LEGEND_TEXT_SIZE] = '\0';
+    return YT2_STATUS_OK;
+}
+
 const yt2_palette *yt2_world_palette(const yt2_world *world,
                                      unsigned int palette)
 {
@@ -156,4 +274,14 @@ const yt2_palette *yt2_world_palette(const yt2_world *world,
         return NULL;
     }
     return &world->palettes[palette];
+}
+
+int yt2_world_anim_base(const yt2_world *world, uint8_t *base)
+{
+    if (world == NULL || world->bytes == NULL || base == NULL ||
+        world->size < YT2_WORLD_ANIM_OFFSET + YT2_WORLD_ANIM_SIZE) {
+        return YT2_STATUS_ERROR;
+    }
+    memcpy(base, world->bytes + YT2_WORLD_ANIM_OFFSET, YT2_WORLD_ANIM_SIZE);
+    return YT2_STATUS_OK;
 }

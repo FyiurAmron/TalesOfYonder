@@ -1,6 +1,7 @@
 #!/bin/sh
 # Starts the engine server (DOSBox-X for the asm build, yt2game for the C
-# build) and then the client, for a one-command test.
+# build, yt2p-play for the B2 port build) and then the client, for a
+# one-command test.
 #
 #   ./play.sh            normal window
 #   ./play.sh --scale 4  four host pixels per game pixel (default 3)

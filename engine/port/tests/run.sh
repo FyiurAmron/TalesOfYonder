@@ -53,9 +53,11 @@ if [ ! -f "$PICTURES" ]; then
     PICTURES=
 fi
 
+mkdir -p "$RUN/unit-tmp"
 YT2_SAVE="$SAVE" YT2_SAVE_ROUNDTRIP="$RUN/roundtrip.save" \
     YT2_SAVE_MOVED="$RUN/moved.save" YT2_WORLD="$WORLD" \
-    YT2_PICTURES="$PICTURES" "$BUILD/yt2p-tests" >"$RUN/tests.log"
+    YT2_PICTURES="$PICTURES" YT2_PORT_TMP="$RUN/unit-tmp" \
+    "$BUILD/yt2p-tests" >"$RUN/tests.log"
 cat "$RUN/tests.log"
 
 if [ -n "$WORLD" ]; then
@@ -108,6 +110,270 @@ if [ -n "$PICTURES" ] && [ -n "$WORLD" ]; then
         exit 1
     fi
     echo "port: main-menu picture renders to the original frame"
+
+    # The oracle frame carries the hand cursor at (24,170); this hash is the
+    # page composition before the display layer draws the pointer.
+    "$BUILD/yt2p-cluebook" "$PICTURES" "$WORLD" "$RUN/cluebook.ppm" \
+        >"$RUN/cluebook.txt"
+    if ! grep -q \
+            "cluebook: frame 07D368FE31D7447F palette-fnv E3275EE3AE459FB5" \
+            "$RUN/cluebook.txt"; then
+        echo "port: clue-book page does not match the original" >&2
+        cat "$RUN/cluebook.txt" >&2
+        exit 1
+    fi
+    if [ "$(wc -c <"$RUN/cluebook.ppm")" -ne 192015 ]; then
+        echo "port: clue-book PPM has the wrong size" >&2
+        exit 1
+    fi
+    echo "port: clue-book page composes to the original frame"
+
+    # The oracle frame carries the hand cursor at (24,170); the catalog hash is
+    # the page composition before the display layer draws the pointer.
+    mkdir -p "$RUN/catalog"
+    "$BUILD/yt2p-catalog" "$PICTURES" "$WORLD" 67 "$RUN/catalog" \
+        >"$RUN/catalog.txt"
+    if ! grep -q "catalog 67 rank 0 frame 064C1427810F47E3" \
+            "$RUN/catalog.txt"; then
+        echo "port: clue-book map catalog does not match the original" >&2
+        cat "$RUN/catalog.txt" >&2
+        exit 1
+    fi
+    "$BUILD/yt2p-mapview" "$PICTURES" "$WORLD" 67 "$RUN/catalog" \
+        >"$RUN/mapview.txt"
+    if ! grep -q \
+            "map 67 ANCIENT RUINS            frame 725194639EB33B4F palette E3275EE3AE459FB5" \
+            "$RUN/mapview.txt"; then
+        echo "port: overhead map does not compose the intended frame" >&2
+        cat "$RUN/mapview.txt" >&2
+        exit 1
+    fi
+    echo "port: clue-book catalog and overhead map compose"
+
+    # Both oracle frames carry the hand cursor at (24,170); the hashes are
+    # the page compositions before the display layer draws the pointer.
+    mkdir -p "$RUN/monsters"
+    "$BUILD/yt2p-monsters" "$PICTURES" "$WORLD" 0 "$RUN/monsters" \
+        >"$RUN/monsters.txt"
+    "$BUILD/yt2p-monsters" "$PICTURES" "$WORLD" 60 "$RUN/monsters" \
+        >>"$RUN/monsters.txt"
+    if ! grep -q "monsters 0 frame D5B4C34273DCD369" "$RUN/monsters.txt" ||
+       ! grep -q "monsters 60 frame 6E3F491525EA591E" "$RUN/monsters.txt"; then
+        echo "port: monster statistics do not match the original" >&2
+        cat "$RUN/monsters.txt" >&2
+        exit 1
+    fi
+    echo "port: monster statistics compose"
+
+    # The oracle frames carry the hand cursor at (24,170); these hashes are
+    # the page compositions before the display layer draws the pointer.
+    # Rank 98's page turn presents a transitional frame first; the pinned
+    # composition matches the settled one (plus the cursor, in test_cursor).
+    mkdir -p "$RUN/spells"
+    "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" 0 "$RUN/spells" \
+        >"$RUN/spells.txt"
+    "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" 14 "$RUN/spells" \
+        >>"$RUN/spells.txt"
+    "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" 98 "$RUN/spells" \
+        >>"$RUN/spells.txt"
+    "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" 104 "$RUN/spells" \
+        >>"$RUN/spells.txt"
+    if ! grep -q "spells 0 frame 336AED2DF4355F25" "$RUN/spells.txt" ||
+       ! grep -q "spells 14 frame 4E0021E2C76A7281" "$RUN/spells.txt" ||
+       ! grep -q "spells 98 frame 14A80E5E78EF674E" "$RUN/spells.txt" ||
+       ! grep -q "spells 104 frame EB4FF720BE73034E" "$RUN/spells.txt"; then
+        echo "port: spell information does not match the original" >&2
+        cat "$RUN/spells.txt" >&2
+        exit 1
+    fi
+    for detail in 0 3 31 60 85 101 104; do
+        "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" detail "$detail" \
+            "$RUN/spells" >>"$RUN/spells.txt"
+    done
+    "$BUILD/yt2p-spells" "$PICTURES" "$WORLD" detail-index 86 \
+        "$RUN/spells" >>"$RUN/spells.txt"
+    cat >"$RUN/spells-detail-expected.txt" <<'EOF'
+spells detail 0 frame 0FB79595E489737C
+spells detail 3 frame 23A5CEF0412FAD86
+spells detail 31 frame AC8DE7BF1FEF84C6
+spells detail 60 frame 0A7260957E4324FD
+spells detail 85 frame DE7BEED456D5549F
+spells detail 101 frame 891A56D3D6EAEF4F
+spells detail 104 frame 3B7482191D934F83
+spells detail-index 86 frame 6E6CF078435509A7
+EOF
+    if ! grep -E "spells detail(-index)?" "$RUN/spells.txt" | \
+            diff -u "$RUN/spells-detail-expected.txt" -; then
+        echo "port: spell details do not match the original" >&2
+        exit 1
+    fi
+    echo "port: spell information composes"
+
+    # The F4 class list (no MORE line on its single page) and the six
+    # spell-by-class details; the oracle frames carry the hand at (24,170)
+    # and the pinned compositions match them in test_cursor.
+    mkdir -p "$RUN/classes"
+    "$BUILD/yt2p-classes" "$PICTURES" "$WORLD" list 0 "$RUN/classes" \
+        >"$RUN/classes.txt"
+    "$BUILD/yt2p-classes" "$PICTURES" "$WORLD" list 5 "$RUN/classes" \
+        >>"$RUN/classes.txt"
+    for spec in "0 0" "0 51" "1 0" "1 49" "2 0" "2 31" "3 0" "3 46" \
+            "4 0" "4 46" "5 0" "5 30"; do
+        # shellcheck disable=SC2086
+        "$BUILD/yt2p-classes" "$PICTURES" "$WORLD" detail $spec \
+            "$RUN/classes" >>"$RUN/classes.txt"
+    done
+    cat >"$RUN/classes-expected.txt" <<'EOF'
+classes list 0 frame 635F5999F0C8700A
+classes list 5 frame 3E56F34BA5FD770A
+classes detail 0 0 frame 7D2F8F049CB7FC98
+classes detail 0 51 frame F3BB3DD90AE90F86
+classes detail 1 0 frame 63D575509257F536
+classes detail 1 49 frame 4894CC8AA5C6573B
+classes detail 2 0 frame 53D69E6B5ECC0E63
+classes detail 2 31 frame 22F3C1CCB32DFCAB
+classes detail 3 0 frame 3E269B1BDE50C254
+classes detail 3 46 frame 2997949A89D11BF3
+classes detail 4 0 frame 9A05102B5253BD5E
+classes detail 4 46 frame 481A7B87A5FBB989
+classes detail 5 0 frame C2D26B9AA8411307
+classes detail 5 30 frame DFA9A774EC40F77A
+EOF
+    if ! diff -u "$RUN/classes-expected.txt" "$RUN/classes.txt"; then
+        echo "port: magic users do not match the original" >&2
+        exit 1
+    fi
+    echo "port: magic users compose"
+
+    # The F5 category list and the six item details; the oracle frames
+    # carry the hand at (24,170) and the pinned compositions match them
+    # in test_cursor.
+    mkdir -p "$RUN/items"
+    "$BUILD/yt2p-items" "$PICTURES" "$WORLD" list 0 "$RUN/items" \
+        >"$RUN/items.txt"
+    "$BUILD/yt2p-items" "$PICTURES" "$WORLD" list 7 "$RUN/items" \
+        >>"$RUN/items.txt"
+    for spec in "0 0" "0 40" "2 0" "2 51" "3 0" "3 42" "4 0" "4 12" \
+            "5 0" "5 26" "7 0" "7 23"; do
+        # shellcheck disable=SC2086
+        "$BUILD/yt2p-items" "$PICTURES" "$WORLD" detail $spec \
+            "$RUN/items" >>"$RUN/items.txt"
+    done
+    "$BUILD/yt2p-items" "$PICTURES" "$WORLD" attribute "$RUN/items" \
+        >>"$RUN/items.txt"
+    "$BUILD/yt2p-items" "$PICTURES" "$WORLD" transport "$RUN/items" \
+        >>"$RUN/items.txt"
+    for spec in "0 0 0" "0 8 0" "2 0 0" "3 27 0" "4 0 0" "4 3 0" "5 9 0" \
+            "7 15 0" "0 0 5"; do
+        # shellcheck disable=SC2086
+        "$BUILD/yt2p-items" "$PICTURES" "$WORLD" page $spec \
+            "$RUN/items" >>"$RUN/items.txt"
+    done
+    cat >"$RUN/items-expected.txt" <<'EOF'
+items list 0 frame 52651339B2A27723
+items list 7 frame 4A2B69FF4D3178A3
+items detail 0 0 frame C87C5DD07A185A62
+items detail 0 40 frame D92112F791E7D764
+items detail 2 0 frame 1E817B5AF150837B
+items detail 2 51 frame B6584121446C9BE7
+items detail 3 0 frame 59C84B0330566BC2
+items detail 3 42 frame C28B92EDC54E105C
+items detail 4 0 frame 058C34726C803E2C
+items detail 4 12 frame 7FF1158C5AE3F7AC
+items detail 5 0 frame A6FCF8E8B1E8075E
+items detail 5 26 frame 93B6F804E0C2FF14
+items detail 7 0 frame E67074CED9AF3D42
+items detail 7 23 frame 381074A149039DDA
+items attribute frame 95390B103B037E48
+items transport frame 65F8EE40B9331EF8
+items page 0 0 +0 frame B3D20242B09338EB
+items page 0 8 +0 frame 09261DA6156A2B77
+items page 2 0 +0 frame 5D12B0CDD1A500D2
+items page 3 27 +0 frame C9335F4118960E4E
+items page 4 0 +0 frame 3E9D8067847AC596
+items page 4 3 +0 frame 5CB36EB9E65878A7
+items page 5 9 +0 frame A3FA36F51F77EE9B
+items page 7 15 +0 frame 46D80760FA64D742
+items page 0 0 +5 frame B7513842755800DB
+EOF
+    if ! diff -u "$RUN/items-expected.txt" "$RUN/items.txt"; then
+        echo "port: inventory items do not match the original" >&2
+        exit 1
+    fi
+    echo "port: inventory items compose"
+
+    # The F6 walkthrough pages; the oracle frames carry the hand at
+    # (24,170) and the pinned compositions match them in test_cursor.
+    # Pages 0-1 also match B1's own cursor-free ESC transitionals.
+    mkdir -p "$RUN/walkthrough"
+    for page in 0 1 14 19 30; do
+        "$BUILD/yt2p-walkthrough" "$PICTURES" "$WORLD" "$page" \
+            "$RUN/walkthrough" >>"$RUN/walkthrough.txt"
+    done
+    cat >"$RUN/walkthrough-expected.txt" <<'EOF'
+walkthrough 0 frame 2006DFD600464B52
+walkthrough 1 frame 22F421C5C49220A1
+walkthrough 14 frame A2B9C0771EAF4A5D
+walkthrough 19 frame 964B04246F019CFC
+walkthrough 30 frame 8A6765000C222B95
+EOF
+    if ! diff -u "$RUN/walkthrough-expected.txt" "$RUN/walkthrough.txt"; then
+        echo "port: walkthrough does not match the original" >&2
+        exit 1
+    fi
+    echo "port: walkthrough composes"
+
+    mkdir -p "$RUN/boot"
+    "$BUILD/yt2p-boot" "$PICTURES" "$WORLD" "$RUN/boot" >"$RUN/boot.txt"
+    cat >"$RUN/boot-expected.txt" <<'EOF'
+scene webfoot         frame C5B1519EF4C1133A palette 089875EBAB4D4C6F
+scene story-sleep     frame FB816B027A864AD1 palette 16E60732045316F6
+scene story-knock     frame 033C9733AF00EB97 palette 16E60732045316F6
+scene attract-combat  frame 1B323B732AF8CFD9 palette E3275EE3AE459FB5
+scene attract-magic   frame E7BF3FF049508B10 palette E3275EE3AE459FB5
+scene attract-dragons frame FD9A4B6D3EA90207 palette E3275EE3AE459FB5
+scene attract-tower   frame 0384E6A33033B700 palette E3275EE3AE459FB5
+scene attract-shop    frame EA4646AEFAF5EADD palette E3275EE3AE459FB5
+scene title           frame 09BEC5E9162924EF palette E3275EE3AE459FB5
+scene menu            frame 6ADE1397DAE95BC0 palette E3275EE3AE459FB5
+EOF
+    if ! diff -u "$RUN/boot-expected.txt" "$RUN/boot.txt"; then
+        echo "port: start-up scenes do not match the original" >&2
+        exit 1
+    fi
+    echo "port: start-up scenes compose to the original frames"
+
+    # The engine speaks v0: the player presents the catalog with the hand at
+    # the oracle capture's position, and the wire bytes decode to the oracle
+    # framebuffer.
+    mkdir -p "$RUN/play/game"
+    cp "$PICTURES" "$RUN/play/game/PICTURES.VGA"
+    cp "$WORLD" "$RUN/play/game/WORLD.DAT"
+    "$BUILD/yt2p-play" "$RUN/play/game" --scene 1 --cursor 24,170 \
+        --frames 3 --tick-ms 1 >"$RUN/play.txt" 2>&1
+    if ! grep -q "play: 3 frames" "$RUN/play.txt"; then
+        echo "port: yt2p-play did not present 3 frames" >&2
+        cat "$RUN/play.txt" >&2
+        exit 1
+    fi
+    if ! python3 "$PORT/tests/check_stream.py" "$RUN/play/game/OUTPUT.BIN" \
+            BC1E5BFF608CB41B 3 >"$RUN/stream.txt" 2>&1; then
+        echo "port: B2 stream does not decode to the oracle frame" >&2
+        cat "$RUN/stream.txt" >&2
+        exit 1
+    fi
+    echo "port: player stream decodes to the oracle framebuffer"
+    if command -v dotnet >/dev/null 2>&1; then
+        if ! sh "$ROOT/tests/replay/run.sh" "$RUN/play/game/OUTPUT.BIN" \
+                >"$RUN/replay.txt" 2>&1; then
+            echo "port: client and Python disagree on B2 output" >&2
+            cat "$RUN/replay.txt" >&2
+            exit 1
+        fi
+        echo "port: client renders B2 output like the reference decoder"
+    else
+        echo "port: dotnet missing; skipping the client render check"
+    fi
 fi
 
 if [ -z "$SAVE" ]; then

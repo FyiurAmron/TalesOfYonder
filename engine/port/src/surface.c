@@ -98,3 +98,64 @@ int yt2_surface_blit(yt2_surface *surface, int x, int y, const uint8_t *source,
     }
     return YT2_STATUS_OK;
 }
+
+int yt2_surface_blit_transparent(yt2_surface *surface, int x, int y,
+                                 const uint8_t *source, unsigned int width,
+                                 unsigned int height, uint8_t transparent)
+{
+    long long source_x = 0;
+    long long source_y = 0;
+    long long destination_x = x;
+    long long destination_y = y;
+    long long copy_width;
+    long long copy_height;
+
+    if (surface == NULL || surface->pixels == NULL || source == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    if (width == 0u || height == 0u) {
+        return YT2_STATUS_OK;
+    }
+    if (destination_x < 0) {
+        source_x = -destination_x;
+        destination_x = 0;
+    }
+    if (destination_y < 0) {
+        source_y = -destination_y;
+        destination_y = 0;
+    }
+    if ((unsigned long long)source_x >= width ||
+        (unsigned long long)source_y >= height ||
+        (unsigned long long)destination_x >= surface->width ||
+        (unsigned long long)destination_y >= surface->height) {
+        return YT2_STATUS_OK;
+    }
+
+    copy_width = (long long)width - source_x;
+    if (copy_width > (long long)surface->width - destination_x) {
+        copy_width = (long long)surface->width - destination_x;
+    }
+    copy_height = (long long)height - source_y;
+    if (copy_height > (long long)surface->height - destination_y) {
+        copy_height = (long long)surface->height - destination_y;
+    }
+    if (copy_width <= 0 || copy_height <= 0) {
+        return YT2_STATUS_OK;
+    }
+
+    for (long long row = 0; row < copy_height; row++) {
+        const uint8_t *source_row =
+            source + (size_t)(source_y + row) * width + (size_t)source_x;
+        uint8_t *destination_row = surface->pixels +
+                                   (size_t)(destination_y + row) *
+                                       surface->stride +
+                                   (size_t)destination_x;
+
+        for (long long column = 0; column < copy_width; column++) {
+            if (source_row[column] != transparent) {
+                destination_row[column] = source_row[column];
+            }
+        }
+    }
+    return YT2_STATUS_OK;
+}
