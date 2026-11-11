@@ -29,4 +29,9 @@ void yt2_surface_clear(yt2_surface *surface, uint8_t value);
 int yt2_surface_blit(yt2_surface *surface, int x, int y, const uint8_t *source,
                      unsigned int width, unsigned int height);
 
+/* As above, skipping source pixels equal to `transparent`. */
+int yt2_surface_blit_transparent(yt2_surface *surface, int x, int y,
+                                 const uint8_t *source, unsigned int width,
+                                 unsigned int height, uint8_t transparent);
+
 #endif /* YT2_SURFACE_H */

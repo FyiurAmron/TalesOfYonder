@@ -56,6 +56,33 @@ int test_surface(void)
           YT2_STATUS_OK);
     CHECK(surface.pixels[0] == 0u);
 
+    yt2_surface_clear(&surface, 0xAAu);
+    CHECK(yt2_surface_blit_transparent(&surface, 2, 1, pattern, 3u, 3u,
+                                       5u) == YT2_STATUS_OK);
+    CHECK(surface.pixels[1u * 16u + 2u] == 1u);
+    CHECK(surface.pixels[1u * 16u + 3u] == 2u);
+    CHECK(surface.pixels[1u * 16u + 4u] == 3u);
+    CHECK(surface.pixels[2u * 16u + 2u] == 4u);
+    CHECK(surface.pixels[2u * 16u + 3u] == 0xAAu);
+    CHECK(surface.pixels[2u * 16u + 4u] == 6u);
+    CHECK(surface.pixels[3u * 16u + 4u] == 9u);
+    CHECK(surface.pixels[1u * 16u + 1u] == 0xAAu);
+
+    yt2_surface_clear(&surface, 0xAAu);
+    CHECK(yt2_surface_blit_transparent(&surface, -1, -1, pattern, 3u, 3u,
+                                       1u) == YT2_STATUS_OK);
+    CHECK(surface.pixels[0] == 5u);
+    CHECK(surface.pixels[1] == 6u);
+    CHECK(surface.pixels[16] == 8u);
+    CHECK(surface.pixels[17] == 9u);
+
+    CHECK(yt2_surface_blit_transparent(NULL, 0, 0, pattern, 3u, 3u, 0u) ==
+          YT2_STATUS_ERROR);
+    CHECK(yt2_surface_blit_transparent(&surface, 0, 0, NULL, 3u, 3u, 0u) ==
+          YT2_STATUS_ERROR);
+    CHECK(yt2_surface_blit_transparent(&surface, 0, 0, pattern, 0u, 3u, 0u) ==
+          YT2_STATUS_OK);
+
     CHECK(yt2_surface_blit(NULL, 0, 0, pattern, 3u, 3u) ==
           YT2_STATUS_ERROR);
     CHECK(yt2_surface_blit(&surface, 0, 0, NULL, 3u, 3u) ==

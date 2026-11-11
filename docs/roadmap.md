@@ -33,10 +33,16 @@ deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
 ## Next
 
 - **M8 - B2 real C port.**  State core, save loader/writer, the `WORLD.DAT`
-  map/palette loader, the `PICTURES.VGA` groups and the indexed surface are in
-  `engine/port/`.  The title and main-menu pictures now render to the
-  original's exact frame hashes.  Next: the boot/menu sequence and the
-  clue-book shell;
+  map/palette loader, the `PICTURES.VGA` groups, the indexed surface, the
+  static start-up scenes and the clue-book shell (help page, F1 map catalog
+  and overhead map, F2 monster list, F3 spell list, F4 class list and
+  spell-by-class details, F5 categories, item details and info screens,
+  F6 walkthrough, F2 monster details, F3 spell details, F1 legend
+  selection/display, list and menu click parity) are in `engine/port/`,
+  each rendering to the original's exact frames.  B2 speaks protocol v0
+  over the folder link (`yt2p-play` + the companion client, live on
+  Xvfb).  The hintbook is complete per B1; next is boundary completion
+  (codec 1, AUDIO), plus DOS re-verifies when X11 recovers (MORE-up);
   every slice is gated differentially against B1 and the DOS oracle. B1 is
   frozen as the oracle.
 - M7 details: the pseudo-port is instruction-level emitted C over a 16-bit

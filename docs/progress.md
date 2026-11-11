@@ -2186,3 +2186,407 @@ items now live in `docs/roadmap.md`).
     `6ADE1397DAE95BC0` and palette hash `E3275EE3AE459FB5`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 text face and clue-book shell:
+  - **trigger**: F8 is handled globally in `fn_PollInput` (`cmp al,42h` ->
+    `fn_00952` unless `v_5064` bit 8 is set); Tab from the main menu reaches
+    the same page through `fn_04B70` key `9`.  A B1 run with F8 at tick 7600
+    opens "DARK UNION : THE ON-LINE CLUE BOOK" at tick ~7728.
+  - **composition**: group 0 picture 13 at (1,1) + the standard 6x6 face
+    (DGROUP:`021Ch`, bank 0 of the `0214h` table) + seven 16x16 command icons
+    (group 8: `20h,145h,147h,153h,149h,14Bh,14Dh`) at `(62+30n,180)`, palette
+    0.  Text is transparent; the title/help colour is `0Dh`, the Tab line
+    `59h`, the list `08h`.  Documented in `docs/structures.md`.
+  - **oracle capture**: 3200-tick `--link` run, F8 at 7600; the presented
+    frame `7F29E8DA4ED08B2F` contains the hand cursor at (24,170).  The
+    cursor-free page checksum (FNV-1a 64) is `07D368FE31D7447F`, palette
+    `E3275EE3AE459FB5`.  The seven-phase palette rotation only touches
+    `D0h..DFh`, which the page never uses.
+  - **model**: `yt2/text.h` owns the font table and transparent line drawing;
+    `yt2/cluebook.h` composes the page.  `yt2_surface_blit_transparent` is the
+    ordinary masked blit.  `yt2p-cluebook` renders the page to a PPM.
+  - **gate**: unit tests pin the 'A' glyph, clipping and masked blits, and the
+    real page checksum; `sh engine/port/tests/run.sh` requires
+    `cluebook: frame 07D368FE31D7447F palette-fnv E3275EE3AE459FB5` and
+    `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 boot-scene sources identified (for the next slice):
+  - **webfoot logo**: group 0 picture 16 at (1,1), exact match at tick 89
+    (`c5b1519ef4c1133a`), its own palette (`089875ebab4d4c6f`).
+  - **attract vignettes**: group 0 pictures 17, 18, 19, 20 at (1,0), exact
+    matches at ticks 2956/3080/3205/3329, palette 0.  They are displayed by
+    `fn_0617A` (indices `11h..16h`, twenty ticks each).
+  - **story text screens**: the `story-sleep`/`story-knock` checkpoints are
+    green 6x6 text on black at ticks 1353/2691, not pictures.  The animated
+    story itself is `sub_05D5B` + `sub_052BF` + `sub_054B1` with object and
+    palette animation; the group 2 story picture follows later.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 static start-up scenes:
+  - **scenes**: the ten settled compositions before play are now typed:
+    webfoot (group 0 picture 16 at (1,1), palette 8), the sleep and knock story
+    text screens (black, palette 0 entries `90h..9Fh`, standard 6x6 face,
+    shadow `93h` at `(x,y)` and body `98h` at `(x-1,y-1)`), attract pictures
+    17-21 at (1,0), title picture 22 at (1,0) and the menu picture 2 at (1,1),
+    all on palette 0.  Documented in `docs/structures.md`.
+  - **model**: `yt2/boot.h` exposes the scene enum, composition and palette
+    derivation; `yt2p-boot` renders every scene to a PPM and prints its
+    frame/palette checksums.  No guest video state is involved.
+  - **oracle**: every composition matches the original's checkpoint pair
+    exactly: `C5B1519EF4C1133A`/`089875EBAB4D4C6F` (webfoot),
+    `FB816B027A864AD1`/`033C9733AF00EB97` with `16E60732045316F6`
+    (story text), the five attract pictures with `E3275EE3AE459FB5`, and
+    title `09BEC5E9162924EF` / menu `6ADE1397DAE95BC0`.
+  - **gate**: unit tests pin all ten frame and palette checksums;
+    `sh engine/port/tests/run.sh` diffs `yt2p-boot` against the expected
+    records and still reports `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 clue-book map catalog and overhead map (F1):
+  - **world grid corrected**: the tiles are one 800x144 world grid in
+    row-major order, not per-map blocks; map (`map_x`, `map_y`) tile
+    (`tile_x`, `tile_y`) is world row `map_y * 24 + tile_y`, world column
+    `map_x * 40 + tile_x`.  Display names append the descriptor suffix:
+    `0   ` none, `0n  ` reads `MAP n`, anything else `LEVEL n`.
+  - **catalog**: DGROUP:`0E95Ch` holds the count word (`0x37`) and 55 DWORD
+    entries (one-based map index, flags word) in reading order; ranks 30..32
+    and 53..54 carry flags bit 15 (drawn, cannot be opened).  The page is
+    group 0 picture 14 at (1,1), the `DARK UNION` / `MAPS` header, fourteen
+    names at (40,27) stepping 10 (selected `8Ah`, rest `0Ah`), the `MORE`
+    arrows and the seven command icons.  Documented in `docs/structures.md`.
+  - **overhead records**: the game's record table (dword offsets at
+    DGROUP:`D201h`, word sizes at DGROUP:`D21Dh`) names record 1 (144x100
+    visibility bits at `155918`, MSB first) and record 4 (405 eight-byte
+    legend entries at `165890`: 1-based map, global x/y, text line).  The
+    record's last three slots are the following text record's digit run and
+    never match a map; the game reads all 405 slots all the same.  Icons come
+    from the executable's tables at DGROUP:`E5B3h` (terrain) and `E1D7h`
+    (object), both verified byte-exact against the image.
+  - **oracle**: the B1 catalog framebuffer is B2's composition plus the 103
+    hand-cursor pixels at (24,170); the captured palette is palette 0 except
+    one byte of the animated `D0h..DFh` range.  A replay of the game's own
+    1018-icon B1 draw trace reproduces B2's overhead composition with zero
+    differences.  A scripted DOS run (ESC, F8, F1, Enter) shows the DOS
+    original presenting the same full catalog and the same full overhead map,
+    so B2 matches the true oracle on both screens; the B1 run's truncated
+    overhead (first icons only) is a B1-only presentation artifact.
+  - **gate**: `yt2p-catalog` pins map 67 at rank 0, enabled, frame
+    `064C1427810F47E3`; `yt2p-mapview` pins map 67 `ANCIENT RUINS` frame
+    `725194639EB33B4F` with palette `E3275EE3AE459FB5`;
+    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 cursor overlay and palette rotation:
+  - **why missing**: the composers render static, cursor-free pages, and the
+    pointer plus the animated entries are dynamic state - the mouse position
+    from input, the rotation phase from the tick clock - with no B2 owner yet.
+    Emulating the clock or the pointer inside the composers would break B2's
+    no-emulation rule, so both land as pure parameterized units: index and
+    position in, phase in.  Tick stepping and pointer tracking stay for the
+    display/input layer.
+  - **cursor**: the id is the group-8 picture index (class entry 8: 256-byte
+    blocks at `C4A37A`); the hand is `1Dh`, matched uniquely by overlaying
+    every group-8 picture onto the B1 catalog capture.  Drawn masked at the
+    position as-is (the hotspot is pre-applied by the game's move logic),
+    right/bottom clipped; the x=0 bottom-overflow quirk writes off-screen and
+    is not reproduced.  Documented in `docs/structures.md`.
+  - **rotation**: sub_100F3 rewrites D0h..DFh every 5 ticks from the 48-byte
+    base at WORLD.DAT `82EBA` (head of the 768-byte record read into
+    DS:4A56h; last byte `11h`, not palette 0's `1Bh`): four groups of four,
+    one step forward per call, four phases.  A port trace proves the guest
+    emits only clean 16-entry writes, so B1's interleaved single-D0 messages
+    are present-path sampling with no hardware meaning.  This corrects the
+    old seven-phase note.
+  - **gate**: catalog plus hand at (24,170) reproduces the B1 framebuffer
+    `BC1E5BFF608CB41B` (tick 8050), help page plus hand `7F29E8DA4ED08B2F`
+    (tick 7718); the base and all four phases are pinned byte-exact.
+    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 speaks protocol v0 over the folder link:
+  - **boundary**: fresh B2 implementation of the frozen spec - v0 framing,
+    VIDEO set_mode/palette/rect/frame_end, CONTROL hello, INPUT decode,
+    timed YT2B writer/follower with wrap handling.  Presents coalesce the
+    palette span and send one raw rect per row (the client's 2048-byte
+    payload cap forbids whole-frame rects).  No B1 code is linked.
+  - **player**: `yt2p-play DIR` composes five scenes, tracks the cursor from
+    mouse input, answers hello/keyframe, and steps the palette rotation on
+    the engine tick (every 5 ticks, the original's cadence), so animated
+    phases leave the engine as palette events.  INPUT type 3 follows the
+    established length rule (five bytes: absolute pointer, else quit).
+  - **gates**: unit tests pin every payload byte and the present/keyframe
+    sequences; `check_stream.py` decodes the player's OUTPUT.BIN to the
+    oracle framebuffer `BC1E5BFF608CB41B`; the C# client and the Python
+    decoder render it byte-identically; `tests/port-live/run.sh` proves the
+    mapped window, the first frame and the input round trip on Xvfb.
+    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 presents diff rows against a shadow:
+  - the first boundary cut sent every row every present (64 KB a frame);
+    the presenter now keeps a shadow of what the client has and sends one
+    raw rect per changed row, so a rotation step costs its 16-entry palette
+    span (~60 bytes) and a cursor move costs its dozen rows; keyframes still
+    send mode, full palette and every row;
+  - **gate**: the present tests pin the new sequences (bare frame_end on
+    idle, palette-only on rotation, exactly the touched row); the player,
+    replay-agreement and live gates stay green.
+    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 input following repaired, game keys wired:
+  - **two transport bugs**: a header arriving after the attach was parsed as
+    a record (poisoning the stream) and the handed-out frame pointer was
+    invalidated by the staging shift (batched records decoded shifted by
+    one).  The follower now consumes the header and retires records only on
+    the next poll; the unit test covers multi-record batches.
+  - **game keys**: the demo answered 1-5/Q only, while a human presses
+    arrows and Enter.  F1 opens the catalog, Up/Down move the gold
+    selection, Enter opens the selected map (disabled rows refuse), ESC
+    goes back with the selection kept - all verified against scripted DOS
+    screenshots.  Left-click selects a catalog row or the icon bar (map
+    opens the catalog, EXIT quits); keys drain one per tick through a
+    15-deep ring like the BIOS queue.  `tests/port-input/run.sh` drives the
+    whole flow from a canned INPUT.BIN.
+  - **gate**: `sh tests/port-input/run.sh` -> `port-input: OK`;
+    `sh engine/port/tests/run.sh` -> `port: OK`;
+    `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 port bundle (`--server port`):
+  - `tools/publish-linux.sh` stages `yt2p-play` with its data and the
+    standard launchers (`server-start.sh`, `client-start.sh`, `play.sh`,
+    `smoke-test.sh`); the shared client launcher accepts the new engine.
+    Windows stays asm/c: B2 has no Windows build yet.
+  - **verified**: published bundle smoke-tested, window mapped and first
+    frame shown on Xvfb through the bundle's own scripts.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - one-command runs: `tools/play-port.sh`, publisher `--build`:
+  - `sh tools/play-port.sh` builds the player and client, stages
+    `build/play/` and opens the live link (args pass to the client);
+    `tools/publish-linux.sh` gained `--build` for all three server kinds so
+    a cold tree publishes in one step (it refuses `--server-dir`, which
+    names a prebuilt tree).
+  - **verified**: `play-port.sh` shows the catalog window on Xvfb;
+    `--server port --build` publishes, and both error paths (bad kind,
+    `--build` with `--server-dir`) fail loudly.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 monster statistics list (F2):
+  - **records**: 61 fixed 106-byte records at WORLD.DAT `1A7994`: two
+    13-byte name fields plus 80 stat bytes.  The list is the joined names
+    byte-sorted (no order table in the executable); a DOS capture pins the
+    first page and B1 captures pin the first and last, the last showing
+    the expected five rows with the up-only MORE.
+  - **composer**: the F1 list layout is now the shared `lists` unit (frame,
+    header, fourteen rows, MORE, icons); the catalog renders through it
+    unchanged (its gate hash is untouched) and F2 supplies the
+    `MONSTER STATISTICS` header at x=208 with icons
+    `20 146 147 153 149 14B 14D`, each matched exactly against group 8.
+  - **gate**: `yt2p-monsters` pins rank 0 `D5B4C34273DCD369` and rank 60
+    `6E3F491525EA591E`; both reproduce their B1 framebuffers with the hand
+    cursor at (24,170).  The player gained scene 5 (F2/`6`, own selection,
+    click rows) and the input gate drives it.
+    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 spell information list (F3):
+  - **records**: 105 fixed 80-byte records at WORLD.DAT `1AA65E`: a
+    21-byte space-padded name plus NUL and 58 stat bytes.  The list order
+    is the original's frozen quirk - alphabetical except BLOCK OF POWER
+    (record 87) sits at ranks 5 and 11 while BEAM OF DEATH (record 86)
+    never appears; no such order table exists in either binary.  A
+    105-Down B1 run matched every rank by template (the port's own font
+    at x=40), and the DOS first page shows the same doubled ranks.
+  - **composer**: F3 renders through the shared `lists` unit with the
+    `SPELL INFORMATION` header at x=213 and icons
+    `20 145 148 153 149 14B 14D` (gold scroll, matched exactly against
+    group 8).  The last page holds ranks 98-104; rank 98's page turn
+    presents one transitional frame (stale rows 12-13) before settling.
+  - **gate**: `yt2p-spells` pins ranks 0/14/98/104
+    `336AED2DF4355F25`/`4E0021E2C76A7281`/`14A80E5E78EF674E`/
+    `EB4FF720BE73034E`; plus the hand at (24,170) they reproduce the B1
+    framebuffers `CFDBBECC9F9F16B5`, `2429157AFD25AAC1`,
+    `EE0BBBD290210786`, `C4B3A494D5A4A386`.  The player gained scene 6
+    (F3, own selection, scroll-icon entry, click rows) and the input gate
+    drives it.  `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-12 - M8/B2 magic users (F4 list and spell-by-class details):
+  - **records**: the exe carries three tiers of nine class names
+    (10 bytes padded plus NUL) at `29625h`/`2A0D7h`/`2A13Ah`; the F4
+    list shows base classes 3-8 as `TIER1 / TIER2 / TIER3` triples.
+    Each line's spells (52/50/32/47/47/31) are the original's fixed
+    assignment, captured spell by spell from B1 detail runs - no
+    per-spell mask field yields it - and byte-sorted, a true sort
+    (mage holds BEAM OF DEATH, druid holds BLOCK OF POWER once).
+  - **composer**: both screens render through the shared `lists` unit:
+    list header `MAGIC USER INFORMATION` at x=183, no MORE line on one
+    page (new composer rule, no-op for F1-F3), detail header
+    `SPELL INFORMATION` at x=213 with a `d LIST` footer at (11,185)
+    in `0Fh` (`d` is the font's left arrow), icons
+    `20 145 147 154 149 14B 14D` throughout.  ESC from either F4
+    screen returns to gameplay (the demo maps it to the previous
+    scene); F4 from gameplay does nothing, it needs the help screen.
+  - **gate**: `yt2p-classes` pins the list ranks 0/5
+    `635F5999F0C8700A`/`3E56F34BA5FD770A` and each detail's
+    first/last ranks; plus the hand at (24,170) they reproduce all
+    14 B1 framebuffers (list `7AFA214601883F62`,
+    `55F1BAF7B6BD4662`).  The player gained scenes 7 (F4 list) and 8
+    (detail, footer click returns), and the input gate drives the
+    F4/Down/Enter/Down/click/ESC flow.
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 inventory items (F5 categories, details, infos):
+  - **records**: 744 fixed 58-byte records at WORLD.DAT `7114B`: three
+    13-byte name fields plus 19 stat bytes.  Six categories list fixed
+    subsets (41/52/43/13/27/24 items; no stat byte, pair or triple
+    yields the assignment) in captured, quirked orders (swapped
+    neighbors, trailing SAPHIRE).  Attribute enhancers and
+    transportations are fixed info screens; creature records in the
+    exe at `2946Ch` carry value/uses/time-window (FLYING RUG unused).
+  - **composer**: the category list renders through the shared `lists`
+    unit (header at x=225, gold chest `14Ah`); details swap the title
+    sides (section left, category right-aligned to 315 - new composer
+    title override) with the `d LIST` footer; infos compose over
+    picture 13 with measured text geometry, colors and group-8 icons.
+  - **gate**: `yt2p-items` pins the list ranks 0/7, each detail's
+    first/last ranks and both info frames; plus the hand at (24,170)
+    they reproduce 16 B1 framebuffers, and both info compositions
+    also match B1's own cursor-free ESC transitionals.  The player
+    gained scenes 9 (categories) and 10 (detail/info) and the input
+    gate drives the F5 flow.
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 complete walk through (F6):
+  - **records**: 31 pages of 25 lines of 51 bytes at WORLD.DAT
+    `159158h` (fifty characters plus NUL); the last line of every page
+    is its footer, typos included (pages 20-31 read "N 0F 31").
+    Percent and tilde render literally.  A nine-page ordering-info
+    document follows in the same format, shown by no clue-book screen.
+  - **composer**: dedicated screen (picture 13, titles, 25 verbatim
+    rows at (10,23+6r) in `0Dh`, standard MORE, gold quill `14Ch`).
+    PgDn/PgUp turn pages, arrows and Enter do nothing; every page turn
+    presents a transitional plus the settled frame.  All 31 pages
+    verified row-by-row against the data by template.
+  - **gate**: `yt2p-walkthrough` pins pages 0/1/14/19/30; plus the hand
+    at (24,170) they reproduce the B1 framebuffers, and pages 0-1 also
+    match B1's own cursor-free ESC transitionals.  The player gained
+    scene 11 (F6/PgDn/PgUp/quill icon) and the input gate drives it.
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 monster detail view (F2 Enter):
+  - **records**: the 80 stats bytes behind each 106-byte record hold
+    everything the detail shows: word 0 is the portrait base picture,
+    four BCD big-endian dwords (gold/nuore/ore/exp at +50/+54/+58/+62),
+    seven plain words (2/4/5/6/7/12/13), and the immune/resistant masks
+    (words 37/38).  All slots were correlated exactly across 58
+    captured details; the SPECIAL abilities strings (pink, `PARTY
+    ATTACK` etc.) are frozen per monster.
+  - **composer**: static chrome (picture 13, title, footer, F2 icon
+    bar), 22 stat rows per `sub_04022`, and the tinted portrait drawn
+    last.  Portraits cycle or ping-pong six pictures with a held
+    base+8 excursion; group-2 art blits unclipped; every monster has a
+    fitted high-nibble remap.  `yt2p-monsters detail RANK PIC` renders
+    any state; the player gained scene 12 (Enter/ESC/footer, animated
+    from the nominal phase model) and the input gate drives it.
+  - **gate**: six cursor-free compositions pinned
+    (`C54C6B3F0E9A2EF3` etc.); all 61 excursion states reproduce the
+    B1 framebuffers with the hand at (24,170) (gator
+    `F6B7F3AC18A1FFC3`).  `sh engine/port/tests/run.sh` -> `port:
+    OK`, `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 hintbook click parity (F1 legend, double-click, MORE):
+  - **legend**: clicking an overhead-map marker shows its text
+    (`sub_03F6B`: icon `73h` at (161,0), record-5 line bytes at (170,1)
+    in color 123 over black; 9x9 inclusive hit boxes, first entry wins,
+    misses change nothing).  DOS-verified pixels
+    (`BONES OF TRAVIS`); B2 pins map 67 + lines 116/30 and hit-tests
+    the marker edges.
+  - **clicks**: single press selects, a second press within 6 ticks
+    opens (the `fn_PollInput` kind-6 latch, DOS/B1-verified), the stale
+    latch re-fires once next tick (gated via a row/marker coincidence
+    on map 91); `MORE` arrows page ±14 (down clamps to the last row);
+    icons switch pages; detail footers return.  Left/Right/PgDn/PgUp
+    stay ignored on lists (B1 answers PgDn, B1-only).
+  - **fixes**: the catalog "disabled" gate was wrong (flags bit 15
+    gates nothing; every rank opens, DOS/B1-verified) and is removed;
+    row hit zones are x 40..279 with 6-pixel bands, not full rows.
+  - **open**: B1 pages MORE-up twice per click pair (-28); the game
+    code shows no release/double path, so B2 ships symmetric -14;
+    re-verify MORE-up on DOS when X11 recovers (one-line flip).
+  - **gate**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK` (legend, MORE,
+    double-click, stale-latch steps).
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 spell detail pages (F3 Enter):
+  - **records**: the 80-byte spell records' words 1-3 are the
+    MP/NUORE/ORE costs (105/105); words[0] is the mage's level when a
+    mage casts the spell, else the first row's (105/105).  Class rows
+    (1-6 per page) are the original's fixed per-spell assignment,
+    captured row by row from 105 B1 detail screens; two spells diverge
+    from the F4 membership (idx 7/34 show PALADIN off-list), so rows
+    are frozen per rank, not derived.  AFFECTS (scope/middle/target),
+    WHEN and the five EFFECT slots are frozen per rank too; EFFECT
+    lines mix the normal face with eighteen private symbol glyphs from
+    the executable's second font bank at `2233Ch` (one rank prints the
+    developer's `BK1_CH2` build path).
+  - **composer**: `spell_detail.c` renders over picture 13 with the
+    measured geometry (class block, costs, AFFECTS/WHEN/EFFECT, `d
+    LIST` footer, the list's seven icons); `yt2p-spells detail RANK`
+    renders one page and the player gained scene 13 (Enter opens,
+    double-click opens, footer/ESC return).
+  - **gate**: seven detail compositions pinned (ranks 0/3/31/60/85/101/
+    104); plus the hand at (24,170) they reproduce the B1
+    framebuffers, and all 105 ranks match their B1 framebuffers byte
+    for byte.  The input gate drives Enter/double-click/footer/ESC.
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 per-class spell details (F4 Enter):
+  - **behavior**: Enter (or double-click) on a class-detail row opens
+    the spell's file-indexed detail page (B1-verified: same body as the
+    F3 page, F4 icon bar `20h 145h 147h 154h 149h 14Bh 14Dh`); file 86
+    (`BEAM OF DEATH`, mage rank 3) opens although it has no F3 rank.
+    Footer returns to the class list (B1-verified); ESC returns to the
+    opener in the demo (gameplay in the original).
+  - **composer**: the detail tables are reindexed by file (ranks 5/11
+    share file 87); `yt2_spell_detail_render_index` takes a chrome
+    flag, the rank renderer wraps it.  Player scene 13 shows a file
+    index from either list; the input gate drives both flows.
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 item detail pages (F5 Enter, all 6 types):
+  - **white-box**: the page mains (fn_02D9E/02E27/02E9B) and their
+    bodies were read from the verified disassembly, not guessed from
+    pixels: records at WORLD `71138h` + file*58 (19 stat bytes, then
+    3x13 names), params from `7C81Eh`/`7DCD2h`/`7D502h` plus the
+    struct+0 byte offset, protections/adds from `7BD2Eh` plus
+    struct+2, names from exe `7B34h`/`7DCAh`.  +N boxes navigate to
+    file+N records (no enhancement formula exists); the oracle served
+    only as verification (17/17 pages plus a +5 state match B1
+    framebuffers byte for byte).
+  - **fixes**: scrolls rank 27 is file 736, not 576 (both named
+    `SCROLL OF FORGERY`; v_5110 disambiguates); the old name-matched
+    table entry was wrong.
+  - **composer**: `item_detail.c` renders from disk bytes (no frozen
+    per-item data); `yt2p-items page CAT RANK PLUS` renders one page
+    and the player gained scene 14 (Enter/double-click opens, footer
+    and ESC return, +N boxes clickable with code-exact hit zones).
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

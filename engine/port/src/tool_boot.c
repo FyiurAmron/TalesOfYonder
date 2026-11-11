@@ -1,0 +1,108 @@
+#include "yt2/boot.h"
+#include "yt2/palette.h"
+#include "yt2/pictures.h"
+#include "yt2/surface.h"
+#include "yt2/world.h"
+
+#include <stdio.h>
+
+#define BOOT_WIDTH 320u
+#define BOOT_HEIGHT 200u
+
+static uint64_t checksum(const uint8_t *bytes, size_t size)
+{
+    uint64_t value = UINT64_C(0xCBF29CE484222325);
+
+    for (size_t index = 0; index < size; index++) {
+        value ^= bytes[index];
+        value *= UINT64_C(0x100000001B3);
+    }
+    return value;
+}
+
+static int write_ppm(const char *path, const yt2_surface *surface,
+                     const yt2_palette *palette)
+{
+    FILE *stream = fopen(path, "wb");
+
+    if (stream == NULL) {
+        return 0;
+    }
+    fprintf(stream, "P6\n%u %u\n255\n", surface->width, surface->height);
+    for (unsigned int y = 0; y < surface->height; y++) {
+        const uint8_t *row = surface->pixels + y * surface->stride;
+
+        for (unsigned int x = 0; x < surface->width; x++) {
+            uint8_t rgb[3];
+
+            rgb[0] = yt2_palette_expand(palette->rgb[row[x] * 3u]);
+            rgb[1] = yt2_palette_expand(palette->rgb[row[x] * 3u + 1u]);
+            rgb[2] = yt2_palette_expand(palette->rgb[row[x] * 3u + 2u]);
+            if (fwrite(rgb, 1, sizeof(rgb), stream) != sizeof(rgb)) {
+                fclose(stream);
+                return 0;
+            }
+        }
+    }
+    return fclose(stream) == 0;
+}
+
+int main(int argc, char **argv)
+{
+    yt2_pictures pictures;
+    yt2_world world;
+    yt2_surface surface;
+    int result = 1;
+
+    if (argc != 4) {
+        fprintf(stderr, "usage: %s PICTURES.VGA WORLD.DAT OUTDIR\n", argv[0]);
+        return 2;
+    }
+    if (yt2_pictures_load(argv[1], &pictures) != YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-boot: cannot load %s\n", argv[1]);
+        return 1;
+    }
+    if (yt2_world_load(argv[2], &world) != YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-boot: cannot load %s\n", argv[2]);
+        yt2_pictures_free(&pictures);
+        return 1;
+    }
+    if (yt2_surface_init(&surface, BOOT_WIDTH, BOOT_HEIGHT) !=
+        YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-boot: cannot allocate the surface\n");
+        goto done;
+    }
+
+    for (int scene = 0; scene < (int)YT2_BOOT_SCENE_COUNT; scene++) {
+        yt2_palette palette;
+        char path[1024];
+
+        if (yt2_boot_palette(&world, (yt2_boot_scene)scene, &palette) !=
+                YT2_STATUS_OK ||
+            yt2_boot_render(&surface, &pictures, (yt2_boot_scene)scene) !=
+                YT2_STATUS_OK) {
+            fprintf(stderr, "yt2p-boot: cannot compose scene %d\n", scene);
+            yt2_surface_free(&surface);
+            goto done;
+        }
+        printf("scene %-15s frame %016llX palette %016llX\n",
+               yt2_boot_scene_name((yt2_boot_scene)scene),
+               (unsigned long long)checksum(surface.pixels,
+                                            surface.stride * surface.height),
+               (unsigned long long)checksum(palette.rgb, YT2_PALETTE_SIZE));
+        snprintf(path, sizeof(path), "%s/%s.ppm", argv[3],
+                 yt2_boot_scene_name((yt2_boot_scene)scene));
+        if (!write_ppm(path, &surface, &palette)) {
+            fprintf(stderr, "yt2p-boot: cannot write %s\n", path);
+            yt2_surface_free(&surface);
+            goto done;
+        }
+    }
+    yt2_surface_free(&surface);
+    result = 0;
+
+done:
+    yt2_world_free(&world);
+    yt2_pictures_free(&pictures);
+    return result;
+}

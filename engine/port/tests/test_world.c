@@ -75,7 +75,9 @@ static int test_synthetic(void)
 
     set_tile(bytes, 0u, 1u, 2u, 3u, 4u);
     set_tile(bytes, 1u, 5u, 6u, 7u, 8u);
-    set_tile(bytes, 21u * 960u, 9u, 10u, 11u, 12u);
+    set_tile(bytes, (1u * YT2_WORLD_MAP_TILES_Y + 0u) * YT2_WORLD_TILES_X +
+                         1u * YT2_WORLD_MAP_TILES_X + 0u,
+             9u, 10u, 11u, 12u);
     set_tile(bytes, YT2_WORLD_TILES_COUNT - 1u, 13u, 14u, 15u, 16u);
     set_map(bytes, 0u, "0   ", 0u, 0u);
     set_map(bytes, 21u, "01  ", 1u, 1u);
@@ -233,16 +235,16 @@ static int test_real(void)
         CHECK(strcmp(yt2_world_map_name(&world, map),
                      "PORT HOPE           ") == 0);
     }
-    tile = yt2_world_tile(&world, 1u, 1u, 0u, 0u);
+    tile = yt2_world_tile(&world, 7u, 3u, 12u, 3u);
     CHECK(tile != NULL);
     if (tile != NULL) {
-        CHECK(tile->terrain == 2u && tile->flags == 0u);
-        CHECK(tile->object == 25u && tile->reserved == 0u);
+        CHECK(tile->terrain == 25u && tile->flags == 0u);
+        CHECK(tile->object == 44u && tile->reserved == 0u);
     }
-    tile = yt2_world_tile(&world, 0u, 1u, 28u, 1u);
+    tile = yt2_world_tile(&world, 7u, 3u, 18u, 6u);
     CHECK(tile != NULL);
     if (tile != NULL) {
-        CHECK(tile->terrain == 16u && tile->object == 39u);
+        CHECK(tile->terrain == 36u && tile->object == 16u);
     }
     CHECK(strcmp(world.names[0], "PORT HOPE           ") == 0);
     CHECK(strcmp(world.names[1], "YENDOR-PORT HOPE    ") == 0);

@@ -55,6 +55,16 @@ or, from the tree, `build/c/yt2game --game DIR --live` next to a client followin
 run-length rows, scroll messages and OPL/speaker audio messages above. See
 `engine/c/README.md`.
 
+The B2 real C port ships the same way as a boundary demo (five composed
+scenes, cursor, rotation events; Linux only, since B2 has no Windows build
+yet):
+
+    sh engine/port/tools/build.sh
+    sh tools/publish-linux.sh --server port
+    sh build/dist/yt2-linux-x64/play.sh
+
+See `engine/port/README.md`.
+
 The client waits for `OUTPUT.BIN`, so the start order does not matter; on a video ring wrap the
 engine follows with a keyframe, so a client that starts late resynchronises. Both `.BIN` files carry
 timestamps; no separate recording is needed for normal live playback.
@@ -139,9 +149,11 @@ single-file `client/Yt2Client` with `libSDL3.so.0` next to it, `server/game`
 (the file-backend seam build), and the launchers. `play.sh` starts the server,
 then the client, and stops the server when the client exits. With `--server c`
 the staged server is `yt2game` and its game data instead, and `server-start.sh`
-runs it directly. `--framework` publishes framework-dependent (needs .NET 11 on
-the target); `-n` or `--no-zip` skips the tarball (`--no-tar` remains an alias).
-`--server-dir` and `--out` behave as on Windows.
+runs it directly. With `--server port` the staged server is the B2 player's
+`yt2p-play` with the data it reads. `--framework` publishes
+framework-dependent (needs .NET 11 on the target); `-n` or `--no-zip` skips
+the tarball (`--no-tar` remains an alias). `--server-dir` and `--out` behave
+as on Windows.
 
 ## The window
 
