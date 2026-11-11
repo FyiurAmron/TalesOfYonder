@@ -62,6 +62,28 @@ These are oracle gates: the B2 real C port must pass the same routes without B1 
 
     sh tests/c/run.sh [--no-build]
 
+## `engine/port/tests/run.sh`
+
+The B2 real C port gate. `engine/port/` is the hand-written, idiomatic C engine
+(the C deliverable); it never links the B1 pseudo-port. The gate builds it
+with warnings as errors, runs its unit tests, and on a real 77509-byte save
+compares `yt2p-info` with B1's `yt2saveinfo` byte for byte, requires the
+load/write round trip to be byte-identical, and moves the party to prove the
+writer applies live state without touching other bytes. It also loads the
+shipped `WORLD.DAT` and `PICTURES.VGA`, pinning the map grid, descriptor types,
+known map names, the nine palette checksums and every picture group's bounds
+and checksum. The renderer blits the title picture with palette 0 and requires
+the original's exact frame hash (`09BEC5E9162924EF`) and palette hash
+(`E3275EE3AE459FB5`), then the main-menu picture with frame hash
+`6ADE1397DAE95BC0`. The first slice covers the typed live party model, the
+`CURGAME`/`SAVEGAMEn` container, the `WORLD.DAT` map/palette data, the picture
+groups and the indexed surface; the later slices add the same differential
+checks for services and scripted routes.
+
+    sh engine/port/tests/run.sh [--no-build]
+
+Artifacts land in `build/runs/port/<stamp>/`.
+
 ## `tests/c/link-resync.sh`
 
 The live-file recovery check: a followed `INPUT.BIN` can be recreated under the engine (a new

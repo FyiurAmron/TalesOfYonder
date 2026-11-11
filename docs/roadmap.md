@@ -20,21 +20,25 @@ deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
 | M5 | ✓ | Gameplay slice | scripted char-creation → walking → combat session matches oracle; extended through the spider victory and chest loot |
 | M6 | ✓ | Sound | FM music audible; the game's WORLD.DAT effects stream as VOC samples when sound is on (the effect-3 PC-speaker fallback stays); port-write goldens match |
 | M7 | ✓ | B1 pseudo-port (executable spec) | quick-and-dirty 100% C transcription of the annotated asm runs the original end-to-end and passes the gates; typed file/save records and frozen protocol; Linux/Windows x64 builds. **A milestone, not the deliverable.** |
-| M8 | — | B2 real C port | minimal-but-real, hand-written idiomatic C engine: typed game state/data and normal abstractions; no asm, no guest CPU/registers/memory, no segment:offset dispatch, no emulation glue in the product path; the B2-only build passes the differential gates. **This is the C deliverable.** |
+| M8 | … | B2 real C port | minimal-but-real, hand-written idiomatic C engine: typed game state/data and normal abstractions; no asm, no guest CPU/registers/memory, no segment:offset dispatch, no emulation glue in the product path; the B2-only build passes the differential gates. State core and save loader started in `engine/port/`. **This is the C deliverable.** |
 | M9 | — | Companion client / host boundary | C core as a host-neutral library over direct/in-process, IPC (shared memory/socket) and record/replay transports; the SDL client renders, plays OPL and injects input on them (the folder link stays a debug backend); replay from recordings; input and audio scheduled on one boundary clock |
 | M10 | — | C# port | new solution, written from B2 (not B1): starts as stream client/front-end, then takes over the engine; the same replay/differential gates run against it. **Starts the real forward effort.** |
 
 ## Open items
 
-- B2 state model and module boundaries — the first M8 task; the B2 tree must not link B1 code.
+- B2 state model and module boundaries — started in `engine/port/` (live party state + save container); the B2 tree must not link B1 code.
 - transport set for the product (in-process / shared memory / sockets) — decide at M9.
 - codec upgrade (LZSS/LZ4) timing — only if the video link needs the bytes.
 
 ## Next
 
-- **M8 - B2 real C port.**  Start with the shared typed state model, the data
-  loaders and save/load, then the boot/menus slice; every slice is gated
-  differentially against B1 and the DOS oracle. B1 is frozen as the oracle.
+- **M8 - B2 real C port.**  State core, save loader/writer, the `WORLD.DAT`
+  map/palette loader, the `PICTURES.VGA` groups and the indexed surface are in
+  `engine/port/`.  The title and main-menu pictures now render to the
+  original's exact frame hashes.  Next: the boot/menu sequence and the
+  clue-book shell;
+  every slice is gated differentially against B1 and the DOS oracle. B1 is
+  frozen as the oracle.
 - M7 details: the pseudo-port is instruction-level emitted C over a 16-bit
   guest model. It is the executable spec, not the product; no new gameplay
   work goes into it.

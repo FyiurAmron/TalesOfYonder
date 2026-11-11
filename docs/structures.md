@@ -130,6 +130,56 @@ The field order is the stat panel's name table at DS:540Ch; `fn_0AB61` sets
 In the shipped roster the two copies differ only in `hit_points` (CONAN has 4
 current / 13 maximum); the second copy is what the character sheet displays.
 
+## `PICTURES.VGA`
+
+Ten picture groups pack the whole file back to back.  A picture is raw 8-bit
+pixels, `width * height` bytes with tightly packed rows (no stride padding).
+The groups are the picture-cache classes; the cache slot counts depend on how
+much EMS is available.
+
+| group | size | count | offset | bytes |
+|---|---|---|---|---|
+| 0 | 318×198 | 23 | `00000000` | 1 448 172 |
+| 1 | 210×105 | 101 | `001618EC` | 2 227 050 |
+| 2 | 140×155 | 215 | `00381456` | 4 665 500 |
+| 3 | 190×110 | 162 | `007F44F2` | 3 385 800 |
+| 4 | 224×74 | 18 | `00B2EEBA` | 298 368 |
+| 5 | 224×62 | 12 | `00B77C3A` | 166 656 |
+| 6 | 56×136 | 55 | `00BA073A` | 418 880 |
+| 7 | 32×32 | 270 | `00C06B7A` | 276 480 |
+| 8 | 16×16 | 510 | `00C4A37A` | 130 560 |
+| 9 | 8×8 | 576 | `00C6A17A` | 36 864 |
+
+The file is 13 054 330 bytes (`00C7317A`).  Palettes are separate: the logo
+and Webfoot intro pictures use their own palettes, the rest the main game
+palette.  B2 exposes a group table and a pointer to each picture; the gate
+pins the group boundaries and an FNV-1a checksum of every group.
+
+## `WORLD.DAT` map prefix
+
+The map database is a flat prefix at the start of `WORLD.DAT`; the sound and
+music records follow it.  The B2 loader in `engine/port/include/yt2/world.h`
+reads this prefix into typed tiles, map descriptors and map names.
+
+| offset | block | layout | notes |
+|---|---|---|---|
+| `00000` | tiles | 115 200 × 4 | 20×6 maps of 40×24 tiles, row-major |
+| `70800` | map descriptors | 120 × 6 | `suffix[4]`, `name_index` byte, `type` byte |
+| `70AD0` | map names | 70 × 20 | fixed-width, space padded |
+| `71048` | rest | | SFX records |
+| `8270A` | palettes | 9 × 768 | 6-bit RGB DAC triples |
+| `8420A` | rest | | world/music records |
+
+A tile is `terrain`, `flags` (block/passthrough), `object` index and one
+reserved byte.  Descriptor type 0 is a filler map, 1 a world map, 2 a dungeon.
+The shipped file is 1 796 340 bytes; the first descriptor is filler, map 21 is
+`YENDOR-PORT HOPE` and map 24 is `PORT HOPE` dungeon level 1.
+
+The nine palettes are loaded with `fn_1821A` (offset table at DS:0CE6F,
+record size `300h`): palette 0 is the title/attract palette (FNV-1a 64
+`E3275EE3AE459FB5`), and the intro/story code fades only selected ranges of a
+palette.  Palettes are stored as 6-bit DAC values, not 8-bit.
+
 ## Other records
 
 | record | source | notes |

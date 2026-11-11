@@ -14,6 +14,8 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
       c/                         B1 pseudo-port/executable spec: emitted instruction-level
                                  C, protocol/service boundary, headless stub, file/save
                                  records and Windows x64 cross-build (not the product)
+      port/                      B2 real C port: hand-written idiomatic C, typed game
+                                 state, data loaders and normal service interfaces
     client/                      the C# companion client (SDL3)
       publish/win/               static files that go into the Windows bundle
       publish/linux/             static files that go into the Linux bundle
@@ -39,6 +41,7 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
 | `build/sbfmdrv/`, `build/sbfmdrv/test/` | the driver build and its test COMs |
 | `build/c/` | the B1 pseudo-port, `yt2stub`, `yt2saveinfo` and the unit tests |
 | `build/c-win/` | the Windows x64 PE32+ B1 programs from `engine/c/tools/build-mingw.sh` |
+| `build/port/` | the B2 real C port: `yt2p-info`, `yt2p-tests` and objects |
 | `build/client/{bin,obj}/` | the C# client (`client/Directory.Build.props` redirects MSBuild here) |
 | `build/runs/<kind>/<stamp>/` | per-run artifacts: oracle, stream, link, replay, session, repro, sbfmdrv, server |
 | `build/dist/` | published bundles (the Windows zip, the Linux tar and their staging dirs) |
@@ -66,6 +69,7 @@ Rules:
 | seam work (protocol, backends, hooks) | `engine/asm/swreg/src/seam.asm` |
 | B1 pseudo-port, protocol/service boundary, backends, stub | `engine/c/` (`src/`, `include/yt2/`, `tests/`) |
 | B1 typed file/save/party/music records | `engine/c/include/yt2/data.h`, `engine/c/src/data.c`, `docs/structures.md` |
+| B2 real C port: live state, data loaders, services | `engine/port/` (`src/`, `include/yt2/`, `tests/`) |
 | FM driver disassembly | `engine/asm/sbfmdrv/src/` |
 | client behaviour (decode, render, options) | `client/*.cs` |
 | bundle packaging | `tools/publish-*.sh` + `client/publish/{win,linux}/` |
@@ -75,7 +79,7 @@ Rules:
 | the roadmap / next steps | `docs/roadmap.md` |
 | the dated progress log | `docs/progress.md` |
 | the protocol spec | `docs/protocol.md` (frozen v0; the source of truth for what crosses the boundary) |
-| the data-model spec | `docs/structures.md` (frozen save/party layout; the C# reference) |
+| the on-disk data layout | `docs/structures.md` (B1 save/party layout; B2 live models are in `engine/port/include/yt2/`) |
 
 Both `engine/asm/swreg/src/swreg.asm` and `engine/asm/sbfmdrv/src/sbfmdrv.asm` are gated
 byte-exactly; `swreg.asm` additionally pins its non-seam text (`swreg.pin`). See

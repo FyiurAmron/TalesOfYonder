@@ -2091,3 +2091,98 @@ items now live in `docs/roadmap.md`).
     `engine/c/README.md` are reframed to match.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 first slice: live party state and the save container:
+  - **new tree**: `engine/port/` is the hand-written B2 engine.  It is
+    ordinary C11 (`-Wall -Wextra -Wpedantic -Werror`) and has no generated
+    code, guest memory, registers, segment dispatch or B1 link.  The B1
+    executable spec stays in `engine/c/` as the oracle.
+  - **live model**: `yt2/party.h` names the party header, the nine roster
+    slots, the attributes/combat skills blocks and the pack/equipment/effect
+    containers.  `party.c` parses the 5000-byte block into that state; the
+    byte offsets live in the parser, not in the live structs.
+  - **container**: `yt2/savefile.h` owns the seven-chunk `CURGAME`/
+    `SAVEGAMEn` image and validates that the chunks tile the 77509 bytes.
+    Only the party block is decoded so far; the other chunks stay typed spans
+    until their models land.
+  - **verification**: `sh engine/port/tests/run.sh` builds and runs
+    `yt2p-tests: OK` and requires `yt2p-info` output to be byte-identical to
+    B1's `yt2saveinfo` on the real `SAVGAME1` from the save/load gate
+    (`port: save/party output matches B1`, status 0).  No assembly changed;
+    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 save writer and round-trip gate:
+  - **writer**: `yt2_party_write` writes the modeled header/slot fields back
+    over a party block; `yt2_save_write` copies the container image, applies
+    the live party, and writes the 77509 bytes through the B2 file service.
+    Reserved spans, containers and the other six chunks are preserved, never
+    reinterpreted.
+  - **gate**: the B2 gate now writes the loaded `SAVEGAME1` back and requires
+    `cmp` identity with the original.  It then moves the party to
+    `1234:5678`, requires B1's `yt2saveinfo` to read that position, requires
+    every other decoded field to stay the same and `cmp -l` to show exactly
+    the four position bytes changed (`port: writer applies live state and
+    preserves everything else`).  Unit tests cover the serializer on a
+    synthetic block: all modeled fields round trip and reserved bytes stay
+    put.
+  - **verification**: `sh engine/port/tests/run.sh` -> `port: OK`, status 0;
+    no assembly changed, `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 `WORLD.DAT` map loader:
+  - **layout**: the map database is a flat prefix of `WORLD.DAT`: 115 200
+    four-byte tiles (20×6 maps of 40×24, row-major), then 120 six-byte map
+    descriptors (four-char suffix, name index, type 0/1/2) and 70 fixed
+    20-byte names.  The prefix is `0x71048` bytes; music and SFX records
+    follow.  Documented in `docs/structures.md`.
+  - **model**: `yt2/world.h` decodes the prefix into `yt2_tile` records and
+    `yt2_map`/name tables, keeps the rest of the file for the audio loaders,
+    and offers bounds-checked map/tile accessors.  `yt2p-world` prints the
+    counts and every non-filler map with its name.
+  - **gate**: the unit tests build a synthetic image to pin parsing and
+    bounds behaviour, then load the shipped `WORLD.DAT` and require 90 126
+    non-zero tiles, 48 filler / 25 world / 47 dungeon maps, map 21
+    `YENDOR-PORT HOPE`, map 24 dungeon `PORT HOPE` and the known tile values
+    at maps 21 and 20.  `sh engine/port/tests/run.sh` -> `port: OK`, status 0.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 picture loader:
+  - **format**: `PICTURES.VGA` is ten groups of tightly packed 8-bit pictures
+    (318×198×23, 210×105×101, 140×155×215, 190×110×162, 224×74×18,
+    224×62×12, 56×136×55, 32×32×270, 16×16×510, 8×8×576).  The sizes sum
+    exactly to the 13 054 330-byte file.  The class sizes match the game's
+    cache-init sizes (`0F5F4h`, `5622h`, ...), and the group order follows the
+    cache classes.  Documented in `docs/structures.md`.
+  - **model**: `yt2/pictures.h` exposes the group table and a pointer to each
+    raw picture, with bounds checks; `yt2p-pictures` prints the bounds and an
+    FNV-1a checksum per group.
+  - **gate**: unit tests build a synthetic 13 MB image to pin the offset math,
+    then load the shipped file and require every group's offset/size and a
+    checksum (`70F8CD07`, `0F255152`, ... `DFB96320`).  The shell gate pins the
+    totals and the first/last group lines.  `sh engine/port/tests/run.sh` ->
+    `port: OK`, status 0.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 palettes, surface and the first rendered title frame:
+  - **palettes**: `WORLD.DAT` holds nine 768-byte 6-bit palettes at `8270Ah`,
+    loaded by `fn_1821A` (offset table at DS:0CE6F, record size `300h`).  The
+    B2 world loader parses all nine; palette 0 is the title/attract palette
+    with FNV-1a 64 `E3275EE3AE459FB5`.  The story intro uses the same table
+    but fades only selected ranges (the settled story palette is palette 0
+    with only entries `90h..9Fh` lit).
+  - **surface**: `yt2/surface.c` is an ordinary 320x200 8-bit indexed surface
+    with a clipped blit, no screen segment or video memory.  `yt2p-render`
+    blits one picture with one palette and writes a PPM.
+  - **first frame**: the title screen is group 0 picture 22 at (1,0) with
+    palette 0.  The gate renders it and requires the original's exact frame
+    hash `09BEC5E9162924EF` and palette hash `E3275EE3AE459FB5`, plus the PPM
+    size.  `sh engine/port/tests/run.sh` -> `port: OK`, status 0.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - M8/B2 main-menu frame:
+  - **oracle capture**: letting the intro finish and pressing Tab reaches the
+    main menu.  The captured 320x200 frame is group 0 picture 2 at (1,1) with
+    palette 0; only 89 pixels near (229..237, 179..194) differ from the raw
+    picture (the sound/status overlay).  The menu options are baked into the
+    picture, so the menu background needs no font renderer.
+  - **gate**: `yt2p-render ... 0 2 0 ... 1 1` must print frame hash
+    `6ADE1397DAE95BC0` and palette hash `E3275EE3AE459FB5`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

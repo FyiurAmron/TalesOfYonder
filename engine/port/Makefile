@@ -1,0 +1,61 @@
+# B2 real C port: ordinary C11, no generated code, no guest CPU/memory.
+#
+#   make -C engine/port            # build into build/port
+#   make -C engine/port test       # build and run the unit tests
+#
+# BUILD and CFLAGS may be overridden from the environment.
+
+ROOT := $(abspath ../..)
+BUILD ?= $(ROOT)/build/port
+CC ?= cc
+CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Werror
+CPPFLAGS += -Iinclude
+
+LIB_SOURCES := src/file.c src/party.c src/pictures.c src/savefile.c \
+               src/surface.c src/world.c
+LIB_OBJECTS := $(patsubst src/%.c,$(BUILD)/obj/src/%.o,$(LIB_SOURCES))
+TEST_SOURCES := tests/test_main.c tests/test_party.c tests/test_pictures.c \
+                tests/test_savefile.c tests/test_surface.c tests/test_world.c
+TEST_OBJECTS := $(patsubst tests/%.c,$(BUILD)/obj/tests/%.o,$(TEST_SOURCES))
+
+.PHONY: all test clean
+
+all: $(BUILD)/yt2p-info $(BUILD)/yt2p-pictures $(BUILD)/yt2p-render \
+     $(BUILD)/yt2p-world $(BUILD)/yt2p-tests
+
+test: all
+	$(BUILD)/yt2p-tests
+
+$(BUILD)/yt2p-info: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_info.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-world: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_world.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-pictures: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_pictures.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-render: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_render.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-tests: $(LIB_OBJECTS) $(TEST_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/obj/src/%.o: src/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+
+$(BUILD)/obj/tests/%.o: tests/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
+
+clean:
+	rm -rf $(BUILD)/obj $(BUILD)/yt2p-info $(BUILD)/yt2p-pictures \
+	       $(BUILD)/yt2p-render $(BUILD)/yt2p-world $(BUILD)/yt2p-tests
+
+-include $(wildcard $(BUILD)/obj/src/*.d $(BUILD)/obj/tests/*.d)
