@@ -1,0 +1,434 @@
+========================================================
+	  YENDORIAN TALES - TYRANTS OF THAINE
+			 v1.0
+     Copyright 1997 SW Games -- All Rights Reserved
+	Published by Spectrum Pacific Publishing
+========================================================
+
+--------------------------------------------------------
+System Requirements:
+--------------------------------------------------------
+  IBM 386 PC or 100% compatible, VGA graphics card
+  2 Megs of RAM
+  21 Megs free on the hard disk
+  Microsoft 100% compatible mouse and driver
+  MSDOS 5.00 or later
+
+Recommendations:
+  Sound Blaster or 100% compatible sound card
+  Windows 95
+
+--------------------------------------------------------
+Troubleshooting (Win 95 only):
+--------------------------------------------------------
+  The best way to run this game under Win95 is by using
+  a shortcut.  When setting up the shortcut be sure to
+  set the memory options as shown below.
+
+  How to create a shortcut under Win95.
+    Right click on the desktop
+    Select NEW
+    Select shortcut
+    Browse for (SW.BAT)
+    Click on NEXT
+    Enter a name to be displayed under the icon
+    Click on FINISH
+    Once your shortcut has been created, 
+       make the following changes:
+
+    Select the 'Program' Tab
+    Set Cmd line to run SW.BAT
+    Set Working to TYRANTS directory
+    Check the 'close on exit' box
+    Select the 'Misc' Tab
+    Foreground 'uncheck' Allow screen saver
+    Select the 'Memory' Tab
+    Set all options to Auto
+    Select 'Apply'
+
+  
+  If you are using a Sound Blaster compatible or if you
+  have a non-standard Sound Blaster installation, you
+  must insure that the "BLASTER" environment variable
+  is properly set.  You can open a DOS window and type
+  "SET".  What you see displayed are the environment
+  variables, if there is not a "BLASTER=", you can add 
+  it to the AUTOEXEC.BAT file.  Be sure to use the 
+  proper values for your sound card.
+
+      Example:
+	 SET BLASTER=A220 I5 D1 H5 P330 E620 T6
+
+--------------------------------------------------------
+Troubleshooting (DOS and Win 3.x):
+--------------------------------------------------------
+  Your system must either load EMM386 or another memory
+  manager that provides access to EXPANDED memory.  The
+  program requires a minimum of 2 Megs, but will use up
+  to 8 Megs if it is available.
+      CONFIG.SYS Example:
+	 DEVICE=C:\DOS\EMM386.EXE RAM
+
+  Your mouse driver must be loaded prior to running the
+  game.  This is normally done in the AUTOEXEC.BAT file.
+
+  If you are using a Sound Blaster compatible or if you
+  have a non-standard Sound Blaster installation, you
+  must insure that the "BLASTER" environment variable
+  is properly set in the AUTOEXEC.BAT file.
+      Example:
+	 SET BLASTER=A220 I5 D1 H5 P330 E620 T6
+
+  If your system does not use the standard Sound Blaster
+  FM driver (SBFMDRV) you will need to modify the batch
+  file (SW.BAT) to load the proper driver.
+
+  In all cases, the BLASTER environment variable is
+  required for proper sound operation.
+
+  If you run this software under Windows and experience
+  problems, run the game in a "pure" DOS environment.
+
+--------------------------------------------------------
+To Play Yendorian Tales - THE TYRANTS OF THAINE:
+--------------------------------------------------------
+  Contents:
+
+  1.  What's New
+  2.  Overview
+  3.  Character Creation
+  4.  Using the Existing Party
+  5.  Using the mouse or keyboard
+  6.  Icons
+  7.  Conversations
+  8.  Battle / Magic
+  9.  Manipulating Items
+ 10.  On-line Cluebook
+ 11.  Recent History
+ 12.  Other Games Available from Spectrum Pacific
+      Publishing
+
+--------------------------------------------------------
+  1.  What's New (if you've played CHAPTER 2)
+--------------------------------------------------------
+  New and Improved Graphics and Sound.
+
+  More diverse inventory items.
+
+  Only one magic reagent (Nuore).
+
+  Food is now kept in one place for the party (like 
+  gold).
+
+  Dozens of new monsters and characters.
+
+  Build your own Keep with unique shops and items that
+  can't be found anywhere else.
+
+  Selectable skills have been reduced to four and a
+  character can only have one selected at a time.
+
+--------------------------------------------------------
+  2.  Overview
+--------------------------------------------------------
+  After loading the game and watching the introduction,
+  you can create your characters by selecting the
+  "Character Creation" option.  After creating the 
+  characters you need to "Assemble A Party", then "Enter 
+  the Game". Be sure to save your game when presented 
+  with the disk panel, otherwise if you die, you will 
+  have to create your party again.
+
+  The goals of the game are to create a four character
+  party, get rid of all the monsters, use and sell items
+  that you find, and talk to all of the people and do
+  what they ask of you.  A new goal of the game is to 
+  build and maintain a Keep located in Yendor.
+
+--------------------------------------------------------
+  3.  Character Creation
+--------------------------------------------------------
+  The options will appear on the left side of the screen
+  with the character and its statistics appearing on the
+  right side.  The options may be selected with a left
+  mouse click or a "hot key" (the orange letter).
+
+  The player's attributes will range from 45 to 60. When
+  "picking" up items, left click an item and left click
+  again to drop it on the player or back on the left 
+  side. See the manipulating items section (#9) for 
+  specifics.
+
+  Character Classes:
+      Fighter - 100% Fighter
+     Merchant - 50-75% Fighter 25-50% Thief
+	Rogue - 100% Thief
+
+	 Monk - 100% Cleric (Wisdom is important)
+    Alchemist - 75% Cleric 25% Wizard (WIS and INT)
+      Paladin - 50% Cleric 50% Fighter
+
+	 Mage - 100% Wizard (Intelligence is important)
+	Druid - 75% Wizard 25% Cleric (INT and WIS)
+     Marksman - 50% Wizard  50% Fighter
+
+  Attributes:
+     The most important things to watch when creating 
+     your characters are slashing, bashing or polearm, 
+     and projectile.  The attributes which make up your 
+     Health and Magic points are also important (Stamina 
+     and Intelligence or Wisdom, or both).
+
+       STRength - determines how much weight you can 
+		  carry
+      DEXterity - in battle, the person with the highest
+		  dexterity goes first
+	STAmina - decides the number of health points
+   INTelligence - establishes the number of magic 
+		  points a wizard type will have
+	 WISdom - magic points for cleric types are 
+		  based on this attribute
+       CHArisma - determines number of bonus points in
+		  training (up to 15)
+
+	 DAMage - damage of equipped hand to hand weapon
+     ABSorption - total absorption of equipped armor.
+
+  Skills:
+     Survival - the party's average determines how much 
+		you know about a monster in combat
+   Projectile - accuracy used when shooting projectiles
+     Slashing - accuracy used when equipped with a 
+		slashing type weapon (knife)
+      Bashing - accuracy when using a bashing weapon 
+		(club)
+      Polearm - accuracy when using a polearm (bo stick)
+      Casting - accuracy when casting a spell
+      Mapping - party average is used to determine if 
+		the overhead map can be used and how 
+		much information is displayed on the 
+		party map
+   Navigation - the party's average establishes the 
+		range in which transportation can be 
+		used
+
+  Once you have entered the world, the following skills 
+  can be highlighted by displaying the character's 
+  statistics (double left click portrait or F1-F4) and 
+  then clicking on the skill with the mouse.  Otherwise, 
+  you will be asked who will perform each function when 
+  the time comes.  Each character can have only one 
+  skill selected at a time. 
+  
+   Bartering - the higher this skill, the more you 
+	       profit in transactions with a shop
+      Repair - used when repairing broken items
+    Thievery - used when picking locks or diffusing 
+	       traps
+ Linguistics - translates foreign languages
+
+  Items:
+     You should give everyone a SLING and use them at 
+     every opportunity in the game.  The KNIFE should 
+     only be equipped on those characters that have a 
+     slashing skill higher than their other fighting 
+     skills.  The CLUB is for bashers and the BO STICK 
+     for those with a good polearm skill.
+
+--------------------------------------------------------
+  4.  Using the existing party
+--------------------------------------------------------
+  If you want to play the game without creating your own
+  party, do the following:
+     Go to "Assemble a Party" from the main menu
+     Click the portraits to preview the characters
+     "Check" the four bottom characters if you want them
+     Click "Done"
+     Enter the Game
+
+--------------------------------------------------------
+  5.  Using the mouse or keyboard
+--------------------------------------------------------
+  Left click
+     select icons, options, etc.
+     select graphs and bubbles
+     spend bonus points (in training)
+     pick up items
+     drop items
+
+  Double left click
+	  on portrait - display the character stats.
+	      on item - displays a description
+	     on spell - will cast the spell
+    on clue book list - select that line
+
+  Right click
+   * use an item (potion, scroll, container, etc.)
+   * repair a broken item
+   * in the playing area it uses what's in front of you
+   * talk to an NPC (tables and beds)
+   * on a portrait- toggle display of one inventory 
+     panel
+
+  Double right click
+     on portrait- toggle display of all inventory panels
+
+  Keyboard keys
+     Cursor UP - move forward
+	  DOWN - move backward
+	  LEFT - turn left
+	 RIGHT - turn right
+     Ctrl-LEFT - step left
+    Ctrl-RIGHT - step right
+     "A" attack
+     "C" cast spell
+     "D" disk icon
+     "K" uses the keyring (if you have it)
+     "M" uses the party map (if you have it)
+     "P" toggles all player panels
+     "R" rest (1 food per person needed)
+     "S" shoot projectiles
+     "T" uses the hourglass (if you have it)
+     "V" display the program version
+     "1-4" character HP, MP and weight
+     "F1-F4" character statistic panel
+     "F5" toggles map window, displays Gold, Food and 
+	  Nuore
+     "F8" On-line clue book
+     "SPACE" uses what's in front of you
+	     casts highlighted spell
+	     selects clue book option
+
+--------------------------------------------------------
+  6.  Icons
+--------------------------------------------------------
+  Four buttons located on the right side.
+
+  The first icon is used to "SHOOT" or "ATTACK".
+  The second is used to "CAST" magic.
+  The third is used to "REST" (1 food per person needed).
+  The last is used to access the "DISK" panel.
+
+--------------------------------------------------------
+  7.  Conversations
+--------------------------------------------------------
+  Initiated by right clicking on a table, bed, etc.
+  Keywords are listed in yellow on the top of the panel,
+  responses are shown on the lower part of the panel.
+  At the end of the conversation, any key or click will
+  close the panel.
+
+--------------------------------------------------------
+  8.  Battle / Magic
+--------------------------------------------------------
+  When a monster is directly in front of you, "SHOOT" it
+  with your projectiles.  When in hand to hand, "ATTACK"
+  with your hand to hand weapon.
+
+  Spells are used to damage monsters or heal characters.
+  If a spell is invalid now, it will be "darkened".
+
+--------------------------------------------------------
+  9.  Manipulating items
+--------------------------------------------------------
+  Equipping items:
+   * helmets on the head
+   * armor on the body
+   * gloves on either hand
+   * rings on either circular slot
+   * boots on the foot area
+   * projectiles on the slot to the left of the head
+   * containers on the slot to the right of the head
+   * weapons on the slot to the left of the legs
+   * shields on the slot to the right of the legs
+
+  Containers:
+   * drop an item onto a closed container to put it 
+   * inside "USE" a container to open it
+   * "USE" an open container to close it
+   * containers can be placed in any of the 8 upper 
+     slots
+   * containers can also be placed inside other 
+     containers
+
+  Dropping on the portrait:
+     The item will be placed in the first available
+     appropriate slot.  (Dropping a sword on a player 
+     without a weapon would equip the sword.)
+
+--------------------------------------------------------
+  10.  On-line Cluebook
+--------------------------------------------------------
+  You can press "F8" any time after loading a game to 
+  use the cluebook.  The shareware version of the 
+  cluebook contains limited data on maps, monsters, 
+  spells, items, and a walk through.
+
+--------------------------------------------------------
+ 11.  Recent History
+--------------------------------------------------------
+
+		       - Book I -
+
+  Zamora, Dean of the Athaneum, had been working for 
+  many years on a solution to the growing monster 
+  problem...a magical orb, which he would present to all 
+  of Yendor.
+
+  During the ceremony, an invisible intruder took 
+  possession of the orb.  Your job was to track down the 
+  mysterious culprit and return the orb.
+
+  After many courageous battles, you finally came face 
+  to face with the dark-souled being that had taken the 
+  orb and used it to wreak havoc on Yendor.  This evil 
+  wizard's name...Paltivar.  
+  
+  The Society of Wizards faced a dilemma.  Because he 
+  was once one of them, they could not kill Paltivar.  
+  So, with their combined power, they banished him into 
+  time itself.
+
+		  - Book I  CHAPTER 2 -
+
+  Beginning with a seemingly insignificant quest, you 
+  were led to the mysterious Lost Isles of Yendor.  
+  Following the trail of a group of evil mages, you 
+  encountered civilizations of Gnomes, Elves, and 
+  Halflings.
+
+  Throughout your journey, you learned that the evil 
+  Paltivar had found a way to communicate through 
+  portals.  He was able to gain the loyalty of three 
+  mages, Simech, Cyril and Irudon.  These mages 
+  unlawfully gathered many powerful reagents to 
+  construct a quartz chamber in Thaine.
+
+  In the end, you were able to defeat them.  
+  Unfortunately, their chamber was already complete, 
+  awaiting the eruption of a volcano.  When filled with 
+  lava, this chamber will be activated and allow 
+  Paltivar to be freed from his eternal prison. 
+
+  And so the story continues...
+
+--------------------------------------------------------
+  12.  Other games from Spectrum Pacific Publishing
+--------------------------------------------------------
+
+  Keep an eye out for other games soon to be available
+  from Spectrum Pacific Publishing, including Inner
+  Worlds, Powball, Subhunt, Slicks'N'Slide, Delta Hydra, 
+  Fatal Fumes, and many more!
+
+    ALSO AVAILABLE: The prequel to Tyrants of Thaine:
+	  Yendorian Tales Book I - Chapter 2
+
+========================================================
+	  Yendorian Tales - Tyrants of Thaine
+			 v1.0
+
+	(C)1997 SW Games, ALL RIGHTS RESERVED
+       Published by Spectrum Pacific Publishing
+	  http://www.SpectrumPacific.com.au
+========================================================

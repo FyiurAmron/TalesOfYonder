@@ -136,7 +136,7 @@ and on a real save compares `yt2p-info` output byte-for-byte with B1's
 round trip to be byte-identical, then moves the party and requires B1 to
 read the new position while every other byte stays put.  It also loads the
 shipped `WORLD.DAT` and `PICTURES.VGA` (from `build/swreg/oracle/` or
-`_ref/orig-bin/`), checks the tile/descriptor counts and pins known tiles,
+`_ref/orig-bin/YT2/`), checks the tile/descriptor counts and pins known tiles,
 maps, names, the nine palette checksums and a checksum for every picture
 group.  It then renders the title picture (group 0, picture 22) at (1,0) with
 palette 0 and requires the original's exact frame hash

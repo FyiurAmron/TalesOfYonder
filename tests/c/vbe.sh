@@ -46,7 +46,7 @@ if [ "$DO_BUILD" = yes ] || { [ "$DO_BUILD" = auto ] && [ ! -x "$GAME" ]; } ||
 fi
 
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
+    cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/game/$file"
 done
 python3 "$ROOT/tests/c/check.py" write-input "$RUN/game/INPUT.BIN" \
     full --header-only >/dev/null

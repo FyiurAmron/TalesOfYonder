@@ -161,7 +161,7 @@ grep -q 'done frames=2' "$RUN/null.log"
 echo "c: game live link"
 mkdir -p "$RUN/link/game"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$file" "$RUN/link/game/$file"
+    cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/link/game/$file"
 done
 python3 "$ROOT/tests/c/check.py" write-input "$RUN/link/game/INPUT.BIN" \
     full --header-only >/dev/null
@@ -207,7 +207,7 @@ tail -2 "$RUN/link-resync.log"
 echo "c: game first light"
 mkdir -p "$RUN/game" "$RUN/checkpoint"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
+    cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/game/$file"
 done
 timeout 300s "$BUILD/yt2game" --game "$RUN/game" --ticks 3600 --no-sound \
     --transfers 100000000 --present-log "$RUN/checkpoint/present.txt" \
@@ -220,7 +220,7 @@ python3 "$ROOT/tests/c/game_frames.py" "$RUN/checkpoint/present.txt" \
 echo "c: game audio"
 mkdir -p "$RUN/audio/game"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$file" "$RUN/audio/game/$file"
+    cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/audio/game/$file"
 done
 timeout 300s "$BUILD/yt2game" --game "$RUN/audio/game" --ticks 700 \
     --audio-log "$RUN/audio/audio.log" >"$RUN/audio/stdout.log" \

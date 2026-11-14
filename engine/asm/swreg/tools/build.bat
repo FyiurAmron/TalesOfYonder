@@ -4,7 +4,7 @@ rem
 rem   build.bat [variant]      oracle (default) ^| serial ^| file ^| tee ^| log ^| fast
 rem
 rem Output: <repo>\build\swreg\<variant>\ - the exe plus the minimum game files
-rem from _ref\orig-bin.  build.sh documents what the variants mean.
+rem from _ref\orig-bin\YT2.  build.sh documents what the variants mean.
 setlocal
 set VARIANT=%~1
 if "%VARIANT%"=="" set VARIANT=oracle
@@ -25,7 +25,7 @@ if /I "%VARIANT%"=="tee" set DEFS=-DSEAM -DSEAM_FILE -DSEAM_TEE
 if /I "%VARIANT%"=="log" set DEFS=-DSEAM -DSEAM_FILE -DSEAM_LOG
 if /I "%VARIANT%"=="fast" set DEFS=-DSEAM -DSEAM_FILE -DSEAM_FAST
 set OUT=..\..\..\..\build\swreg\%VARIANT%
-set REFBIN=..\..\..\..\_ref\orig-bin
+set REFBIN=..\..\..\..\_ref\orig-bin\YT2
 if not exist %OUT% mkdir %OUT%
 uasm -nologo -mz %DEFS% -Fo=%OUT%\SWREG.EXE ..\src\swreg.asm
 if errorlevel 1 exit /b 1

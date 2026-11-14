@@ -196,7 +196,7 @@ beep = b"".join([
 open(f"{work}/beep-only.bin", "wb").write(beep)
 PY
 
-WORLD="$ROOT/_ref/orig-bin/WORLD.DAT"
+WORLD="$ROOT/_ref/orig-bin/YT2/WORLD.DAT"
 dotnet "$CLIENT" --file "$WORK/sfx3.bin" --wav "$WORK/sfx3.wav" --world "$WORLD"
 dotnet "$CLIENT" --file "$WORK/sample3.bin" --wav "$WORK/sample3.wav" --world "$WORLD"
 dotnet "$CLIENT" --file "$WORK/sample5.bin" --wav "$WORK/sample5.wav" --world "$WORLD"

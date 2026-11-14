@@ -15,7 +15,7 @@ BUILD="${BUILD:-$ROOT/build/c}"
 GENERATED="$BUILD/generated"
 PORT="$BUILD/port"
 ASM="$ROOT/engine/asm/swreg/src/swreg.asm"
-EXE="$ROOT/_ref/orig-bin/SWREG.EXE"
+EXE="$ROOT/_ref/orig-bin/YT2/SWREG.EXE"
 
 mkdir -p "$GENERATED" "$PORT"
 

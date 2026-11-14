@@ -74,8 +74,8 @@ case "$SERVER" in
             exit 1
         fi
         for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
-            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
-                echo "publish-win: _ref/orig-bin/$f is missing" >&2
+            if [ ! -f "$ROOT/_ref/orig-bin/YT2/$f" ]; then
+                echo "publish-win: _ref/orig-bin/YT2/$f is missing" >&2
                 exit 1
             fi
         done
@@ -143,7 +143,7 @@ cp "$PUBLISH_DIR/smoke-test.bat" "$BUNDLE/"
 cp "$SAMPLE" "$BUNDLE/sample/OUTPUT.BIN"
 if [ "$SERVER" = c ]; then
     for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
-        cp "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+        cp "$ROOT/_ref/orig-bin/YT2/$f" "$BUNDLE/server/game/$f"
     done
     cp "$SERVER_DIR/yt2game.exe" "$BUNDLE/server/game/yt2game.exe"
     cp "$PUBLISH_DIR/server-start-c.bat" "$BUNDLE/server-start.bat"

@@ -29,7 +29,7 @@ DURATION="${1:-${AUDIO_DURATION:-45}}"
 MODE="${AUDIO_MODE:-wav}"
 STAMP="$(date +%Y%m%d-%H%M%S)-audio"
 RUN="$ROOT/build/runs/oracle/$STAMP"
-REFBIN="$ROOT/_ref/orig-bin"
+REFBIN="$ROOT/_ref/orig-bin/YT2"
 DISP=":95"
 GAME_FILES="CH2.BAT SBFMDRV.COM SWREG.EXE WORLD.DAT PICTURES.VGA CURGAME"
 

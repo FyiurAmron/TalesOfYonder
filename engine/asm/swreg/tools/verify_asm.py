@@ -4,7 +4,7 @@
 Usage:
     python3 engine/asm/swreg/tools/verify_asm.py [candidate.exe] [--listing swreg.lst] [--max N]
 
-Default reference: _ref/orig-bin/SWREG.EXE resolved from this script's location
+Default reference: _ref/orig-bin/YT2/SWREG.EXE resolved from this script's location
 (the repo layout), or $SWREG_EXE if set. Default candidate: ./SWREG.EXE.
 
 The reference image is decoded with the local trace/model tooling, so differences
@@ -30,7 +30,7 @@ def main(argv):
     script_dir = os.path.dirname(os.path.abspath(__file__))
     repo_ref = os.path.normpath(
         os.path.join(script_dir, os.pardir, os.pardir, os.pardir, os.pardir,
-                   "_ref", "orig-bin", "SWREG.EXE")
+                   "_ref", "orig-bin", "YT2", "SWREG.EXE")
     )
     cand = None
     listing_path = None

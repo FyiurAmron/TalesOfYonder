@@ -18,7 +18,7 @@ sh "$ROOT/engine/port/tools/build.sh"
 dotnet build "$ROOT/client" -c Release >/dev/null
 
 mkdir -p "$PLAY"
-ln -sf "$ROOT/_ref/orig-bin/WORLD.DAT" "$ROOT/_ref/orig-bin/PICTURES.VGA" \
+ln -sf "$ROOT/_ref/orig-bin/YT2/WORLD.DAT" "$ROOT/_ref/orig-bin/YT2/PICTURES.VGA" \
     "$PLAY/"
 
 "$ROOT/build/port/yt2p-play" "$PLAY" >"$PLAY/player.log" 2>&1 &

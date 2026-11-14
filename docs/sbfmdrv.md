@@ -4,7 +4,7 @@ Status: byte-perfect disassembly, full stream decode, and black-box trace done.
 
 | item | value |
 | --- | --- |
-| image | `_ref/orig-bin/SBFMDRV.COM` |
+| image | `_ref/orig-bin/YT2/SBFMDRV.COM` |
 | size / MD5 | 7211 bytes / `0f679017d543b0947fc5a33456ba38a7` |
 | source | `engine/asm/sbfmdrv/src/sbfmdrv.asm` (UASM, raw COM) |
 | gate | `sh engine/asm/sbfmdrv/tools/verify.sh` -> `SBFMDRV.COM: OK` / `IDENTICAL` |

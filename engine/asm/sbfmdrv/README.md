@@ -3,7 +3,7 @@
 Byte-perfect UASM source for the Creative Sound Blaster FM driver shipped with
 Yendorian Tales Book I, Chapter 2:
 
-    _ref/orig-bin/SBFMDRV.COM
+    _ref/orig-bin/YT2/SBFMDRV.COM
     size 7211 bytes, MD5 0f679017d543b0947fc5a33456ba38a7
 
 The driver is a COM TSR (version 1.34).  It installs a resident INT API on a
@@ -20,7 +20,7 @@ engine.  The game locates it by the "FMDRV" signature at resident offset 103h.
   different (non-identical) encoding; those are emitted as `db` with the
   original mnemonic in a comment.
 - `tools/build.sh` - assemble `src/sbfmdrv.asm` into `build/sbfmdrv/`.
-- `tools/verify.sh` - build and byte-verify against `_ref/orig-bin/SBFMDRV.COM`.
+- `tools/verify.sh` - build and byte-verify against `_ref/orig-bin/YT2/SBFMDRV.COM`.
 - `tools/verify.py` - exact size/MD5/per-byte comparison.
 - `tools/tables.py` - emits the C engine's `engine/c/src/game/sound_tables.h`
   from the resident instrument/percussion/pitch tables (`--check` proves the
@@ -61,7 +61,7 @@ The reference path can be overridden with `SBFMDRV_EXE=...` for
 - `test/music.asm` - `MUSIC.COM`: plays a real `WORLD.DAT` block (`MUSIC.BLK`)
   through commands 2/4/6 and single-steps the sequencer, logging
   `S<step> P<position> X<status>` to `MUSIC.LOG`.
-- `test/music.py` - extract a music record from `_ref/orig-bin/WORLD.DAT`
+- `test/music.py` - extract a music record from `_ref/orig-bin/YT2/WORLD.DAT`
   (`extract`), print the static stream walk (`walk`) and compare a `MUSIC.LOG`
   against it (`check`).  `--track N` selects the id, `--song` slices exactly to
   the stop marker instead of the game's record window; `--play` validates a

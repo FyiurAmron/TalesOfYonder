@@ -87,8 +87,8 @@ case "$SERVER" in
             exit 1
         fi
         for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
-            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
-                echo "publish-linux: _ref/orig-bin/$f is missing" >&2
+            if [ ! -f "$ROOT/_ref/orig-bin/YT2/$f" ]; then
+                echo "publish-linux: _ref/orig-bin/YT2/$f is missing" >&2
                 exit 1
             fi
         done
@@ -101,8 +101,8 @@ case "$SERVER" in
             exit 1
         fi
         for f in WORLD.DAT PICTURES.VGA; do
-            if [ ! -f "$ROOT/_ref/orig-bin/$f" ]; then
-                echo "publish-linux: _ref/orig-bin/$f is missing" >&2
+            if [ ! -f "$ROOT/_ref/orig-bin/YT2/$f" ]; then
+                echo "publish-linux: _ref/orig-bin/YT2/$f is missing" >&2
                 exit 1
             fi
         done
@@ -150,7 +150,7 @@ fi
 
 if [ "$SERVER" = c ]; then
     for f in CH2.BAT WORLD.DAT PICTURES.VGA CURGAME; do
-        cp -f "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+        cp -f "$ROOT/_ref/orig-bin/YT2/$f" "$BUNDLE/server/game/$f"
     done
     cp -f "$SERVER_DIR/yt2game" "$BUNDLE/server/game/yt2game"
     chmod +x "$BUNDLE/server/game/yt2game"
@@ -158,7 +158,7 @@ if [ "$SERVER" = c ]; then
     cp -f "$PUBLISH_DIR/README-c.txt" "$BUNDLE/README.txt"
 elif [ "$SERVER" = port ]; then
     for f in WORLD.DAT PICTURES.VGA; do
-        cp -f "$ROOT/_ref/orig-bin/$f" "$BUNDLE/server/game/$f"
+        cp -f "$ROOT/_ref/orig-bin/YT2/$f" "$BUNDLE/server/game/$f"
     done
     cp -f "$SERVER_DIR/yt2p-play" "$BUNDLE/server/game/yt2p-play"
     chmod +x "$BUNDLE/server/game/yt2p-play"

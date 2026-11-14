@@ -11,7 +11,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "SBFMDRV.COM"))
+REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "YT2", "SBFMDRV.COM"))
 BUILT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
     ROOT, "build", "driver", "SBFMDRV.COM"
 )

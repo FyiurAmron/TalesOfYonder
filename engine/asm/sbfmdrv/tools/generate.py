@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a byte-perfect UASM disassembly of _ref/orig-bin/SBFMDRV.COM.
+"""Generate a byte-perfect UASM disassembly of _ref/orig-bin/YT2/SBFMDRV.COM.
 
 The generator is a development tool: it decodes the COM image recursively from
 every known entry point, emits MASM/UASM source, assembles it, and for every
@@ -33,7 +33,7 @@ from capstone.x86 import (
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-REF = os.path.join(ROOT, "_ref", "orig-bin", "SBFMDRV.COM")
+REF = os.path.join(ROOT, "_ref", "orig-bin", "YT2", "SBFMDRV.COM")
 BUILD = os.path.join(ROOT, "build", "driver")
 BASE = 0x100
 IMG = open(REF, "rb").read()
@@ -336,7 +336,7 @@ def build():
     src.add("; ===========================================================================")
     src.add("; SBFMDRV.COM 1.34 - Creative Sound Blaster FM Driver")
     src.add(";")
-    src.add("; Byte-perfect annotated disassembly of _ref/orig-bin/SBFMDRV.COM")
+    src.add("; Byte-perfect annotated disassembly of _ref/orig-bin/YT2/SBFMDRV.COM")
     src.add(";   size %d bytes, MD5 %s" % (len(IMG), MD5))
     src.add(";")
     src.add("; The generated baseline is produced by engine/asm/sbfmdrv/tools/generate.py; the")

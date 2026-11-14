@@ -21,7 +21,7 @@ done
 
 make -C "$ROOT/engine/port" BUILD="$ROOT/build/port" all >"$WORK/build.log" 2>&1
 dotnet build "$ROOT/client" -c Release >>"$WORK/build.log" 2>&1
-cp "$ROOT/_ref/orig-bin/WORLD.DAT" "$ROOT/_ref/orig-bin/PICTURES.VGA" \
+cp "$ROOT/_ref/orig-bin/YT2/WORLD.DAT" "$ROOT/_ref/orig-bin/YT2/PICTURES.VGA" \
     "$WORK/game/"
 
 N=90

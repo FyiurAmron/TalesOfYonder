@@ -87,7 +87,7 @@ paragraph prefix 7, `EMMXXXX0` delta `0C99h`) and stages the minimum game files.
 `engine/asm/swreg/tools/verify_asm.py` verifies a rebuilt candidate against the reference, per instruction.
 
 - Python 3 + `capstone` (5.x). The verifier reads the reference via `$SWREG_EXE` (default:
-  `_ref/orig-bin/SWREG.EXE`): `python3 engine/asm/swreg/tools/verify_asm.py [candidate.exe]`
+  `_ref/orig-bin/YT2/SWREG.EXE`): `python3 engine/asm/swreg/tools/verify_asm.py [candidate.exe]`
 - The generation pipeline (`build.py`, `emit.py`, `identify/`, …) stays read-only in
   `_ref/disasm/tools/` — it is the provenance of the frozen baseline; don't edit it.
 - Follow the existing style: stdlib + capstone, compact, no third-party dependencies.
@@ -157,5 +157,5 @@ The M9/M10 rules above still govern the product client.
 
 ## Assets & provenance
 
-`_ref/orig-bin/` contains the original 1996 distribution, kept for preservation and reverse
+`_ref/orig-bin/YT2/` contains the original 1996 distribution, kept for preservation and reverse
 engineering. It is reference data only.

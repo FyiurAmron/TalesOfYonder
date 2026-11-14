@@ -37,7 +37,7 @@ fi
 
 mkdir -p "$RUN/game" "$RUN/frames"
 for f in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$f" "$RUN/game/$f"
+    cp "$ROOT/_ref/orig-bin/YT2/$f" "$RUN/game/$f"
 done
 
 "$GAME" --game "$RUN/game" --ticks "$TICKS" --transfers 400000000 \

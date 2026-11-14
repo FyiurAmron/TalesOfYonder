@@ -3,7 +3,7 @@
 #
 #   sh tools/dosbox/baseline.sh [duration_seconds]     (default 75)
 #
-# Runs _ref/orig-bin on a private Xvfb display with the oracle profile
+# Runs _ref/orig-bin/YT2 on a private Xvfb display with the oracle profile
 # (tools/dosbox/dosbox-x.conf): X window snapshots (snap.py) at fixed checkpoints,
 # save states from the built-in autosave (slots 1..4), everything collected
 # under build/runs/oracle/<timestamp>/.
@@ -15,7 +15,7 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 DURATION="${1:-75}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RUN="$ROOT/build/runs/oracle/$STAMP"
-REFBIN="$ROOT/_ref/orig-bin"
+REFBIN="$ROOT/_ref/orig-bin/YT2"
 DISP=":97"
 GAME_FILES="CH2.BAT SBFMDRV.COM SWREG.EXE WORLD.DAT PICTURES.VGA CURGAME"
 

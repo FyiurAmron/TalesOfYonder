@@ -7,7 +7,7 @@ hand-maintained annotated source: the human-readable spec the C port is derived 
 ## Invariant
 
 Every edit is gated by `sh engine/asm/swreg/tools/verify.sh`: the build must print `SWREG.EXE: OK` and
-`IDENTICAL` (per-instruction byte diff against `_ref/orig-bin/SWREG.EXE`). Annotations never
+`IDENTICAL` (per-instruction byte diff against `_ref/orig-bin/YT2/SWREG.EXE`). Annotations never
 change instructions, data bytes, ordering or encodings; a batch that fails the gate is
 reverted, not "fixed" by adjusting the reference.
 

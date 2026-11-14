@@ -39,7 +39,7 @@ fi
 
 WORLD="$ROOT/build/swreg/oracle/WORLD.DAT"
 if [ ! -f "$WORLD" ]; then
-    WORLD="$ROOT/_ref/orig-bin/WORLD.DAT"
+    WORLD="$ROOT/_ref/orig-bin/YT2/WORLD.DAT"
 fi
 if [ ! -f "$WORLD" ]; then
     WORLD=
@@ -47,7 +47,7 @@ fi
 
 PICTURES="$ROOT/build/swreg/oracle/PICTURES.VGA"
 if [ ! -f "$PICTURES" ]; then
-    PICTURES="$ROOT/_ref/orig-bin/PICTURES.VGA"
+    PICTURES="$ROOT/_ref/orig-bin/YT2/PICTURES.VGA"
 fi
 if [ ! -f "$PICTURES" ]; then
     PICTURES=

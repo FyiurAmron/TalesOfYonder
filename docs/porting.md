@@ -10,7 +10,7 @@ log is in `docs/progress.md`.  This document is the design and verification plan
 
 | Path | Role |
 |---|---|
-| `_ref/orig-bin/` | original distribution: `SWREG.EXE` (MD5 `c3bdd3…`), `WORLD.DAT`, `PICTURES.VGA`, `SBFMDRV.COM`, `CH2.BAT`, `CURGAME`, `README.DOC`, `YENDOR2.BMP` |
+| `_ref/orig-bin/YT2/` | original YT2 distribution (YT3 reference data sits alongside in `_ref/orig-bin/YT3/`): `SWREG.EXE` (MD5 `c3bdd3…`), `WORLD.DAT`, `PICTURES.VGA`, `SBFMDRV.COM`, `CH2.BAT`, `CURGAME`, `README.DOC`, `YENDOR2.BMP` |
 | `engine/asm/swreg/` | the working byte-perfect disassembly: source in `engine/asm/swreg/src/`, build/verify machinery in `engine/asm/swreg/tools/` (sourced from the reference below) |
 | `_ref/disasm/` | frozen read-only reference: generation pipeline, historic MASM source, toolchain evidence |
 | `_ref/TalesOfYonder/` | data-format mining project (existing C#, moved in from this repository's previous life): picture/palette/world decoding; **cross-reference and future GUI resource editor** (read-only until the main port is finished), not the engine |
