@@ -1,0 +1,38 @@
+# B1-only samples the port never emits (frame class px-hash + proof).
+# leak: 1-2 garbage pixels (VGA snow / mode-set); mid-flush: band mix of
+# adjacent frames (present caught a copy mid-flight); race: B1's slow
+# emulation fired a span/pending event the logic-fast port never sees.
+2 leak 22357B9A73B94B29 # boot VBE: 1 nonzero pixel, black pal
+13 mid-flush 6393FC004C4F8EA5 # boot blank->webfoot transition torn
+209 mid-flush C1A2AEC5710CDE55 # L1 init compose torn (43 blank + 153 L1 rows)
+319 race AF535AE14D824CD0 # pixel flight: flush work crossed ticks (event 1)
+574 mid-flush 796F5B77D4BB6D42 # L4#6 compose torn (9 old + 33 new band rows)
+636 race 4A3C122D1D7B27F8 # L4 11th: slow steps spanned 55 ticks (port: 9)
+909 race A0C5A31A540032C4 # L5#1: pending event beat the story text (textless)
+919 mid-flush 3975408FC30F7945 # L5#2 compose torn (170 L5#1 + 144 L5#2 rows)
+941 race EC195C218B250569 # L5 4th: slow span fired past the port's early exit
+1038 mid-flush 243DBED0939F4850 # L6#4 compose torn (unique px, fade pal)
+1058 race 5574344986FA98C8 # L6 6th: wide DAC writes crossed ticks (port: 5)
+2837 mid-flush 2C9D8512C73B5EFA # menu page-turn torn
+2934 mid-flush 957D22B3F24727B0 # menu page-turn torn
+3031 mid-flush C94540F3C849F241 # menu page-turn torn
+3323 mid-flush 8EC81BD5FD3CAEC3 # menu-enter transition torn (2 frames)
+3324 mid-flush 16E3484B67D794DD # menu-enter transition torn (2 frames)
+3346 leak D0EC875987A3373F # menu exit: 2px snow vs menu frame
+3348 leak 22357B9A73B94B29 # menu exit: mode-set pixel (same 1px frame)
+3359 mid-flush 27F7866B81EE7260 # webfoot blit torn (41213/4875 px diffs)
+3777 mid-flush 51357A2AC51C7DD2 # cycle-2 L3#2 compose torn (10 + 31 band rows)
+4265 race 1E637D7A38BE51CC # cycle-2 twin of f909 (pending beat the text)
+4380 mid-flush F9B11CCD5BE806F0 # cycle-2 L6#3 compose torn (splits L6)
+4412 mid-flush 0D1032F4B0065633 # sleep draw torn (131 L6#6 + 72 sleep rows)
+4555 mid-flush 8194FF69EF362082 # cycle-2 sleep/menu transition torn
+5131 mid-flush 3C1B1C1F9C956A58 # cycle-2 menu transition torn
+5987 mid-flush D004F260948EC122 # cycle-2 menu transition torn
+6090 mid-flush 4E59B7C926FB761A # cycle-2 menu page-turn torn (2 frames)
+6091 mid-flush 520F746CDE7C8B4E # cycle-2 menu page-turn torn (2 frames)
+6383 mid-flush 643FA60DDC1C6B71 # cycle-2 menu page-turn torn
+6481 mid-flush D06BFB313B2B9DE7 # cycle-2 menu page-turn torn
+6578 mid-flush 1B2987DE36DFA391 # cycle-2 menu page-turn torn
+6675 mid-flush 8EC81BD5FD3CAEC3 # cycle-2 twin of f3323 (menu-enter torn)
+6697 leak D0EC875987A3373F # cycle-2 twin of f3346 (same 2px snow)
+6699 leak 22357B9A73B94B29 # cycle-2 twin of f3348

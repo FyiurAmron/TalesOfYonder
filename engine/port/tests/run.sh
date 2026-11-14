@@ -407,7 +407,7 @@ EOF
     cp "$PICTURES" "$RUN/play/game/PICTURES.VGA"
     cp "$WORLD" "$RUN/play/game/WORLD.DAT"
     "$BUILD/yt2p-play" "$RUN/play/game" --scene 1 --cursor 24,170 \
-        --frames 3 --tick-ms 1 >"$RUN/play.txt" 2>&1
+        --frames 3 --tick-ms 1 --no-intro >"$RUN/play.txt" 2>&1
     if ! grep -q "play: 3 frames" "$RUN/play.txt"; then
         echo "port: yt2p-play did not present 3 frames" >&2
         cat "$RUN/play.txt" >&2

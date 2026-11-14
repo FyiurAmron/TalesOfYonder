@@ -205,6 +205,24 @@ The story text is drawn as a shadow at `(x,y)` in colour `93h` and the body at
 `(x-1,y-1)` in colour `98h`, six-pixel leading.  The source strings are the
 sleep and knock captions in the executable's DGROUP text table.
 
+Between the statics the attract loop runs one scripted cycle per pass: boot
+(VBE publisher logo, webfoot, SW logo) -> L1 -> W5 -> shooting star (53
+plots, four per tick) -> W10a -> L2 ->
+W10b -> L3 -> W20 -> L4 -> story scroll (32/38/128 rows at two rows per
+frame, palette cuts between groups instead of the vanilla fade bursts)
+-> W7 -> L5 -> W45 -> W15 (e4 countdown) -> L6 -> sleep ->
+menu tail -> menu-exit blank.  The L-phases walk sprite pose cycles: A0 has
+6 poses, split by the copyright text into a pre-copyright bg (L1/L2 side)
+and a post-copyright bg (L4 side) - the text lands mid-L3 on cycle 1;
+A1 (L5+W45) and A2 (W15 tail+L6) have 3 poses each with e4 frozen.  Cycle 2+
+inherits the menu's div-3 leftover, so its loops run longer (L1 17, L3 15,
+L4 20 multis after wait-tail trims).  The audio script per two cycles is
+music 3/18, the gate-star music-service, the menu-idle music-stop, then the
+replayed pair.  B2 ports this in `engine/port/src/intro.c` and gates it
+behaviorally against B1 in `engine/port/tests/check_intro.py` (pose sets
+and cycle walks, scroll rows, audio order+ids; B1's fade pacing, wait
+lengths and palette bytes are host timing and stay unbounded).
+
 ## `WORLD.DAT` map prefix
 
 The map database is a flat prefix at the start of `WORLD.DAT`; the sound and
@@ -225,6 +243,7 @@ tables instead of re-deriving them.
 | `71048` | rest | | SFX records |
 | `8270A` | palettes | 9 × 768 | 6-bit RGB DAC triples |
 | `8420A` | rest | | world/music records |
+| `1AE0F6` | LOGO.PCX | 29214 | 640x480x256 PCX (fn_15DC2 VBE logo) |
 
 A tile is `terrain`, `flags` (block/passthrough), `object` index and one
 reserved byte.  The tiles form one world grid, not per-map blocks: the engine
