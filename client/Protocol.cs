@@ -43,6 +43,12 @@ public enum AudioMessage : byte
     Sample = 5,
 }
 
+public enum TickMessage : byte
+{
+    Tick = 0,
+    Pace = 1,
+}
+
 public enum ControlMessage : byte
 {
     Hello = 0,

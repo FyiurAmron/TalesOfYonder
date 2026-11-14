@@ -29,6 +29,19 @@
 #define YT2_SPELLS_RECORD_SIZE 80u
 #define YT2_SPELLS_NAME_SIZE 21u
 
+/*
+ * The detail page's EFFECT text: WORLD files 6+7.  File 6 is the 4-byte
+ * (start, count) index (slot file+1, slot 0 is the (0,0) header); file 7
+ * holds 39-byte NUL-terminated text records.  Vanilla's text area was
+ * never authored (script bytes and stray names); the spelltext patch
+ * (tools/yt2_spelltext.py) fills it with YT3's descriptions.  The shipped
+ * tables peak at 8 lines (DISPEL ILLUSION).
+ */
+#define YT2_SPELLS_EFFECT_INDEX 0x16762Eu
+#define YT2_SPELLS_EFFECT_TEXT 0x167822u
+#define YT2_SPELLS_EFFECT_REC 39u
+#define YT2_SPELLS_EFFECT_MAX_LINES 8u
+
 #define YT2_SPELLS_HEADER "SPELL INFORMATION"
 #define YT2_SPELLS_HEADER_X 213
 
@@ -55,6 +68,19 @@ int yt2_spell_name_by_index(const yt2_spells *spells, unsigned int index,
 
 /* File record behind a rank (for the detail view's statistics). */
 const uint8_t *yt2_spell_record(const yt2_spells *spells, unsigned int rank);
+
+/*
+ * EFFECT text lines for a file index, read live from WORLD files 6+7
+ * (slot file+1): at most YT2_SPELLS_EFFECT_MAX_LINES NUL-terminated lines
+ * of up to 38 bytes plus the terminator, `count` set to the lines read.
+ * Counts above the maximum are clamped; returns YT2_STATUS_ERROR out of
+ * range or when the world ends mid-table.  Raw record bytes (high bytes
+ * included): the detail renderer canonicalizes them for the text face.
+ */
+int yt2_spells_effect_lines(const yt2_spells *spells, unsigned int file_index,
+                            char lines[YT2_SPELLS_EFFECT_MAX_LINES]
+                                       [YT2_SPELLS_EFFECT_REC],
+                            unsigned int *count);
 
 /*
  * Compose the information page with `selected` (a rank) selected.

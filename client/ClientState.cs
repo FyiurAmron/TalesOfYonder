@@ -20,6 +20,8 @@ public sealed class ClientStats
     public long AudioControls;
     public long AudioSpeakers;
     public long AudioSamples;
+    public long Ticks;
+    public long Paces;
     public long EngineErrors;
     public long UnknownFamilies;
     public long UnknownMessages;
@@ -51,6 +53,7 @@ public sealed class ClientStats
             : string.Empty) +
         (AudioSpeakers > 0 ? $"speaker={AudioSpeakers} " : string.Empty) +
         (AudioSamples > 0 ? $"samples={AudioSamples} " : string.Empty) +
+        (Ticks + Paces > 0 ? $"ticks={Ticks}t/{Paces}p " : string.Empty) +
         $"records={Records} bytes={Bytes} shown={Presented} " +
         (Dropped > 0 ? $"dropped={Dropped} " : string.Empty) +
         (Presented > 0 ? $"render={PresentMs / Presented:F1}ms " : string.Empty) +
@@ -221,6 +224,10 @@ public sealed class ClientState(int width, int height)
             if (header.Family == Family.Audio)
             {
                 return ApplyAudio(payload, length);
+            }
+            if (header.Family == Family.Tick)
+            {
+                return ApplyTick(payload, length);
             }
             if (header.Family != Family.Video)
             {
@@ -539,6 +546,29 @@ public sealed class ClientState(int width, int height)
                     BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(3)),
                     payload[5] != 0);
                 Stats.AudioControls++;
+                return false;
+
+            default:
+                Stats.UnknownMessages++;
+                return false;
+        }
+    }
+
+    private bool ApplyTick(byte[] payload, int length)
+    {
+        if (length < 1)
+        {
+            Stats.UnknownMessages++;
+            return false;
+        }
+        switch ((TickMessage)payload[0])
+        {
+            case TickMessage.Tick when length >= 5:
+                Stats.Ticks++;
+                return false;
+
+            case TickMessage.Pace when length >= 3:
+                Stats.Paces++;
                 return false;
 
             default:

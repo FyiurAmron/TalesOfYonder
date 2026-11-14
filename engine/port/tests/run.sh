@@ -53,12 +53,69 @@ if [ ! -f "$PICTURES" ]; then
     PICTURES=
 fi
 
+SPELLTEXT=
+SPELLTEXT_COMPLETE=
+if [ -n "$WORLD" ] && [ -f "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" ]; then
+    if ! python3 "$ROOT/tools/yt2_spelltext.py" "$WORLD" \
+            "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" \
+            "$RUN/world-spelltext.DAT" --check \
+            >"$RUN/spelltext.log" 2>&1; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: official spelltext patch failed" >&2
+        exit 1
+    fi
+    if ! python3 "$ROOT/tools/yt2_spelltext.py" "$WORLD" \
+            "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" \
+            "$RUN/world-spelltext-complete.DAT" --complete --check \
+            >>"$RUN/spelltext.log" 2>&1; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: complete spelltext patch failed" >&2
+        exit 1
+    fi
+    if ! grep -q "92 spells patched" "$RUN/spelltext.log" || \
+       ! grep -q "105 spells patched" "$RUN/spelltext.log"; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: spelltext patch counts are wrong" >&2
+        exit 1
+    fi
+    SPELLTEXT="$RUN/world-spelltext.DAT"
+    SPELLTEXT_COMPLETE="$RUN/world-spelltext-complete.DAT"
+    echo "port: spelltext worlds patched (official 92, complete 105)"
+fi
+
 mkdir -p "$RUN/unit-tmp"
 YT2_SAVE="$SAVE" YT2_SAVE_ROUNDTRIP="$RUN/roundtrip.save" \
     YT2_SAVE_MOVED="$RUN/moved.save" YT2_WORLD="$WORLD" \
     YT2_PICTURES="$PICTURES" YT2_PORT_TMP="$RUN/unit-tmp" \
+    YT2_WORLD_SPELLTEXT="$SPELLTEXT" \
+    YT2_WORLD_SPELLTEXT_COMPLETE="$SPELLTEXT_COMPLETE" \
     "$BUILD/yt2p-tests" >"$RUN/tests.log"
 cat "$RUN/tests.log"
+
+if ! python3 "$PORT/tests/check_stream.py" \
+        "$ROOT/tests/data/sample-pan-rows.bin" --all \
+        >"$RUN/pan-rows.txt" 2>&1; then
+    echo "port: row pan fixture does not decode" >&2
+    cat "$RUN/pan-rows.txt" >&2
+    exit 1
+fi
+if ! python3 "$PORT/tests/check_stream.py" \
+        "$ROOT/tests/data/sample-pan-scroll.bin" --all \
+        >"$RUN/pan-scroll.txt" 2>&1; then
+    echo "port: scroll pan fixture does not decode" >&2
+    cat "$RUN/pan-scroll.txt" >&2
+    exit 1
+fi
+if ! cmp -s "$RUN/pan-rows.txt" "$RUN/pan-scroll.txt"; then
+    echo "port: scroll pan renders unlike the row pan" >&2
+    diff "$RUN/pan-rows.txt" "$RUN/pan-scroll.txt" >&2 || true
+    exit 1
+fi
+if [ "$(wc -l <"$RUN/pan-rows.txt")" != "12" ]; then
+    echo "port: pan fixtures should hold twelve pictures" >&2
+    exit 1
+fi
+echo "port: scroll pan renders like the row pan"
 
 if [ -n "$WORLD" ]; then
     "$BUILD/yt2p-world" "$WORLD" >"$RUN/world.txt"
@@ -359,6 +416,11 @@ EOF
     if ! python3 "$PORT/tests/check_stream.py" "$RUN/play/game/OUTPUT.BIN" \
             BC1E5BFF608CB41B 3 >"$RUN/stream.txt" 2>&1; then
         echo "port: B2 stream does not decode to the oracle frame" >&2
+        cat "$RUN/stream.txt" >&2
+        exit 1
+    fi
+    if ! grep -q "ticks=3, paces=1" "$RUN/stream.txt"; then
+        echo "port: B2 stream lacks its tick stamps" >&2
         cat "$RUN/stream.txt" >&2
         exit 1
     fi

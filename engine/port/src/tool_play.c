@@ -3,6 +3,11 @@
  * palette rotation on the engine side of protocol v0.
  *
  *   yt2p-play DIR [--scene N] [--cursor X,Y] [--frames N] [--tick-ms N]
+ *       [--spelltext]
+ *
+ * --spelltext reads the F3 detail EFFECT lines live from WORLD.DAT (files
+ * 6+7) instead of the frozen vanilla bytes, so a spelltext-patched world
+ * (tools/yt2_spelltext.py) shows its descriptions.
  *
  * DIR holds WORLD.DAT and PICTURES.VGA; OUTPUT.BIN is created there and
  * INPUT.BIN is followed there.  Keys 1-6 switch scenes (help, catalog,
@@ -59,6 +64,7 @@ typedef struct play_options {
     int cursor_y;
     unsigned int frames;
     unsigned int tick_ms;
+    int spelltext;
 } play_options;
 
 typedef struct play_state {
@@ -108,6 +114,7 @@ typedef struct play_state {
     unsigned int key_count;
     int cursor_x;
     int cursor_y;
+    int spelltext;
     unsigned int rotation_countdown;
     unsigned int rotation_phase;
     int hello_sent;
@@ -150,6 +157,7 @@ static int parse_options(int argc, char **argv, play_options *options)
     options->cursor_y = 100;
     options->frames = 0u;
     options->tick_ms = PLAY_TICK_MS;
+    options->spelltext = 0;
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--scene") == 0 && i + 1 < argc) {
             if (!parse_unsigned(argv[++i], &options->scene) ||
@@ -175,10 +183,12 @@ static int parse_options(int argc, char **argv, play_options *options)
             }
         } else if (strcmp(argv[i], "--tick-ms") == 0 && i + 1 < argc) {
             if (!parse_unsigned(argv[++i], &options->tick_ms) ||
-                options->tick_ms == 0u) {
+                options->tick_ms == 0u || options->tick_ms > 0xFFFFu) {
                 fprintf(stderr, "yt2p-play: bad --tick-ms\n");
                 return 0;
             }
+        } else if (strcmp(argv[i], "--spelltext") == 0) {
+            options->spelltext = 1;
         } else {
             fprintf(stderr, "yt2p-play: unknown argument %s\n", argv[i]);
             return 0;
@@ -276,9 +286,15 @@ static int render_scene(play_state *state)
         break;
     }
     case 13:
-        ok = yt2_spell_detail_render_index(
-            &state->surface, &state->pictures, &state->spells,
-            state->spell_detail_index, state->spell_detail_f4);
+        if (state->spelltext) {
+            ok = yt2_spell_detail_render_index_world(
+                &state->surface, &state->pictures, &state->spells,
+                state->spell_detail_index, state->spell_detail_f4);
+        } else {
+            ok = yt2_spell_detail_render_index(
+                &state->surface, &state->pictures, &state->spells,
+                state->spell_detail_index, state->spell_detail_f4);
+        }
         break;
     case 12:
         ok = yt2_monster_detail_render(
@@ -839,7 +855,7 @@ int main(int argc, char **argv)
     if (argc < 2 || !parse_options(argc, argv, &options)) {
         fprintf(stderr,
                 "usage: %s DIR [--scene N] [--cursor X,Y] [--frames N] "
-                "[--tick-ms N]\n",
+                "[--tick-ms N] [--spelltext]\n",
                 argv[0]);
         return 2;
     }
@@ -848,6 +864,7 @@ int main(int argc, char **argv)
     state.scene = options.scene;
     state.cursor_x = options.cursor_x;
     state.cursor_y = options.cursor_y;
+    state.spelltext = options.spelltext;
     state.rotation_countdown = PLAY_ROTATION_TICKS;
     state.rotation_phase = 0u;
     clamp_cursor(&state);
@@ -879,8 +896,10 @@ int main(int argc, char **argv)
     }
     if (render_scene(&state) != YT2_STATUS_OK ||
         yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
+        yt2_present_pace(&presenter, &out, options.tick_ms) !=
+            YT2_STATUS_OK ||
         yt2_present_frame(&presenter, &out, &state.surface, &state.palette,
-                          1) != YT2_STATUS_OK) {
+                          1, state.tick) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot present the first frame\n");
         goto done;
     }
@@ -943,7 +962,9 @@ int main(int argc, char **argv)
                 if (event.role == YT2_ROLE_CLIENT && event.version == 0 &&
                     !state.hello_sent) {
                     if (yt2_present_hello(&presenter, &out) !=
-                        YT2_STATUS_OK) {
+                            YT2_STATUS_OK ||
+                        yt2_present_pace(&presenter, &out, options.tick_ms) !=
+                            YT2_STATUS_OK) {
                         running = 0;
                     }
                     state.hello_sent = 1;
@@ -1032,7 +1053,8 @@ int main(int argc, char **argv)
             }
             if (render_scene(&state) != YT2_STATUS_OK ||
                 yt2_present_frame(&presenter, &out, &state.surface,
-                                  &state.palette, force) != YT2_STATUS_OK) {
+                                  &state.palette, force,
+                                  state.tick) != YT2_STATUS_OK) {
                 fprintf(stderr, "yt2p-play: cannot present\n");
                 break;
             }

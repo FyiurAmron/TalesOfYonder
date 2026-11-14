@@ -17,6 +17,24 @@ static uint64_t checksum(const uint8_t *bytes, size_t size)
     return value;
 }
 
+/* An effect line equals `text` plus space padding to the record width. */
+static int check_line(const char *line, const char *text)
+{
+    size_t length = strlen(text);
+
+    if (length > YT2_SPELLS_EFFECT_REC - 1u ||
+        strlen(line) != YT2_SPELLS_EFFECT_REC - 1u ||
+        strncmp(line, text, length) != 0) {
+        return 0;
+    }
+    for (size_t i = length; line[i] != '\0'; i++) {
+        if (line[i] != ' ') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 int test_spells(void)
 {
     const char *pictures_path = getenv("YT2_PICTURES");
@@ -31,6 +49,13 @@ int test_spells(void)
     CHECK(yt2_spell_name(NULL, 0u, name, sizeof(name)) == YT2_STATUS_ERROR);
     CHECK(yt2_spell_record(NULL, 0u) == NULL);
     CHECK(yt2_spells_render(NULL, NULL, NULL, 0u) == YT2_STATUS_ERROR);
+    {
+        char lines[YT2_SPELLS_EFFECT_MAX_LINES][YT2_SPELLS_EFFECT_REC];
+        unsigned int count = 0u;
+
+        CHECK(yt2_spells_effect_lines(NULL, 0u, lines, &count) ==
+              YT2_STATUS_ERROR);
+    }
 
     if (pictures_path == NULL || pictures_path[0] == '\0' ||
         world_path == NULL || world_path[0] == '\0') {
@@ -127,6 +152,110 @@ int test_spells(void)
           UINT64_C(0x08EAA2E4290A0C7D));
     CHECK(yt2_spell_detail_render_index(&surface, &pictures, &spells, 105u,
                                         0) == YT2_STATUS_ERROR);
+
+    /* World-sourced EFFECT text: the reader serves the raw record lines. */
+    {
+        const char *official = getenv("YT2_WORLD_SPELLTEXT");
+        const char *complete = getenv("YT2_WORLD_SPELLTEXT_COMPLETE");
+        char lines[YT2_SPELLS_EFFECT_MAX_LINES][YT2_SPELLS_EFFECT_REC];
+        unsigned int count = 0u;
+        yt2_world patched;
+        yt2_spells patched_spells;
+
+        CHECK(yt2_spells_effect_lines(&spells, 105u, lines, &count) ==
+              YT2_STATUS_ERROR);
+        CHECK(yt2_spell_detail_render_world(NULL, NULL, NULL, 0u) ==
+              YT2_STATUS_ERROR);
+        CHECK(yt2_spell_detail_render_index_world(NULL, NULL, NULL, 0u, 0) ==
+              YT2_STATUS_ERROR);
+        if (official != NULL && official[0] != '\0') {
+            CHECK(yt2_world_load(official, &patched) == YT2_STATUS_OK);
+            CHECK(yt2_spells_load(&patched_spells, &patched) ==
+                  YT2_STATUS_OK);
+            CHECK(yt2_spells_effect_lines(&patched_spells, 0u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 2u);
+            CHECK(check_line(lines[0], "THIS SPELL WILL RESTORE 10 HEALTH"));
+            CHECK(check_line(lines[1], "POINTS TO A SINGLE PLAYER."));
+            CHECK(yt2_spells_effect_lines(&patched_spells, 48u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 3u);
+            CHECK(check_line(lines[1], "MONSTERS FOR 145 POINTS OF DAMAGE A"));
+            CHECK(yt2_spells_effect_lines(&patched_spells, 8u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 3u);
+            CHECK(check_line(lines[2], "MONSTER~S DEXTERITY BY 20."));
+            yt2_world_free(&patched);
+        }
+        if (complete != NULL && complete[0] != '\0') {
+            CHECK(yt2_world_load(complete, &patched) == YT2_STATUS_OK);
+            CHECK(yt2_spells_load(&patched_spells, &patched) ==
+                  YT2_STATUS_OK);
+            CHECK(yt2_spells_effect_lines(&patched_spells, 87u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 4u);
+            CHECK(check_line(lines[0], "WHILE DOING A DAMAGE OF UP TO 310"));
+            CHECK(yt2_spells_effect_lines(&patched_spells, 33u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 4u);
+            CHECK(check_line(lines[2], "AN UNDEAD FOR UP TO 120 POINTS OF"));
+            CHECK(yt2_spells_effect_lines(&patched_spells, 6u, lines,
+                                          &count) == YT2_STATUS_OK);
+            CHECK(count == 2u);
+            CHECK(check_line(lines[0], "THIS SPELL WILL CREATE FOOD FOR THE"));
+            CHECK(check_line(lines[1], "PARTY OUT OF THIN AIR."));
+            yt2_world_free(&patched);
+        }
+    }
+
+    /* On a vanilla world the live reader renders pixel-identical to the
+       frozen table, for every file: the canonical map is the original's
+       own rendering rule. */
+    {
+        yt2_surface live;
+
+        CHECK(yt2_surface_init(&live, 320u, 200u) == YT2_STATUS_OK);
+        for (unsigned int file = 0u; file < YT2_SPELLS_COUNT; file++) {
+            CHECK(yt2_spell_detail_render_index(&surface, &pictures, &spells,
+                                                file, 0) == YT2_STATUS_OK);
+            CHECK(yt2_spell_detail_render_index_world(&live, &pictures,
+                                                      &spells, file,
+                                                      0) == YT2_STATUS_OK);
+            CHECK(memcmp(surface.pixels, live.pixels, 320u * 200u) == 0);
+        }
+        yt2_surface_free(&live);
+    }
+
+    /* Wiring: a patched spell shows the new text, an unpatched spell keeps
+       vanilla bytes pixel for pixel. */
+    {
+        const char *official = getenv("YT2_WORLD_SPELLTEXT");
+        yt2_surface live;
+
+        if (official != NULL && official[0] != '\0') {
+            yt2_world patched;
+            yt2_spells patched_spells;
+
+            CHECK(yt2_world_load(official, &patched) == YT2_STATUS_OK);
+            CHECK(yt2_spells_load(&patched_spells, &patched) ==
+                  YT2_STATUS_OK);
+            CHECK(yt2_surface_init(&live, 320u, 200u) == YT2_STATUS_OK);
+            CHECK(yt2_spell_detail_render_index(&surface, &pictures, &spells,
+                                                48u, 0) == YT2_STATUS_OK);
+            CHECK(yt2_spell_detail_render_index_world(&live, &pictures,
+                                                      &patched_spells, 48u,
+                                                      0) == YT2_STATUS_OK);
+            CHECK(memcmp(surface.pixels, live.pixels, 320u * 200u) != 0);
+            CHECK(yt2_spell_detail_render_index(&surface, &pictures, &spells,
+                                                87u, 0) == YT2_STATUS_OK);
+            CHECK(yt2_spell_detail_render_index_world(&live, &pictures,
+                                                      &patched_spells, 87u,
+                                                      0) == YT2_STATUS_OK);
+            CHECK(memcmp(surface.pixels, live.pixels, 320u * 200u) == 0);
+            yt2_surface_free(&live);
+            yt2_world_free(&patched);
+        }
+    }
     yt2_surface_free(&surface);
 
     yt2_world_free(&world);

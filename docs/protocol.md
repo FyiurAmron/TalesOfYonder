@@ -144,7 +144,9 @@ Rules:
   rows than no shift at all and at least 100 rows**; otherwise the rows go out as rects exactly as
   before. So the game stays correct when the heuristic does not fire, and a step costs 2 bytes
   when it does. The client's checksum table is shifted with the message, which is what makes the
-  following rows comparable again.
+  following rows comparable again. The port applies the same rules (same thresholds, tie order
+  and table shift, repaints never scroll) but compares full shadow rows instead of checksums -
+  exact, so no collision can misroute a pan - and at any height instead of 320x200 only.
 - A pan beyond +-8 rows per presented picture falls back to rects: correct, just not cheap. The
   detector is covered by `tests/seam-scroll/run.sh` (the asm routine against a Python model of
   these rules) and by the C port's pan cases in `yt2core-tests`; `tests/data/sample-pan-rows.bin`
@@ -194,7 +196,8 @@ unpadded. VIDEO, CONTROL and INPUT (keys) are implemented in the seam builds (se
 `docs/stream.md`); AUDIO is implemented in the seam builds (they emit the
 driver's register writes and the PC-speaker gate) and consumed by the client
 (it keeps the per-port register file, synthesises the samples and renders the
-beep, `docs/client.md`); TICK, mouse INPUT and FILES are still spec-only here:
+beep, `docs/client.md`); the port implements all six AUDIO encoders with no
+live source yet (M9); mouse INPUT and FILES are still spec-only here:
 
 | type | message | payload after `u8 type` |
 |---|---|---|
@@ -255,6 +258,26 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   is the effect whose immediately following PC-speaker fallback pair the
   client drops when it has the sample.
 
+TICK (family 4), spoken by the port (the seam and C builds do not emit it yet):
+
+| type | message | payload after `u8 type` |
+|---|---|---|
+| 0 | `tick` | `u32 n` (LE, length 5) |
+| 1 | `pace` | `u16 ms` (LE, length 3) |
+
+- `tick(n)` stamps a presented frame with the engine's logical tick: every
+  presented frame carries exactly one, immediately before its `frame_end`,
+  and `n` rises monotonically (modulo 2^32) across presents, skipping idle
+  ticks.  The client may pace presentation against it; the engine never
+  reads wall clocks.  Like INPUT and CONTROL, TICK is never compressed.
+- `pace(ms)` announces the engine's milliseconds per tick.  The engine
+  sends it once per session (and again after every hello re-send, so a
+  reader that joins mid-stream learns it); the value never changes within
+  a session.  A client-to-engine `pace` is reserved: parsers accept family
+  4 in both directions but only the engine-to-client announcements are
+  defined.
+- The codec field is 0: TICK carries no pixels.
+
 - Palette values are DAC values (0..63), not 8-bit RGB; clients expand them for display.
 - Compared with the M1b spike (one full 256-entry palette per fade step), the
   palette message is now a diff span and `frame_end` closes every pass. The v0
@@ -263,8 +286,8 @@ AUDIO (family 2), emitted by the seam builds and consumed by the client:
   VIDEO uses `h=1` rects (one message per changed row, at most 640 wide), in
   320x200x8 for the game and 640x480x8 for the VBE intro. Raw v0 files remain
   supported for protocol fixtures.
-  Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam and C builds use codec 1 and
-  a recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
+  Rows travel as raw pixels (codec 0) or as runs (codec 1); the seam, C and port builds use
+  codec 1 and a recording can mix both.  `tests/data/sample-video.bin` covers mode 13h raw,
   `tests/data/sample-vbe.bin` the intro raw, `tests/data/sample-video-rle.bin` both modes with the
   run codec, and `tests/data/sample-pan-rows.bin` / `sample-pan-scroll.bin` the same twelve-picture
   pan encoded as rows and as scroll messages.

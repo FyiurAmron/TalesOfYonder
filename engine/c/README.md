@@ -154,6 +154,8 @@ the game data, builds what is stale, starts the engine and opens the client:
     sh tools/play-c.sh                # client window
     sh tools/play-c.sh --scale 4
     sh tools/play-c.sh --headless --stats 5
+    sh tools/play-c.sh --spelltext   # YT3-sourced F3 descriptions (92)
+    sh tools/play-c.sh --spelltext-complete  # all 105 (13 curated lines)
 
 By hand (two terminals):
 

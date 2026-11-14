@@ -109,6 +109,53 @@ const uint8_t *yt2_spell_record(const yt2_spells *spells, unsigned int rank)
            (size_t)spells->order[rank] * YT2_SPELLS_RECORD_SIZE;
 }
 
+static uint16_t read_u16(const uint8_t *at)
+{
+    return (uint16_t)((uint16_t)at[0] | ((uint16_t)at[1] << 8));
+}
+
+int yt2_spells_effect_lines(const yt2_spells *spells, unsigned int file_index,
+                            char lines[YT2_SPELLS_EFFECT_MAX_LINES]
+                                       [YT2_SPELLS_EFFECT_REC],
+                            unsigned int *count)
+{
+    size_t slot;
+    unsigned int start;
+    unsigned int total;
+
+    if (spells == NULL || spells->bytes == NULL || lines == NULL ||
+        count == NULL || file_index >= YT2_SPELLS_COUNT) {
+        return YT2_STATUS_ERROR;
+    }
+    slot = (size_t)YT2_SPELLS_EFFECT_INDEX +
+           (size_t)(file_index + 1u) * 4u;
+    if (slot + 4u > spells->size) {
+        return YT2_STATUS_ERROR;
+    }
+    start = read_u16(spells->bytes + slot);
+    total = read_u16(spells->bytes + slot + 2u);
+    if (total > YT2_SPELLS_EFFECT_MAX_LINES) {
+        total = YT2_SPELLS_EFFECT_MAX_LINES;
+    }
+    for (unsigned int i = 0u; i < total; i++) {
+        size_t record = (size_t)YT2_SPELLS_EFFECT_TEXT +
+                        (size_t)(start + i) * YT2_SPELLS_EFFECT_REC;
+        size_t length = 0u;
+
+        if (record + YT2_SPELLS_EFFECT_REC > spells->size) {
+            return YT2_STATUS_ERROR;
+        }
+        while (length + 1u < YT2_SPELLS_EFFECT_REC &&
+               spells->bytes[record + length] != 0u) {
+            lines[i][length] = (char)spells->bytes[record + length];
+            length++;
+        }
+        lines[i][length] = '\0';
+    }
+    *count = total;
+    return YT2_STATUS_OK;
+}
+
 static int spell_row_text(void *ctx, unsigned int rank, char *buffer,
                           size_t size)
 {

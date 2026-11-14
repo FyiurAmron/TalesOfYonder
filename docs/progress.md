@@ -2590,3 +2590,103 @@ items now live in `docs/roadmap.md`).
     `sh tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - YT2 spell-effect source (white-box) + YT3 descriptions:
+  - **mechanism**: `sub_03988` draws EFFECT from WORLD files 6+7
+    (chunk table `0D201h`): `(start,count)` index at `16762Eh`, slot
+    `file+1`, 39-byte records at `167822h`.  The index chains perfectly;
+    the text area was never authored (script bytes, item names, a
+    `BK1_CH2` dev path) - that is the vanilla bug, byte-proven
+    (file 31 renders the dev path + `STEEL CHEST KEY` exactly).
+  - **YT3**: its WORLD.DAT holds the same structure twice with REAL
+    English descriptions (copy A `3D4AEFh`/`3D4C9Fh`, truncated by copy B
+    at record 61; copy B `3D5631h`/`3D57E1h`, all 354 records clean;
+    `B[i]==A[i+1]`).  107 spell records at `41B5BFh`, same 80-byte
+    format.  No YT3 executable, so the live chunk choice stays unknown;
+    `tools/yt3_spells.py` dumps either copy per file.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: codec 1 + AUDIO encoders:
+  - **codec 1**: the presenter emits run-coded row rects
+    (`yt2_video_encode_rect_runs`, fresh spec implementation); three B1
+    seam rows from `sample-video-rle.bin` (seq 138/139/197) are frozen
+    byte-for-byte, `check_stream.py` decodes runs, and the port gate's own
+    replay step plus `tests/port-live/run.sh` prove the C# client renders
+    the bytes.
+  - **AUDIO**: all six family encoders (opl_write/batch/timed, ctrl,
+    speaker, sample) with spec-pinned unit vectors; a throwaway probe fed
+    them to the headless client (`audio=5w/2b/1c speaker=2 samples=1`,
+    zero unknowns).  No live source yet - that waits for M9's sequencer.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - YT2 spell-description patch (official + complete tables):
+  - **match**: 97 of 105 YT2 spells name-match YT3's; `REGISTER.EXE` is
+    the YT3 game (SW.BAT runs it) pointing at description copy B, and
+    YT3's ERROR slots 59/71/80 keep the BLOCK texts.  Description numbers
+    map to record words (damage w12, beneficial w6, ailment w8).
+  - **official** (`tools/yt2_spelltext.py` + `.tsv`): 92 spells with YT2's
+    own numbers substituted (incl. two stale YT3 texts fixed to the true
+    stats); durations and YT2-only spells keep vanilla bytes.
+  - **complete** (`--complete` + `_complete.tsv`): all 105 spells - BLOCKs
+    from the ERROR slots, durations assumed, five spells invented from
+    the YT2 records.  351/351 text records; `--check` re-derives every
+    line.
+  - **proof**: B1 with the patched WORLD.DAT runs the full M5 slice plus
+    F8/F3/Enter to the detail page and renders ACID RAIN's substituted
+    145 glyph-exact (2592/2592 pixels, diffs only in EFFECT bands).
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 spelltext play option + gate:
+  - **port**: `--spelltext` reads EFFECT lines live from WORLD files 6+7
+    (`yt2_spells_effect_lines`, `render_world` variants, 32-entry
+    canonical map with zero conflicts); vanilla renders pixel-identical,
+    patched worlds show their text.  `yt2p-play`/`yt2p-spells` take the
+    flag; both play scripts take `--spelltext`/`--spelltext-complete`.
+  - **gate**: `run.sh` builds both patched worlds and the unit tests pin
+    the reader strings (HEAL/ACID/FEET, POWER/STAKE), prove world==frozen
+    pixels for all 105 vanilla files, and check patched/unpatched wiring.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - CREATE FOOD experiment (how much food?):
+  - **setup**: boot truncates CURGAME unread, so saves can't be doctored;
+    `tools/doctor_world.py` doctors WORLD.DAT's NPC records instead
+    (spellbook byte 0xCB, MP 200, casting 90; template ORE/NUORE 99).
+    `play-c.sh` takes `PLAY_WORLD=` to stage it.
+  - **spellbook**: per-slot 14-byte bitmask at slot+0xCA, bit[file]
+    MSB-first (`sub_17FD1`); proven live (menu lists doctored spells).
+  - **verdict so far**: the cast pays MP-8/ORE-8, sets amount v_40E2=55
+    (= item file, not a count) and arms the food cursor, but nothing is
+    granted anywhere (packs/counters/objects/map/saves/messages all
+    clean; MINER'S LIGHT control shows effects work).  Grant count w13
+    reads 0 in shipped data.  Delivery needs a placement click whose
+    target is still unknown.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: scroll detection:
+  - **prescan**: the presenter scores +-8 shifts against the full shadow
+    (exact rows, not checksums; same 32/100 thresholds and tie order as
+    the seam/C detector, at any height) and emits scroll + residue rects;
+    keyframes always go out as rows.  `check_stream.py` applies scroll
+    and reads raw fixtures; the pan fixtures decode to twelve identical
+    frames both ways.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: TICK stream (boundary completion done):
+  - **wire**: `tick(n)` after every frame (codec 0, 6B payload, monotonic
+    mod 2^32, gaps allowed only for never-presented composes), `pace(ms)`
+    once per session + after hello re-send; the player paces itself with
+    nanosleep against the 55 ms budget.
+  - **receivers**: the C# client applies ticks in `ApplyTick` (renders
+    unchanged) and echoes `ticks=`/`paces=`; `replay.py` counts and
+    paces; `check_stream.py` checks adjacency, monotonicity and
+    pace-stability.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

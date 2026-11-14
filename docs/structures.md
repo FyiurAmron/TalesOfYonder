@@ -397,6 +397,51 @@ opens the same page for that spell's file index (file 86, `BEAM OF
 DEATH`, has no F3 rank but opens from the mage list) with the F4 icon
 bar; the footer returns to the class list.
 
+The EFFECT source is white-box: `sub_03988` draws the labels (one
+`fn_13E8C` call over `AFFECTS:` - the blob's double NULs become the blank
+rows), the costs from `v_5A6E/70/72`, the six class rows by scanning the
+per-class spell tables at `0D275h/0D28Dh`, and AFFECTS/WHEN by bit-testing
+`v_5A9E/5AA2/5A74/5A9C` against the fixed exe vocabulary.  The EFFECT lines
+come from WORLD files 6+7 (`fn_180D0` chunk table at `0D201h`): file 6 is
+the 4-byte `(start, count)` index at `16762Eh` (slot `file+1`), file 7 the
+39-byte text records at `167822h`.  The index chains perfectly but the text
+area was never authored - it holds script bytes, item names and a stray
+`ER2\BK1_CH2\GAME\DAD\WORLD.DAT` dev path, which is exactly what vanilla
+renders (frozen bytes are matcher-canonical: e.g. true record byte `03h`
+renders a glyph the port stores as `83h`; the frames match).  Note the
+listing trap: segments are byte-aligned, so a runtime string pointer is the
+listing offset plus 7 (`tools/port/program.py`).
+
+YT3's WORLD.DAT holds the same structure twice, with REAL descriptions:
+copy A (index `3D4AEFh`, text `3D4C9Fh`, records 0-61 clean, then
+truncated mid-record-61 by copy B) and copy B (index `3D5631h`, text
+`3D57E1h`, all 354 used records clean English).  The two indexes are
+identical (0/108 slots differ); the YT3 executable is `REGISTER.EXE`
+(`SW.BAT` runs it as the game program) and it points at copy B.  YT3 has
+107 spell records at `41B5BFh` (same 80-byte format, record 0 identical to
+YT2's); its ERROR slots 59/71/80 still hold the BLOCK OF ICE/FIRE/
+ELECTRICITY descriptions.  `tools/yt3_spells.py` dumps either copy per
+file.
+
+97 of YT2's 105 spells name-match YT3's, so YT3 supplies an optional
+description patch (`tools/yt2_spelltext.py`, which rewrites WORLD files
+6+7 only - file 7 has no other reader).  Description numbers map to
+record words: damage to word 12, beneficial magnitudes to word 6,
+ailment magnitudes to word 8 (each proven by single-candidate spells and
+phrase templates); YT2's own numbers are substituted, including two
+stale YT3 texts (HARDY PARTY prints 650 for a 600 stat, ERADICATE 400
+for 480).  The official table covers 92 spells; five duration-bearing
+spells keep vanilla bytes (durations live in no record word) as do the
+eight YT2-only spells.  `--complete` fills those 13 from curated lines
+(BLOCKs from the ERROR slots, durations assumed, five spells invented
+from the YT2 records).  Proven live: B1 with the patched WORLD.DAT
+renders ACID RAIN's substituted 145 glyph-exact (2592/2592 pixels,
+diffs only in the EFFECT bands).  The port renders either table with
+`--spelltext` (`yt2_spells_effect_lines` + a 32-entry canonical map that
+aligns every vanilla record byte with the frozen table - zero conflicts -
+so a vanilla world stays pixel-identical); both play scripts take
+`--spelltext` / `--spelltext-complete`.
+
 ## Magic users (F4)
 
 F4 from the help page opens the class list over the same shared geometry.
