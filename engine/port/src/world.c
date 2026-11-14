@@ -285,3 +285,16 @@ int yt2_world_anim_base(const yt2_world *world, uint8_t *base)
     memcpy(base, world->bytes + YT2_WORLD_ANIM_OFFSET, YT2_WORLD_ANIM_SIZE);
     return YT2_STATUS_OK;
 }
+
+int yt2_world_logo(const yt2_world *world, const uint8_t **bytes,
+                   size_t *size)
+{
+    if (world == NULL || world->bytes == NULL || bytes == NULL ||
+        size == NULL ||
+        world->size < YT2_WORLD_LOGO_OFFSET + YT2_WORLD_LOGO_SIZE) {
+        return YT2_STATUS_ERROR;
+    }
+    *bytes = world->bytes + YT2_WORLD_LOGO_OFFSET;
+    *size = YT2_WORLD_LOGO_SIZE;
+    return YT2_STATUS_OK;
+}

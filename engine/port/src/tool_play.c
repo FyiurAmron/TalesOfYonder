@@ -1,23 +1,29 @@
-/* yt2p-play: the B2 boundary demo.  Composes screens with the port engine,
- * presents them over the folder link, and answers input, ticks and the
- * palette rotation on the engine side of protocol v0.
+/* yt2p-play: the B2 boundary demo.  Boots the scripted start-up sequence
+ * (Webfoot logo, story cutscene, attract pictures, menu) with the port
+ * engine, then falls through to the scene demo for the slices the menu
+ * selects; presents everything over the folder link, and answers input,
+ * ticks and the palette rotation on the engine side of protocol v0.
  *
  *   yt2p-play DIR [--scene N] [--cursor X,Y] [--frames N] [--tick-ms N]
- *       [--spelltext]
+ *       [--spelltext] [--no-intro]
  *
  * --spelltext reads the F3 detail EFFECT lines live from WORLD.DAT (files
  * 6+7) instead of the frozen vanilla bytes, so a spelltext-patched world
- * (tools/yt2_spelltext.py) shows its descriptions.
+ * (tools/yt2_spelltext.py) shows its descriptions.  --no-intro skips the
+ * start-up sequence and opens the scene demo directly.
  *
  * DIR holds WORLD.DAT and PICTURES.VGA; OUTPUT.BIN is created there and
- * INPUT.BIN is followed there.  Keys 1-6 switch scenes (help, catalog,
- * overhead map, title, menu, monsters); F1-F6, arrows, PgDn/PgUp, Enter
- * and ESC work as in the game (F3 opens the spells, F4 the class list,
- * Enter a line's spells, F5 the categories, Enter a category's items, F6
- * the walkthrough, Enter on the monsters a monster's statistics), the
- * mouse moves the hand cursor, Q quits.  ESC from a list or detail
- * returns to the previous demo scene; the game itself returns to
- * gameplay, which the demo has no scene for yet.
+ * INPUT.BIN is followed there.  During the intro, ESC skips the cutscene
+ * and attract to the menu; in the menu the letter keys (C/A/E/R/I) and
+ * clicks select, Enter toggles the music, Q quits.  Menu selections whose
+ * slices are unported land in the scene demo instead.  There, keys 1-6
+ * switch scenes (help, catalog, overhead map, title, menu, monsters);
+ * F1-F6, arrows, PgDn/PgUp, Enter and ESC work as in the game (F3 opens
+ * the spells, F4 the class list, Enter a line's spells, F5 the categories,
+ * Enter a category's items, F6 the walkthrough, Enter on the monsters a
+ * monster's statistics), the mouse moves the hand cursor, Q quits.  ESC
+ * from a list or detail returns to the previous demo scene; the game
+ * itself returns to gameplay, which the demo has no scene for yet.
  * Watch with the companion client:
  *
  *   dotnet build/client/bin/Release/net11.0/Yt2Client.dll \
@@ -30,9 +36,11 @@
 #include "yt2/clock.h"
 #include "yt2/cluebook.h"
 #include "yt2/cursor.h"
+#include "yt2/intro.h"
 #include "yt2/items.h"
 #include "yt2/lists.h"
 #include "yt2/mapview.h"
+#include "yt2/titlemenu.h"
 #include "yt2/monster_detail.h"
 #include "yt2/monsters.h"
 #include "yt2/palette.h"
@@ -65,6 +73,7 @@ typedef struct play_options {
     unsigned int frames;
     unsigned int tick_ms;
     int spelltext;
+    int no_intro;
 } play_options;
 
 typedef struct play_state {
@@ -76,6 +85,8 @@ typedef struct play_state {
     yt2_items items;
     yt2_walkthrough walk;
     yt2_surface surface;
+    yt2_surface vbe;
+    int have_vbe;
     yt2_palette palette;
     uint8_t anim_base[YT2_WORLD_ANIM_SIZE];
     unsigned int scene;
@@ -158,6 +169,7 @@ static int parse_options(int argc, char **argv, play_options *options)
     options->frames = 0u;
     options->tick_ms = PLAY_TICK_MS;
     options->spelltext = 0;
+    options->no_intro = 0;
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--scene") == 0 && i + 1 < argc) {
             if (!parse_unsigned(argv[++i], &options->scene) ||
@@ -189,6 +201,8 @@ static int parse_options(int argc, char **argv, play_options *options)
             }
         } else if (strcmp(argv[i], "--spelltext") == 0) {
             options->spelltext = 1;
+        } else if (strcmp(argv[i], "--no-intro") == 0) {
+            options->no_intro = 1;
         } else {
             fprintf(stderr, "yt2p-play: unknown argument %s\n", argv[i]);
             return 0;
@@ -838,6 +852,292 @@ static void play_press_at(play_state *state, int x, int y, int *dirty,
     }
 }
 
+/* IBM set-1 scancode of Q (the menu quit key; the wire carries no Ctrl). */
+#define PLAY_SCAN_Q 0x10u
+
+/* Game key codes queued for the intro (the original's BIOS typeahead ring
+   holds 15). */
+#define PLAY_INTRO_KEYS 15u
+
+typedef struct play_intro_bridge {
+    play_state *state;
+    yt2_folder_out *out;
+    yt2_folder_in *in;
+    yt2_presenter *presenter;
+    yt2_intro *intro;
+    unsigned int tick_ms;
+    unsigned int *presented;
+    unsigned int frames_cap;
+    /* Full wire events: the game-code translation happens at consumption,
+       and whatever the intro leaves queued carries into the demo loop. */
+    yt2_input_event keys[PLAY_INTRO_KEYS];
+    unsigned int key_count;
+    int click_pending;
+    int click_x;
+    int click_y;
+    int force;
+    int hello_sent;
+    int quit;
+    int failed;
+    int have_paced;
+    unsigned long paced_tick;
+    unsigned int audio_sent;
+} play_intro_bridge;
+
+/*
+ * Pace every script tick in wall time, whoever observes it first: holds
+ * and menu spins burn ticks without emitting, so emit-side pacing alone
+ * lets polls race ahead of wall-clock input.  Each tick sleeps exactly
+ * once; quiet stretches render as holds of the current frame.
+ */
+static void play_intro_pace(play_intro_bridge *bridge, unsigned long tick)
+{
+    if (!bridge->have_paced) {
+        bridge->paced_tick = tick;
+        bridge->have_paced = 1;
+    } else if (tick > bridge->paced_tick) {
+        yt2_sleep_ms((unsigned int)((tick - bridge->paced_tick) *
+                                      bridge->tick_ms));
+        bridge->paced_tick = tick;
+    }
+}
+
+static const char *play_intro_audio_name(yt2_intro_audio_op op)
+{
+    switch (op) {
+    case YT2_INTRO_AUDIO_MUSIC:
+        return "music";
+    case YT2_INTRO_AUDIO_SFX:
+        return "sfx";
+    case YT2_INTRO_AUDIO_MUSIC_STOP:
+        return "music-stop";
+    case YT2_INTRO_AUDIO_MUSIC_SERVICE:
+        return "music-service";
+    default:
+        return "unknown";
+    }
+}
+
+static const char *play_intro_transition_name(yt2_intro_transition transition)
+{
+    switch (transition) {
+    case YT2_INTRO_TRANSITION_QUIT:
+        return "quit";
+    case YT2_INTRO_TRANSITION_CREATE:
+        return "create";
+    case YT2_INTRO_TRANSITION_LOAD:
+        return "load";
+    case YT2_INTRO_TRANSITION_EMBARK:
+        return "embark";
+    case YT2_INTRO_TRANSITION_RULES:
+        return "rules";
+    case YT2_INTRO_TRANSITION_NONE:
+    default:
+        return "none";
+    }
+}
+
+static void play_intro_poll(yt2_intro_input *input, void *user)
+{
+    play_intro_bridge *bridge = user;
+    play_state *state = bridge->state;
+
+    play_intro_pace(bridge, bridge->intro->tick);
+    for (;;) {
+        const uint8_t *frame;
+        uint32_t length;
+        yt2_input_event event;
+        int poll = yt2_folder_in_poll(bridge->in, &frame, &length);
+
+        if (poll <= 0) {
+            if (poll < 0) {
+                bridge->failed = 1;
+            }
+            break;
+        }
+        if (yt2_input_decode_frame(frame, length, &event) != 1) {
+            continue;
+        }
+        switch (event.kind) {
+        case YT2_INPUT_EVENT_HELLO:
+            if (event.role == YT2_ROLE_CLIENT && event.version == 0 &&
+                !bridge->hello_sent) {
+                if (yt2_present_hello(bridge->presenter, bridge->out) !=
+                        YT2_STATUS_OK ||
+                    yt2_present_pace(bridge->presenter, bridge->out,
+                                     bridge->tick_ms) != YT2_STATUS_OK) {
+                    bridge->failed = 1;
+                }
+                bridge->hello_sent = 1;
+            }
+            break;
+        case YT2_INPUT_EVENT_KEYFRAME_REQUEST:
+            bridge->force = 1;
+            bridge->intro->reshow = 1;
+            break;
+        case YT2_INPUT_EVENT_KEY:
+            if (event.down == 0) {
+                break;
+            }
+            if (bridge->key_count < PLAY_INTRO_KEYS) {
+                bridge->keys[bridge->key_count++] = event;
+            }
+            break;
+        case YT2_INPUT_EVENT_MOUSE_MOVE:
+            state->cursor_x += event.dx;
+            state->cursor_y += event.dy;
+            clamp_cursor(state);
+            break;
+        case YT2_INPUT_EVENT_MOUSE_ABS:
+            state->cursor_x = (int)event.x;
+            state->cursor_y = (int)event.y;
+            clamp_cursor(state);
+            break;
+        case YT2_INPUT_EVENT_MOUSE_BUTTON:
+            if (event.button == 0u && event.down == 1u) {
+                bridge->click_pending = 1;
+                bridge->click_x = state->cursor_x;
+                bridge->click_y = state->cursor_y;
+            }
+            break;
+        case YT2_INPUT_EVENT_QUIT:
+            bridge->quit = 1;
+            bridge->intro->stop = 1;
+            break;
+        default:
+            break;
+        }
+    }
+    /* A checkpoint poll only asks after ESC: report the first one queued
+       and leave everything else (other keys, clicks) for the menu. */
+    if (bridge->intro->peek_only) {
+        unsigned int found = bridge->key_count;
+        unsigned int qi;
+
+        for (qi = 0; qi < bridge->key_count; qi++) {
+            if (bridge->keys[qi].scancode == PLAY_SCAN_ESC) {
+                found = qi;
+                break;
+            }
+        }
+        if (found < bridge->key_count) {
+            input->have_key = 1;
+            input->key = 0x1Bu;
+            bridge->key_count--;
+            memmove(&bridge->keys[found], &bridge->keys[found + 1],
+                    (bridge->key_count - found) *
+                        sizeof(bridge->keys[0]));
+        }
+        return;
+    }
+    /* One queued key per poll, like the original's per-frame ring drain.
+       Untranslatable keys (arrows, function keys) are consumed but not
+       reported: the intro has no binding for them. */
+    if (bridge->key_count > 0u) {
+        yt2_input_event *queued = &bridge->keys[0];
+        uint8_t code = queued->ascii;
+
+        /* The wire carries no modifiers, so plain Q is the DOS ^Q the
+           menu quits on; ESC arrives with its own code. */
+        if (queued->scancode == PLAY_SCAN_ESC) {
+            code = 0x1Bu;
+        } else if (queued->scancode == PLAY_SCAN_Q) {
+            code = 0x11u;
+        }
+        if (code != 0) {
+            input->have_key = 1;
+            input->key = code;
+        }
+        bridge->key_count--;
+        memmove(&bridge->keys[0], &bridge->keys[1],
+                bridge->key_count * sizeof(bridge->keys[0]));
+    }
+    if (bridge->click_pending) {
+        bridge->click_pending = 0;
+        input->left_pressed = 1;
+        input->mouse_x = bridge->click_x;
+        input->mouse_y = bridge->click_y;
+    }
+}
+
+static int play_intro_emit(const uint8_t *frame, const uint8_t *palette,
+                           unsigned long tick, void *user)
+{
+    play_intro_bridge *bridge = user;
+    play_state *state = bridge->state;
+
+    /* A BIOS tick is ~55 ms: pace emissions by the stamp they carry, so
+       same-tick flushes (full-speed fades) present back to back. */
+    play_intro_pace(bridge, tick);
+    while (bridge->audio_sent < bridge->intro->audio_count) {
+        const yt2_intro_audio_event *event =
+            &bridge->intro->audio[bridge->audio_sent++];
+
+        printf("play: audio %lu %s %u\n", event->tick,
+               play_intro_audio_name(event->op), event->id);
+    }
+    if (yt2_surface_blit(&state->surface, 0, 0, frame, PLAY_WIDTH,
+                         PLAY_HEIGHT) != YT2_STATUS_OK) {
+        bridge->failed = 1;
+        return 1;
+    }
+    memcpy(state->palette.rgb, palette, YT2_PALETTE_SIZE);
+    if (yt2_folder_out_take_wrapped(bridge->out)) {
+        bridge->force = 1;
+    }
+    if (yt2_present_frame(bridge->presenter, bridge->out, &state->surface,
+                          &state->palette, bridge->force,
+                          (uint32_t)tick) != YT2_STATUS_OK) {
+        bridge->failed = 1;
+        return 1;
+    }
+    bridge->force = 0;
+    (*bridge->presented)++;
+    if (bridge->quit || bridge->failed) {
+        return 1;
+    }
+    if (bridge->frames_cap != 0u &&
+        *bridge->presented >= bridge->frames_cap) {
+        return 1;
+    }
+    return 0;
+}
+
+static int play_intro_vbe_show(const uint8_t *indices, const uint8_t *palette,
+                               unsigned long tick, void *user)
+{
+    play_intro_bridge *bridge = user;
+    play_state *state = bridge->state;
+
+    play_intro_pace(bridge, tick);
+    printf("play: intro vbe 640x480\n");
+    if (yt2_surface_blit(&state->vbe, 0, 0, indices, YT2_INTRO_VBE_WIDTH,
+                         YT2_INTRO_VBE_HEIGHT) != YT2_STATUS_OK) {
+        bridge->failed = 1;
+        return 1;
+    }
+    memcpy(state->palette.rgb, palette, YT2_PALETTE_SIZE);
+    if (yt2_folder_out_take_wrapped(bridge->out)) {
+        bridge->force = 1;
+    }
+    if (yt2_present_frame(bridge->presenter, bridge->out, &state->vbe,
+                          &state->palette, bridge->force,
+                          (uint32_t)tick) != YT2_STATUS_OK) {
+        bridge->failed = 1;
+        return 1;
+    }
+    bridge->force = 0;
+    (*bridge->presented)++;
+    if (bridge->quit || bridge->failed) {
+        return 1;
+    }
+    if (bridge->frames_cap != 0u &&
+        *bridge->presented >= bridge->frames_cap) {
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
     play_options options;
@@ -847,6 +1147,7 @@ int main(int argc, char **argv)
     yt2_presenter presenter;
     char path[1024];
     unsigned int presented = 0u;
+    unsigned int qi;
     int running = 1;
     int result = 1;
 
@@ -855,7 +1156,7 @@ int main(int argc, char **argv)
     if (argc < 2 || !parse_options(argc, argv, &options)) {
         fprintf(stderr,
                 "usage: %s DIR [--scene N] [--cursor X,Y] [--frames N] "
-                "[--tick-ms N] [--spelltext]\n",
+                "[--tick-ms N] [--spelltext] [--no-intro]\n",
                 argv[0]);
         return 2;
     }
@@ -881,8 +1182,15 @@ int main(int argc, char **argv)
         return 1;
     }
     if (yt2_surface_init(&state.surface, PLAY_WIDTH, PLAY_HEIGHT) !=
-            YT2_STATUS_OK ||
-        yt2_world_anim_base(&state.world, state.anim_base) != YT2_STATUS_OK ||
+            YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-play: cannot start the session\n");
+        goto done;
+    }
+    /* A short VBE surface only loses the publisher logo (black beat). */
+    state.have_vbe =
+        yt2_surface_init(&state.vbe, YT2_INTRO_VBE_WIDTH,
+                         YT2_INTRO_VBE_HEIGHT) == YT2_STATUS_OK;
+    if (yt2_world_anim_base(&state.world, state.anim_base) != YT2_STATUS_OK ||
         yt2_monsters_load(&state.monsters, &state.world) != YT2_STATUS_OK ||
         yt2_spells_load(&state.spells, &state.world) != YT2_STATUS_OK ||
         yt2_classes_load(&state.classes, &state.spells) != YT2_STATUS_OK ||
@@ -893,6 +1201,65 @@ int main(int argc, char **argv)
         yt2_presenter_init(&presenter) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot start the session\n");
         goto done;
+    }
+    if (!options.no_intro) {
+        play_intro_bridge bridge;
+        yt2_intro intro;
+        yt2_titlemenu titlemenu;
+        yt2_intro_transition transition;
+
+        memset(&bridge, 0, sizeof(bridge));
+        bridge.state = &state;
+        bridge.out = &out;
+        bridge.in = &in;
+        bridge.presenter = &presenter;
+        bridge.tick_ms = options.tick_ms;
+        bridge.presented = &presented;
+        bridge.frames_cap = options.frames;
+        bridge.force = 1;
+        printf("play: intro start\n");
+        if (yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
+            yt2_present_pace(&presenter, &out, options.tick_ms) !=
+                YT2_STATUS_OK ||
+            yt2_intro_init(&intro, &state.pictures, &state.world,
+                           play_intro_emit, play_intro_poll,
+                           &bridge) != YT2_STATUS_OK) {
+            fprintf(stderr, "yt2p-play: cannot start the intro\n");
+            goto done;
+        }
+        bridge.intro = &intro;
+        /* Live play lets the client draw the pointer. */
+        intro.engine_cursor = 0;
+        if (state.have_vbe) {
+            intro.vbe_show = play_intro_vbe_show;
+        }
+        if (yt2_titlemenu_init(&titlemenu, &intro, options.tick_ms) != YT2_STATUS_OK) {
+            fprintf(stderr, "yt2p-play: cannot start the menu\n");
+            yt2_intro_free(&intro);
+            goto done;
+        }
+        transition = yt2_titlemenu_boot(&titlemenu);
+        printf("play: intro transition %s frames %u\n",
+               play_intro_transition_name(transition), presented);
+        state.tick = (unsigned int)intro.tick;
+        /* Keys the wire delivered while the intro owned it belong to the
+           demo now, oldest first; the demo queue holds the same 15. */
+        for (qi = 0; qi < bridge.key_count; qi++) {
+            state.key_queue[qi] = bridge.keys[qi];
+        }
+        state.key_count = bridge.key_count;
+        yt2_intro_free(&intro);
+        if (bridge.failed) {
+            fprintf(stderr, "yt2p-play: intro failure\n");
+            goto done;
+        }
+        if (bridge.quit ||
+            transition == YT2_INTRO_TRANSITION_QUIT ||
+            (options.frames != 0u && presented >= options.frames)) {
+            printf("play: %u frames\n", presented);
+            result = 0;
+            goto done;
+        }
     }
     if (render_scene(&state) != YT2_STATUS_OK ||
         yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
@@ -1074,6 +1441,7 @@ done:
     yt2_presenter_done(&presenter);
     yt2_folder_in_close(&in);
     yt2_folder_out_close(&out);
+    yt2_surface_free(&state.vbe);
     yt2_surface_free(&state.surface);
     yt2_world_free(&state.world);
     yt2_pictures_free(&state.pictures);

@@ -24,6 +24,7 @@ The first vertical slice is the state core and the save loader:
 | `include/yt2/world.h` | `WORLD.DAT` map prefix: tiles, map descriptors, map names |
 | `include/yt2/pictures.h` | `PICTURES.VGA` group table and picture accessors |
 | `include/yt2/palette.h` | 256-entry 6-bit VGA palette + the D0h..DFh rotation |
+| `include/yt2/pcx.h` | single-plane 8-bit PCX decode (the VBE logo format) |
 | `include/yt2/surface.h` | 8-bit indexed surface, clipped blits, masked blits |
 | `include/yt2/text.h` | the executable's standard 6x6 text face |
 | `include/yt2/cluebook.h` | the clue-book/help page composer |
@@ -46,6 +47,7 @@ The first vertical slice is the state core and the save loader:
 | `include/yt2/boot.h` | the static start-up scenes and their palettes |
 | `include/yt2/file.h` | the small platform file service |
 | `include/yt2/endian.h` | explicit little-endian reads/writes |
+| `include/yt2/intro.h` | the boot/menu state machine + attract cutscene (`yt2_intro`) |
 | `src/party.c` | parses the 5000-byte party block into live state and writes it back |
 | `src/savefile.c` | loads/writes the 77509-byte save, validates the chunks, owns the bytes |
 | `src/world.c` | parses the map grid, descriptors, names and nine palettes |
@@ -55,6 +57,7 @@ The first vertical slice is the state core and the save loader:
 | `src/cluebook.c` | composes picture, text and the command icon bar |
 | `src/cursor.c` | draws the masked 16x16 cursor at a position |
 | `src/palette.c` | writes one rotation phase over D0h..DFh |
+| `src/pcx.c` | decodes the WORLD.DAT LOGO.PCX embed to 640x480 indices |
 | `src/protocol.c` | v0 frame/message encode (codec-1 runs, AUDIO) + input decode |
 | `src/transport_folder.c` | timed YT2B writer, input follower |
 | `src/present.c` | presents with palette-span and row diffing |
@@ -71,6 +74,7 @@ The first vertical slice is the state core and the save loader:
 | `src/items.c` | the item table plus F5 screens over/around the composer |
 | `src/walkthrough.c` | the text pages plus the F6 screen |
 | `src/boot.c` | composes the webfoot, story-text, attract, title and menu scenes |
+| `src/intro.c` | the boot/menu flow and the animated attract loop over `yt2_intro` |
 | `src/tool_info.c` | `yt2p-info`, the differential save reader |
 | `src/tool_world.c` | `yt2p-world`, the map-database reader |
 | `src/tool_pictures.c` | `yt2p-pictures`, the picture-group reader |
@@ -85,6 +89,7 @@ The first vertical slice is the state core and the save loader:
 | `src/tool_walkthrough.c` | `yt2p-walkthrough`, the F6 page renderer |
 | `src/tool_play.c` | `yt2p-play`, the boundary demo (scenes + input + ticks) |
 | `src/tool_boot.c` | `yt2p-boot`, the start-up scene renderer |
+| `src/tool_intro.c` | `yt2p-intro`, the attract-loop frame/audio renderer |
 | `tests/` | unit tests and the gate |
 
 `yt2_world` parses the map prefix into live tiles and descriptors, the nine
@@ -105,6 +110,17 @@ model yet; they are preserved, not interpreted.
     build/port/yt2p-tests
     sh engine/port/tests/run.sh
     sh tests/port-live/run.sh
+
+The intro gate renders two attract cycles and checks them behaviorally
+against the frozen B1 log (frames on stdout, audio triggers on stderr):
+
+    build/port/yt2p-intro PICTURES.VGA WORLD.DAT --frames 14000 \
+      >build/tmp/port.intro.log 2>build/tmp/port.intro.audio
+    python3 engine/port/tests/check_intro.py \
+      engine/port/tests/intro_ref.log build/tmp/port.intro.log \
+      --artifacts engine/port/tests/intro_artifacts.txt \
+      --audio engine/port/tests/intro_audio.txt build/tmp/port.intro.audio \
+      --rows engine/port/tests/intro_rows_c1.txt
 
 ## Watch it live
 
@@ -207,7 +223,8 @@ onto a black 320x200 surface and writes a PPM with the 6-bit palette expanded.
 
 ## Next slices
 
-1. the animated story cutscene and the boot/menu state machine;
+1. the animated story cutscene and the boot/menu state machine (done,
+   gated by `check_intro.py` against B1 over two attract cycles);
 2. the clue-book list pages (F3-F6; F1 maps and F2 monsters done);
 3. boundary completion: row diffing (done), codec 1 (done, renders in
    the C# client), AUDIO encoders (done; no live source yet - M9), scroll

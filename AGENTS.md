@@ -1,5 +1,10 @@
 Main rule: *If unsure, ask instead of pondering or guessing.*
 
+Porting bar: this stage ports code from asm-driven C (B1) to real C (B2); the
+reverse-engineering is done, so port the logic as written and do not chase
+per-millisecond or per-frame equivalence with B1/DOS timing - the goal is a
+game that works well, not a cycle-exact replica.
+
 `CONTRIBUTING.md` is the **source of truth** for layout, conventions, gates and history. Read it
 first and follow it; if this file ever disagrees with it, `CONTRIBUTING.md` wins. This file only
 adds agent-specific operational rules.

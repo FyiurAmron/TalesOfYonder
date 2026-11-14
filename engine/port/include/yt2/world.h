@@ -90,6 +90,13 @@
  */
 #define YT2_WORLD_ANIM_OFFSET 0x82EBAu
 #define YT2_WORLD_ANIM_SIZE 48u
+/*
+ * The embedded LOGO.PCX (fn_15DC2's VBE picture): the EXE's static offset
+ * table names 0x1AE0F6 and v_9099 sizes it 0x721E; the PCX header and its
+ * 640x480 dimensions plus the 0x0C palette trailer self-check the range.
+ */
+#define YT2_WORLD_LOGO_OFFSET 0x1AE0F6u
+#define YT2_WORLD_LOGO_SIZE 0x721Eu
 #define YT2_WORLD_LEGEND_ENTRY_SIZE 8u
 
 typedef struct yt2_legend {
@@ -169,5 +176,12 @@ const yt2_palette *yt2_world_palette(const yt2_world *world,
  * when the file is not loaded or is too short to hold the record.
  */
 int yt2_world_anim_base(const yt2_world *world, uint8_t *base);
+
+/*
+ * Point `*bytes`/`*size` at the embedded LOGO.PCX file image (NULL/0 and
+ * YT2_STATUS_ERROR when the file is not loaded or is too short).
+ */
+int yt2_world_logo(const yt2_world *world, const uint8_t **bytes,
+                   size_t *size);
 
 #endif /* YT2_WORLD_H */

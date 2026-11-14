@@ -25,17 +25,18 @@ cp "$ROOT/_ref/orig-bin/YT2/WORLD.DAT" "$ROOT/_ref/orig-bin/YT2/PICTURES.VGA" \
 PPID=$!
 trap 'kill "$PPID" 2>/dev/null || true; wait 2>/dev/null || true' EXIT INT TERM
 sleep 1
-# One step per round trip: hello, keyframe, Down, Down, Enter, ESC, legend
-# pick (Up, Up, Enter, marker click, ESC), two MORE-downs, one MORE-up,
-# four Ups and a double-click (opens plus the stale-latch legend), ESC,
-# F1, a click on catalog row 5 (abs + button together), F2, Down, a
-# double-click on monster row 0, ESC, Down, F3, Down, ESC, F4, Down, Enter,
-# Down, a click on the detail footer (back to the list), ESC, F5, Down,
-# Enter (attribute info), ESC, six Downs (weapons), Enter, Down, ESC, ESC,
-# F6, PgDn, PgUp, MORE-down, MORE-up, ESC, then quit.  Keys drain one
-# per tick, so each step presents before the next lands; steps stay 30
-# ticks apart so only the double-click batches (two presses, one tick)
-# open.
+# One step per round trip: hello, keyframe, ESC (skip logo), ESC (skip
+# attract to the menu), C (create: the unported slice lands in the scene
+# demo), Down, Down, Enter, ESC, legend pick (Up, Up, Enter, marker click,
+# ESC), two MORE-downs, one MORE-up, four Ups and a double-click (opens
+# plus the stale-latch legend), ESC, F1, a click on catalog row 5 (abs +
+# button together), F2, Down, a double-click on monster row 0, ESC, Down,
+# F3, Down, ESC, F4, Down, Enter, Down, a click on the detail footer
+# (back to the list), ESC, F5, Down, Enter (attribute info), ESC, six
+# Downs (weapons), Enter, Down, ESC, ESC, F6, PgDn, PgUp, MORE-down,
+# MORE-up, ESC, then quit.  Keys drain one per tick, so each step presents
+# before the next lands; steps stay 30 ticks apart so only the
+# double-click batches (two presses, one tick) open.
 python3 - "$RUN/game/INPUT.BIN" <<'EOF'
 import struct
 import sys
@@ -67,6 +68,9 @@ with open(path, "wb") as stream:
     stream.flush()
     emit(stream, (5, bytes([0, 1, 0])), (5, bytes([4])))
     steps = [
+        [(3, bytes([0, 1, 0x01, 0x1B]))],  # ESC -> skip logo
+        [(3, bytes([0, 1, 0x01, 0x1B]))],  # ESC -> skip attract to menu
+        [(3, bytes([0, 1, 0x2E, 0x43]))],  # C -> demo scenes
         [(3, bytes([0, 1, 0x50, 0x00]))],  # Down -> sel 1
         [(3, bytes([0, 1, 0x50, 0x00]))],  # Down -> sel 2
         [(3, bytes([0, 1, 0x1C, 0x0D]))],  # Enter -> overhead
@@ -168,6 +172,8 @@ if kill -0 "$PPID" 2>/dev/null; then
     exit 1
 fi
 wait "$PPID" 2>/dev/null || true
+grep -q "play: intro transition create" "$RUN/play.log" ||
+    { echo "port-input: FAIL - boot menu missed" >&2; cat "$RUN/play.log" >&2; exit 1; }
 grep -q "scene 1 sel 1" "$RUN/play.log" ||
     { echo "port-input: FAIL - first Down missed" >&2; cat "$RUN/play.log" >&2; exit 1; }
 grep -q "scene 1 sel 2" "$RUN/play.log" ||

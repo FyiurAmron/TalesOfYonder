@@ -6,6 +6,7 @@ int test_boot(void);
 int test_catalog(void);
 int test_classes(void);
 int test_cursor(void);
+int test_intro(void);
 int test_items(void);
 int test_mapview(void);
 int test_monster_detail(void);
@@ -30,6 +31,7 @@ int main(void)
     test_catalog();
     test_classes();
     test_cursor();
+    test_intro();
     test_items();
     test_mapview();
     test_monster_detail();

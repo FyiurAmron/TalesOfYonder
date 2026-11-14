@@ -1,0 +1,13 @@
+# Boot audio triggers in order across two attract cycles (music 3/18, the
+# gate-star service, the menu idle stop, then the replayed pair, twice).
+# No SFX: the bank is off.
+music 3
+music 18
+music-service 0
+music-stop 0
+music 3
+music 18
+music-service 0
+music-stop 0
+music 3
+music 18

@@ -2524,6 +2524,8 @@ items now live in `docs/roadmap.md`).
   - **open**: B1 pages MORE-up twice per click pair (-28); the game
     code shows no release/double path, so B2 ships symmetric -14;
     re-verify MORE-up on DOS when X11 recovers (one-line flip).
+    Resolved 2026-11-15: DOS, the asm build and B2 all page ±14 rows;
+    the -28 was a B1-run glitch.  No flip needed.
   - **gate**: `sh engine/port/tests/run.sh` -> `port: OK`,
     `sh tests/port-input/run.sh` -> `port-input: OK` (legend, MORE,
     double-click, stale-latch steps).
@@ -2688,5 +2690,108 @@ items now live in `docs/roadmap.md`).
   - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
     `sh tests/port-input/run.sh` -> `port-input: OK`,
     `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boot/menu + animated story intro (attract loop):
+  - **engine**: `engine/port/src/intro.c` ports the boot/menu state machine
+    and the attract cutscene from the B1 spec (BIOS-tick timing, no
+    B1-calibrated seeds); `yt2p-intro` renders frames plus the audio
+    trigger log; unit tests in `engine/port/tests/test_intro.c`.
+  - **menu**: the menu loop lives in `yt2/titlemenu.*` (`fn_0D36C`, boot flow
+    `fn_01BE8`); `intro.c` keeps sequences and primitives. It polls and
+    acts at once (clicks act on capture, one logical tick per poll for
+    the script clock, wall-clock idle fuse ~12.4s). Menu table matches
+    DS:5AFAh exactly.
+  - **gate**: `engine/port/tests/check_intro.py` checks two attract cycles
+    behaviorally against B1 (`intro_ref.log`, 6712 frames): statics in
+    script order, loop counts, wait/pose sets and cycle walks, scroll
+    rows pinned to `intro_rows_c1.txt`, audio order+ids exact, 34 listed
+    B1-only artifacts (tears/races/leaks).  B1's fade pacing, wait
+    lengths and palette values are host timing, not script.
+  - **gates**: `check_intro.py` -> `intro-gate: OK`,
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 play boots through the intro (+ boot fixes):
+  - **wire-up**: `yt2p-play` runs `yt2_menu_boot` first (paced by tick
+    stamp, input bridged with a typeahead FIFO, audio triggers logged),
+    then falls through to the scene demo on menu transitions; `--no-intro`
+    keeps the old direct-to-scenes path.  Checkpoint polls peek for ESC
+    so menu keys pressed mid-cutscene survive; leftover keys carry into
+    the demo; pacing covers every tick (holds/menu render as holds).
+  - **VESA**: no VBE and no LOGO.PCX exist on this boundary (B1 shows
+    black too), so the 6 s dead-air hold collapses to a short ESC-polled
+    beat; the palette seeding stays.
+  - **SW logo**: the asm 90-tick ESC-polled hold the transcription skipped
+    (fn_11B00 loc_11C58) is back, so the logo holds ~5 s; B1's capture
+    skips it via sound-driver idle, which the port cannot model yet.
+  - **star**: the 53-flush flight shared one tick stamp (an instant burst
+    live); reimagined slow-but-steady, one step per two ticks (~6 s),
+    same path/colors/frames, ESC-skippable, background held.
+  - **gates**: intro-gate pins updated for the retime (C2 L1 16 after the
+    ragged loop-exit draw rejoins it, landmark lower band 0.1);
+    port-input/port-live script ESC,ESC,C through the boot and pin the
+    `create` transition; run.sh uses `--no-intro` for the scene check.
+  - **gates**: `check_intro.py` -> `intro-gate: OK`,
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 VBE logo + star retune:
+  - **logo**: LOGO.PCX is WORLD.DAT file 0 (`0x1AE0F6`, 29214 bytes; the
+    game extracts it at boot and deletes it after the show, which is why
+    no copy exists on disk).  New `yt2_pcx` decoder + `yt2_world_logo`
+    accessor; the intro shows it at 640x480 over a mode switch, holds
+    63/90 ticks ESC-polled, re-shows on keyframe request for clients
+    attaching mid-hold.  Decoded pixels are bit-identical to B1's live
+    VBE frame; pinned by unit test.
+  - **star**: one step per tick now (~3 s across, was two).
+  - **gates**: intro-gate log takes `W H` columns; L1 counts its rejoined
+    loop-exit draw (phase-proof 17); port-live pins first-frame 640x480.
+  - **gates**: `check_intro.py` -> `intro-gate: OK`,
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK` (twice),
+    `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 star 2x + smooth gate pan:
+  - **star**: two plots per tick now (~1.5 s across), all 53 plots kept.
+  - **pan**: the vanilla 55/62-step inter-group fades land on two tick
+    stamps, strobing as 0.1 s flickers between smooth pans.  The sweep
+    now runs straight through at two rows per frame (uniform frame per
+    tick, ~5.5 s vs ~11 s), each fade replaced by one palette cut: the
+    fade runs silently to its exact end state (verified byte-equal
+    against the old fade ends) and a single flush shows it.
+  - **gates**: scroll pins re-measured (C1 16/2/19/2/63, C2 15/2/19/2/62),
+    rows fixture regenerated (100 rows), audio pin goes prefix (the
+    frame cap overruns further now).
+  - **gates**: `check_intro.py` -> `intro-gate: OK`,
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 star 4x + even pan beats:
+  - **star**: four plots per tick now (~0.7 s across), all 53 plots kept.
+  - **pan**: the two leftover hitches were the odd single-row steps
+    (rows1/rows2 ended 15x2+1 and 19x2+1) plus deduped identical draws
+    dropping beats.  Groups repartitioned even (32/38/128, same journey,
+    cuts land one row off), and scroll steps force-emit holds instead of
+    dropping ticks: 97 uniform 55 ms beats plus the two instant palette
+    cuts, verified frame by frame.
+  - **gates**: scroll pins re-measured (C1 16/2/18/2/62, C2 15/2/18/2/62),
+    rows fixture regenerated (98 rows).
+  - **gates**: `check_intro.py` -> `intro-gate: OK`,
+    `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.

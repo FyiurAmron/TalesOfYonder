@@ -5,8 +5,9 @@
 #   sh tests/port-live/run.sh
 #
 # Passes when the client window maps at 960x600, presents a 320x200 frame,
-# and the engine answers the scripted key with a scene switch.  Needs Xvfb,
-# xwininfo and dotnet; skips cleanly without them.
+# the scripted keys boot through the intro (ESC, ESC, C) into the scene
+# demo, and the engine answers the last key with a scene switch.  Needs
+# Xvfb, xwininfo and dotnet; skips cleanly without them.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK="$ROOT/build/runs/port-live/$(date +%Y%m%d-%H%M%S)-$$"
@@ -57,11 +58,13 @@ done
 
 "$ROOT/build/port/yt2p-play" "$WORK/game" --tick-ms 55 >"$WORK/play.log" 2>&1 &
 PPID=$!
-sleep 1
+# No sleep: the follower waits for OUTPUT.BIN itself, and every second
+# counts against the VBE logo hold.
 DISPLAY="$DISP" SDL_VIDEODRIVER=x11 SDL_AUDIODRIVER=dummy \
     dotnet "$ROOT/build/client/bin/Release/net11.0/Yt2Client.dll" \
     --follow "$WORK/game/OUTPUT.BIN" --input "$WORK/game/INPUT.BIN" \
-    --stats 0 --key 4:0x04:0x33 --mouse 6:20:10 \
+    --stats 0 --key 2:0x01:0x1B --key 4:0x01:0x1B --key 6:0x2E:0x43 \
+    --key 8:0x04:0x33 --mouse 10:20:10 \
     >"$WORK/client.log" 2>&1 &
 CPID=$!
 
@@ -90,7 +93,7 @@ if [ "$W" != "960" ] || [ "$H" != "600" ]; then
     exit 1
 fi
 I=0
-until grep -q "client: first frame shown 320x200" "$WORK/client.log"; do
+until grep -q "client: first frame shown 640x480" "$WORK/client.log"; do
     I=$((I + 1))
     if [ "$I" -ge 150 ]; then
         echo "port-live: FAIL - no first frame" >&2
@@ -99,9 +102,14 @@ until grep -q "client: first frame shown 320x200" "$WORK/client.log"; do
     fi
     sleep 0.1
 done
-sleep 8
+sleep 14
 python3 "$ROOT/tools/dosbox/snap.py" --display "$DISP" --window \
     "$WORK/screen.png" >/dev/null
+if ! grep -q "play: intro transition create" "$WORK/play.log"; then
+    echo "port-live: FAIL - boot menu missed" >&2
+    cat "$WORK/play.log" >&2
+    exit 1
+fi
 if ! grep -q "present .* scene 2" "$WORK/play.log"; then
     echo "port-live: FAIL - engine ignored the key" >&2
     cat "$WORK/play.log" >&2
