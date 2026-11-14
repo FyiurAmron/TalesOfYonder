@@ -12,7 +12,7 @@ items now live in `docs/roadmap.md`).
     vendored mining project); a pre-commit hook (`.githooks/`) refuses commits that change it;
   - the working disassembly lives directly in `engine/asm/swreg/` (source in `src/`, machinery in `tools/`); MASM
     stays reference-only; `tools/build.sh` assembles into `build/swreg/oracle/` and stages the
-    minimum game files (from `_ref/orig-bin/`) so the built game runs as-is;
+    minimum game files (from `_ref/orig-bin/YT2/`) so the built game runs as-is;
   - build outputs routed to `build/` (scratch in `build/tmp/`); `.gitignore` covers `build/`;
   - UASM 2.57 (linux64 release) at `~/.local/bin/uasm`; `engine/asm/swreg/tools/verify.sh` reproduces
     `SWREG.EXE` byte-identically into `build/swreg/oracle/` (0 warnings, ~65 s per assembly);
@@ -24,7 +24,7 @@ items now live in `docs/roadmap.md`).
 - 2026-10-19 — M0 oracle (done):
   - `tools/dosbox/`: the oracle profile (`dosbox-x.conf` — svga_s3/VBE 1.2, EMS+XMS+UMB, SB16+OPL3,
     16 MB, fixed 30 000 cycles, autosave of save states), the headless runner (`baseline.sh` —
-    Xvfb, `CH2.BAT`, original distribution from `_ref/orig-bin/`, md5-checked per run) and X11
+    Xvfb, `CH2.BAT`, original distribution from `_ref/orig-bin/YT2/`, md5-checked per run) and X11
     helpers (`keys.py` — XTEST key injection via ctypes; `snap.py` — `XGetImage` window snapshots);
   - baseline (no input) captured under `build/runs/oracle/<stamp>/`: 3 screen snapshots (title screen,
     intro), 4 save states (slots 1–4, 15 s interval), DOSBox-X logs, `SWREG.EXE: OK`;

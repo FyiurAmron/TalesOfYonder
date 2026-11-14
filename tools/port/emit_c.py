@@ -752,7 +752,7 @@ class Emitter:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", type=pathlib.Path,
-                        default=pathlib.Path("_ref/orig-bin/SWREG.EXE"))
+                        default=pathlib.Path("_ref/orig-bin/YT2/SWREG.EXE"))
     parser.add_argument("--listing", type=pathlib.Path,
                         default=pathlib.Path("build/port/swreg.lst"))
     parser.add_argument("--out", type=pathlib.Path,

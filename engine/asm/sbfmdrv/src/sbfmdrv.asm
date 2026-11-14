@@ -1,7 +1,7 @@
 ; ===========================================================================
 ; SBFMDRV.COM 1.34 - Creative Sound Blaster FM Driver
 ;
-; Byte-perfect annotated disassembly of _ref/orig-bin/SBFMDRV.COM
+; Byte-perfect annotated disassembly of _ref/orig-bin/YT2/SBFMDRV.COM
 ;   size 7211 bytes, MD5 0f679017d543b0947fc5a33456ba38a7
 ;
 ; The generated baseline is produced by engine/asm/sbfmdrv/tools/generate.py; the

@@ -32,7 +32,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-REFBIN = os.path.join(ROOT, "_ref", "orig-bin")
+REFBIN = os.path.join(ROOT, "_ref", "orig-bin", "YT2")
 EXE = os.environ.get("SWREG_EXE", os.path.join(REFBIN, "SWREG.EXE"))
 WORLD = os.environ.get("WORLD_DAT", os.path.join(REFBIN, "WORLD.DAT"))
 

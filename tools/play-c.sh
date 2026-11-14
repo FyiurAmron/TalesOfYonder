@@ -17,12 +17,12 @@ ENGINE=$ROOT/build/c/yt2game
 
 mkdir -p "$GAME"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    if [ ! -f "$ROOT/_ref/orig-bin/$file" ]; then
-        echo "play-c: _ref/orig-bin/$file is missing" >&2
+    if [ ! -f "$ROOT/_ref/orig-bin/YT2/$file" ]; then
+        echo "play-c: _ref/orig-bin/YT2/$file is missing" >&2
         exit 1
     fi
-    if [ ! -f "$GAME/$file" ] || [ "$ROOT/_ref/orig-bin/$file" -nt "$GAME/$file" ]; then
-        cp -f "$ROOT/_ref/orig-bin/$file" "$GAME/$file"
+    if [ ! -f "$GAME/$file" ] || [ "$ROOT/_ref/orig-bin/YT2/$file" -nt "$GAME/$file" ]; then
+        cp -f "$ROOT/_ref/orig-bin/YT2/$file" "$GAME/$file"
     fi
 done
 

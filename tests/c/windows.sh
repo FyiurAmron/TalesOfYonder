@@ -89,7 +89,7 @@ wine "$WIN/yt2game-tests.exe" | tee "$RUN/game-unit.log"
 mkdir -p "$RUN/lin/game" "$RUN/lin/dump" "$RUN/win/game" "$RUN/win/dump"
 for side in lin win; do
     for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-        cp "$ROOT/_ref/orig-bin/$file" "$RUN/$side/game/$file"
+        cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/$side/game/$file"
     done
 done
 
@@ -174,7 +174,7 @@ if [ "$FULL" = 1 ]; then
              "$RUN/full/win/game" "$RUN/full/win/dump"
     for side in lin win; do
         for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-            cp "$ROOT/_ref/orig-bin/$file" "$RUN/full/$side/game/$file"
+            cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/full/$side/game/$file"
         done
         {
             cat "$ROOT/tests/c/m5_input.txt"

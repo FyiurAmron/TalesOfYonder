@@ -35,7 +35,7 @@ import struct
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "SBFMDRV.COM"))
+REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "YT2", "SBFMDRV.COM"))
 VEL_TABLE = 0x0A1C - 0x100  # CS:0A1Ch in a .COM image
 
 # The crafted stream in test.asm (stream_perc): one hit and one release per

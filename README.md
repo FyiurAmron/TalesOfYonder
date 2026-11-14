@@ -20,7 +20,7 @@ SDL3 development host; `docs/progress.md` is the live log and `docs/roadmap.md` 
 ## Quick start
 
     sh engine/asm/swreg/tools/verify.sh      # assemble + byte gate: SWREG.EXE: OK, IDENTICAL
-    sh tools/dosbox/baseline.sh 75           # headless oracle run of the original (_ref/orig-bin)
+    sh tools/dosbox/baseline.sh 75           # headless oracle run of the original (_ref/orig-bin/YT2)
 
 The live link (folder transport):
 
@@ -89,6 +89,6 @@ DOSBox-X, the .NET SDK, and `Xvfb` for headless runs. Details in `CONTRIBUTING.m
 
 ## Provenance
 
-`_ref/orig-bin/` holds the original 1996 distribution, kept for preservation and reverse engineering;
+`_ref/orig-bin/YT2/` holds the original 1996 distribution, kept for preservation and reverse engineering (`YT3/` holds the sequel\u2019s reference data);
 it is reference data and is never modified. The game itself is © 1996 SW Games / Spectrum Pacific
 Publishing.

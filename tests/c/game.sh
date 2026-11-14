@@ -49,7 +49,7 @@ fi
 
 mkdir -p "$RUN/game" "$RUN/checkpoint"
 for file in CURGAME WORLD.DAT PICTURES.VGA CH2.BAT; do
-    cp "$ROOT/_ref/orig-bin/$file" "$RUN/game/$file"
+    cp "$ROOT/_ref/orig-bin/YT2/$file" "$RUN/game/$file"
 done
 
 if [ "$WRITE_PPM" = 1 ]; then

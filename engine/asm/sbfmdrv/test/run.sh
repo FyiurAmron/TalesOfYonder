@@ -66,7 +66,7 @@ case "$MODE" in
 esac
 STAMP="$(date +%Y%m%d-%H%M%S)-$MODE"
 RUN="$ROOT/build/runs/sbfmdrv/$STAMP"
-REFBIN="$ROOT/_ref/orig-bin"
+REFBIN="$ROOT/_ref/orig-bin/YT2"
 DISP=":98"
 
 sh "$ROOT/engine/asm/sbfmdrv/tools/build.sh" >/dev/null

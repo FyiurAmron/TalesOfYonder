@@ -12,7 +12,7 @@ differential testing. Configs and scripts live in `tools/dosbox/`; every run wri
 Requirements: `Xvfb`, `dosbox-x` (2026.01.02 tested), `python3` (Pillow;
 libX11/libXtst at runtime).
 
-The run boots the original distribution from `_ref/orig-bin/` (md5-checked against
+The run boots the original distribution from `_ref/orig-bin/YT2/` (md5-checked against
 `engine/asm/swreg/tools/SWREG.EXE.md5` inside the run) via `CH2.BAT` on a private Xvfb display,
 with no input.
 

@@ -54,7 +54,7 @@ adds agent-specific operational rules.
 - `uasm` 2.57 at `~/.local/bin/uasm` (on `PATH`).
 - `python3` + `capstone`; `dosbox-x`; `gh` (authenticated as the repo owner).
 - Tools read the reference via `SWREG_EXE`; e.g.
-  `SWREG_EXE=_ref/orig-bin/SWREG.EXE python3 engine/asm/swreg/tools/verify_asm.py`.
+  `SWREG_EXE=_ref/orig-bin/YT2/SWREG.EXE python3 engine/asm/swreg/tools/verify_asm.py`.
 
 ## Where things are
 

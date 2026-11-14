@@ -515,7 +515,7 @@ button or `Ctrl+Q`.
 - Live keyed capture (2026-10-25): `STREAM_KEYS="62:Return 63:space ..."`
   with `tools/dosbox/stream.sh 95` advanced the intro to the story scene.
   The recording carried 9 `sample` messages (ids 16–25, offsets matching the
-  game's `0CF51h` table), and `--file --wav --world _ref/orig-bin/WORLD.DAT`
+  game's `0CF51h` table), and `--file --wav --world _ref/orig-bin/YT2/WORLD.DAT`
   rendered 95.51 s with 9/9 played and 0 unknown.  The sample windows are
   rms 2.2k–4.7k against ~1.1k between lines.  That scene never takes the
   effect-3 fallback, so the recording has no speaker edges.

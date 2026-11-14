@@ -7,7 +7,7 @@ The C engine's resident emulation installs the driver's own instrument,
 percussion and pitch tables at their resident CS offsets so the game's scanner
 and the music blocks behave exactly as they do with the real driver
 (docs/sbfmdrv.md 4.4).  This tool slices those tables out of
-`_ref/orig-bin/SBFMDRV.COM` and writes the generated header.  `--check`
+`_ref/orig-bin/YT2/SBFMDRV.COM` and writes the generated header.  `--check`
 compares the checked-in file instead of writing it and exits non-zero when it
 is stale.
 
@@ -20,7 +20,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "SBFMDRV.COM"))
+REF = os.environ.get("SBFMDRV_EXE", os.path.join(ROOT, "_ref", "orig-bin", "YT2", "SBFMDRV.COM"))
 HEADER = os.path.join(ROOT, "engine", "c", "src", "game", "sound_tables.h")
 MD5 = "0f679017d543b0947fc5a33456ba38a7"
 

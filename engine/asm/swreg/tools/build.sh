@@ -11,14 +11,14 @@
 #     fast     + -DSEAM_FAST      file backend, presentation gate open (diagnostic)
 #
 # Output: <repo>/build/swreg/<variant>/ -- the exe plus the minimum game files
-# from _ref/orig-bin, so the directory runs as staged.  The oracle build is
+# from _ref/orig-bin/YT2, so the directory runs as staged.  The oracle build is
 # checked against SWREG.EXE.md5 here; verify.sh runs the instruction-level gate.
 # The seam variants are not byte-identical on purpose (docs/client.md).
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ASM_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 ROOT="$(cd "$ASM_DIR/../../.." && pwd)"
-REFBIN="$ROOT/_ref/orig-bin"
+REFBIN="$ROOT/_ref/orig-bin/YT2"
 VARIANT=oracle
 
 while [ $# -gt 0 ]; do

@@ -126,8 +126,8 @@ through an IRET sentinel and advances the BIOS tick word and midnight flag from 
 emitted cycle clock.
 
     mkdir -p build/tmp/game build/tmp/checkpoint
-    cp _ref/orig-bin/CURGAME _ref/orig-bin/WORLD.DAT _ref/orig-bin/PICTURES.VGA \
-       _ref/orig-bin/CH2.BAT build/tmp/game/
+    cp _ref/orig-bin/YT2/CURGAME _ref/orig-bin/YT2/WORLD.DAT _ref/orig-bin/YT2/PICTURES.VGA \
+       _ref/orig-bin/YT2/CH2.BAT build/tmp/game/
     build/c/yt2game --game build/tmp/game --ticks 3600 --transfers 100000000 \
         --present-log build/tmp/present.txt --dump build/tmp/checkpoint
     python3 tests/c/game_frames.py build/tmp/present.txt \
@@ -158,8 +158,8 @@ the game data, builds what is stale, starts the engine and opens the client:
 By hand (two terminals):
 
     mkdir -p build/tmp/play
-    cp _ref/orig-bin/CURGAME _ref/orig-bin/WORLD.DAT _ref/orig-bin/PICTURES.VGA \
-       _ref/orig-bin/CH2.BAT build/tmp/play/
+    cp _ref/orig-bin/YT2/CURGAME _ref/orig-bin/YT2/WORLD.DAT _ref/orig-bin/YT2/PICTURES.VGA \
+       _ref/orig-bin/YT2/CH2.BAT build/tmp/play/
     build/c/yt2game --game build/tmp/play --live
 
     dotnet run --project client -c Release -- \
@@ -208,7 +208,7 @@ rows and the pan rules.
   still future. AUDIO messages carry the driver's OPL register batches with PIT stamps,
   its music control state and PC-speaker gate edges.
 - The stub scene is 320x200x8; the game's VBE intro modes are presented, and
-  `LOGO.PCX` is absent from `_ref/orig-bin/`, so the intro falls through to the
+  `LOGO.PCX` is absent from `_ref/orig-bin/YT2/`, so the intro falls through to the
   title as it does in the oracle run.
 - SBFMDRV is emulated, not executed: `game_sound.c` implements the resident INT API,
   timer ISR and sequencer from `docs/sbfmdrv.md`, and installs the signature and
