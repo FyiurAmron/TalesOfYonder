@@ -2845,3 +2845,28 @@ items now live in `docs/roadmap.md`).
     `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-15 - M8/B2 embark/walk slice (room + explore + movement):
+  - **spec**: `docs/structures.md` gains the Exploration section (window,
+    terrain/object tables, perspective blitter, gather/occlusion, render
+    passes, runtime objects, explore UI, movement/collision, clock/date,
+    embark flow), ported from the B1 oracle's room path.
+  - **room**: new `engine/port/src/room.c` (`yt2/room.h`) + `tool_room.c`
+    renders the first-person view cursor-free and pixel-exact vs B1 frame
+    1743 outside the 9x16 cursor box (FNV pixels `166202CD198B9900`,
+    palette `EA991CB49988BA23`); movement/time follow `fn_00FBA` and the
+    scene clock; `yt2p-room` gate added to `run.sh`.
+  - **portraits**: `fn_1274F` reads the live roster like vanilla reads
+    DGROUP (file image is persistence only): `yt2_character` models
+    `ready` (+0x1E), `buffs[9]` (+0x20), `icon_sel` (+0xB4) and
+    `overlay` (+0x15E) with parse/write, pinned by the round-trip
+    test; a created hero's portrait paints pixel-exact in explore.
+  - **wiring**: `yt2p-play` runs explore as session 3 (embark marker,
+    room tick, arrow/ESC keys, walk SFX, `CURGAME` persistence); the menu
+    embark returns EMBARK once the party is set.
+  - **live**: new `engine/port/tests/live_explore.py` drives the full
+    loop marker-based (roster 1 6 7 8, single E embark, 3 walks, ESC,
+    quit): `live-explore: OK (1 embark, 3 walks)`; choreography notes
+    (11s post-roster gap, no ESC-blast before E) live in its header.
+  - **gates**: `yt2p-tests: OK`, `port: OK` (room smoke included).
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

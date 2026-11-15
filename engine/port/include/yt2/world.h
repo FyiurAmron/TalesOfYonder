@@ -82,14 +82,43 @@
 #define YT2_WORLD_LEGEND_TEXT_SIZE 18u
 
 /*
- * The palette-animation base: 16 DAC entries (four rotating groups of four)
- * at the head of the 768-byte record the game reads into DS:4A56h at startup.
- * The rotator (sub_100F3, every 5 ticks) permutes these through the live
- * entries D0h..DFh; the rest of the record is scratch the fade engine
- * tramples, so B2 loads only these 48 bytes.
+ * The scene palette record: 768 bytes the game reads into DS:4A56h at
+ * startup.  The E0h..FFh sky window (`sub_10208`) slides through it from
+ * `v_9581`; the D0h..DFh rotation base (four rotating groups of four,
+ * `sub_100F3` every 5 ticks) sits at offset 0x1B0.  The fade engine uses
+ * the tail as scratch.
  */
+#define YT2_WORLD_SCENE_PAL_OFFSET 0x82D0Au
+#define YT2_WORLD_SCENE_PAL_SIZE 0x300u
 #define YT2_WORLD_ANIM_OFFSET 0x82EBAu
 #define YT2_WORLD_ANIM_SIZE 48u
+/*
+ * The first-person column geometry: the perspective table `fn_1A0A9`
+ * draws through (`fn_18268`).
+ */
+#define YT2_WORLD_PERSP_OFFSET 0x19C826u
+#define YT2_WORLD_PERSP_SIZE 0x499Cu
+/*
+ * Doors, objects and teleporters: the per-column record lists
+ * (`fn_18200`, `v_518E` bytes) plus the 26-byte and 4-byte data records
+ * (`fn_07727`/`fn_077C4`) backing `fn_11914`.
+ */
+#define YT2_WORLD_DOORS_OFFSET 0x1A11C2u
+#define YT2_WORLD_DOORS_SIZE 0x6768u
+#define YT2_WORLD_DOOR26_OFFSET 0x7E5BAu
+#define YT2_WORLD_DOOR26_COUNT 600u
+#define YT2_WORLD_DOOR26_SIZE 26u
+#define YT2_WORLD_DOOR4_OFFSET 0x822AAu
+#define YT2_WORLD_DOOR4_COUNT 280u
+#define YT2_WORLD_DOOR4_SIZE 4u
+/*
+ * Runtime object definitions: the 2-byte id-to-definition index
+ * (`fn_1852C`) and the 106-byte definitions (`fn_1850E`) `fn_12D72`
+ * loads into the 0xF20 slots.
+ */
+#define YT2_WORLD_OBJIDX_OFFSET 0x1A92D6u
+#define YT2_WORLD_OBJDEF_OFFSET 0x1A792Au
+#define YT2_WORLD_OBJDEF_SIZE 106u
 /*
  * The embedded LOGO.PCX (fn_15DC2's VBE picture): the EXE's static offset
  * table names 0x1AE0F6 and v_9099 sizes it 0x721E; the PCX header and its

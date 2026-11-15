@@ -53,6 +53,10 @@ int test_party(void)
     yt2_write_u16(block + TEST_SLOT_BASE + 0x16, 1u);
     block[TEST_SLOT_BASE + 0x1B] = 37u;
     yt2_write_u16(block + TEST_SLOT_BASE + 0x1C, 0u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x1E, 1u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x22, 3u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0xB4, 0u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x15E, 0u);
 
     set_current(block, 0u, 0x00u, 50u);
     set_current(block, 0u, 0x02u, 49u);
@@ -131,6 +135,11 @@ int test_party(void)
     CHECK(party.roster[0].equipment[0].id == 542u);
     CHECK(party.roster[0].effects[0] == 362u);
     CHECK(party.roster[0].flags == 0x0880u);
+    CHECK(party.roster[0].ready == 1u);
+    CHECK(party.roster[0].buffs[0] == 0u);
+    CHECK(party.roster[0].buffs[1] == 3u);
+    CHECK(party.roster[0].icon_sel == 0u);
+    CHECK(party.roster[0].overlay == 0u);
     CHECK(party.roster[1].name[0] == '\0');
 
     CHECK(strcmp(yt2_class_name(YT2_CLASS_MARKSMAN), "marksman") == 0);
@@ -143,7 +152,7 @@ int test_party(void)
         CHECK(written != NULL);
         if (written != NULL) {
             block[0x10] = 0xA5u;
-            block[TEST_SLOT_BASE + 0x1Eu] = 0x5Au;
+            block[TEST_SLOT_BASE + 0x32u] = 0x5Au;
             block[TEST_SLOT_BASE + 0x17Cu] = 0x3Cu;
 
             memcpy(written, block, YT2_PARTY_BLOCK_SIZE);
@@ -161,12 +170,20 @@ int test_party(void)
             party.roster[0].current.combat.hit_points = 9u;
             party.roster[0].pack[1].id = 0xBEEFu;
             party.roster[0].pack[1].count = 5u;
+            party.roster[0].ready = 0u;
+            party.roster[0].buffs[1] = 7u;
+            party.roster[0].icon_sel = 2u;
+            party.roster[0].overlay = 0x8000u;
 
             CHECK(yt2_party_write(written, YT2_PARTY_BLOCK_SIZE, &party) ==
                   YT2_STATUS_OK);
             CHECK(written[0x10] == 0xA5u);
-            CHECK(written[TEST_SLOT_BASE + 0x1Eu] == 0x5Au);
+            CHECK(written[TEST_SLOT_BASE + 0x32u] == 0x5Au);
             CHECK(written[TEST_SLOT_BASE + 0x17Cu] == 0x3Cu);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1E) == 0u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x22) == 7u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0xB4) == 2u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x15E) == 0x8000u);
 
             CHECK(yt2_party_parse(written, YT2_PARTY_BLOCK_SIZE, &reread) ==
                   YT2_STATUS_OK);

@@ -54,6 +54,7 @@
 #include "yt2/present.h"
 #include "yt2/protocol.h"
 #include "yt2/item_detail.h"
+#include "yt2/room.h"
 #include "yt2/spell_detail.h"
 #include "yt2/spells.h"
 #include "yt2/text.h"
@@ -138,14 +139,20 @@ typedef struct play_state {
     unsigned int rotation_phase;
     int hello_sent;
     /* Creation/roster sessions (menu loop; the demo never touches these). */
-    int session_mode; /* 0: demo, 1: create, 2: roster */
+    int session_mode; /* 0: demo, 1: create, 2: roster, 3: explore */
     yt2_create create;
     yt2_roster roster;
+    yt2_room room;
+    int explore_done;
     yt2_save save;
     int have_save;
     char save_path[1024];
     /* No party copy: assigned[] lives in save.party (header 0x1EC)
        and party_ok is derived from its sum at embark (fn_0D36C). */
+    /* Live session I/O for the explore present callback. */
+    yt2_folder_out *session_out;
+    yt2_presenter *session_presenter;
+    unsigned int *session_presented;
     unsigned int create_sfx_seen;
     unsigned int roster_sfx_seen;
 } play_state;
@@ -164,6 +171,8 @@ typedef struct play_state {
 #define PLAY_SCAN_PGDN 0x51u
 #define PLAY_SCAN_UP 0x48u
 #define PLAY_SCAN_DOWN 0x50u
+#define PLAY_SCAN_LEFT 0x4Bu
+#define PLAY_SCAN_RIGHT 0x4Du
 
 static int parse_unsigned(const char *text, unsigned int *value)
 {
@@ -1064,6 +1073,10 @@ static void play_intro_poll(yt2_intro_input *input, void *user)
         } else if (queued->scancode == PLAY_SCAN_Q) {
             code = 0x11u;
         }
+        if (getenv("YT2_PLAY_KEYTRACE") != NULL) {
+            fprintf(stderr, "keytrace scan=%02X ascii=%02X code=%02X\n",
+                    queued->scancode, queued->ascii, code);
+        }
         if (code != 0) {
             input->have_key = 1;
             input->key = code;
@@ -1201,13 +1214,34 @@ static int session_present(play_state *state, yt2_folder_out *out,
                         state->cursor_x, state->cursor_y) != YT2_STATUS_OK) {
         return YT2_STATUS_ERROR;
     }
-    state->palette = *base;
-    if (yt2_palette_rotate(&state->palette, state->anim_base,
-                           state->rotation_phase) != YT2_STATUS_OK) {
-        return YT2_STATUS_ERROR;
+    if (state->session_mode == 3) {
+        /* Explore owns rotation phase and the E0-FF sky window. */
+        if (yt2_room_palette(&state->room, &state->palette) !=
+            YT2_STATUS_OK) {
+            return YT2_STATUS_ERROR;
+        }
+    } else {
+        state->palette = *base;
+        if (yt2_palette_rotate(&state->palette, state->anim_base,
+                               state->rotation_phase) != YT2_STATUS_OK) {
+            return YT2_STATUS_ERROR;
+        }
     }
     return yt2_present_frame(presenter, out, &state->frame, &state->palette,
                              force, state->tick);
+}
+
+/* yt2_room_present_fn: the room presents every frame it composes. */
+static int explore_present(void *context)
+{
+    play_state *state = context;
+
+    if (session_present(state, state->session_out, state->session_presenter,
+                        0) != YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    (*state->session_presented)++;
+    return YT2_STATUS_OK;
 }
 
 static void session_drain_sfx(play_state *state)
@@ -1239,6 +1273,30 @@ static void session_key(play_state *state, const yt2_input_event *event,
     if (event->down != 1) {
         return;
     }
+    if (state->session_mode == 3) {
+        /* ESC returns to the menu (camp/menu lands in a later slice). */
+        if (getenv("YT2_PLAY_KEYTRACE") != NULL) {
+            fprintf(stderr, "explore key scan=%02X\n", event->scancode);
+        }
+        if (event->scancode == PLAY_SCAN_ESC) {
+            state->explore_done = 1;
+            return;
+        }
+        if (event->scancode == PLAY_SCAN_UP ||
+            event->scancode == PLAY_SCAN_DOWN ||
+            event->scancode == PLAY_SCAN_LEFT ||
+            event->scancode == PLAY_SCAN_RIGHT) {
+            /* Presents happen inside (flash, step); no trailing dup. */
+            state->room.last_sfx = 0u;
+            if (yt2_room_key(&state->room, &state->surface, event->scancode,
+                             explore_present, state) == YT2_STATUS_OK &&
+                state->room.last_sfx != 0u) {
+                printf("play: audio %u sfx %u\n", state->tick,
+                       state->room.last_sfx);
+            }
+        }
+        return;
+    }
     if (state->session_mode == 2 && event->scancode >= PLAY_SCAN_F1 &&
         event->scancode <= PLAY_SCAN_F1 + 8u) {
         if (yt2_roster_fkey(&state->roster,
@@ -1262,6 +1320,14 @@ static void session_key(play_state *state, const yt2_input_event *event,
 static void session_click(play_state *state, int x, int y, int right,
                           int *dirty)
 {
+    /* Explore clicks (arrows, portraits, viewport) land in later slices. */
+    if (state->session_mode == 3) {
+        (void)x;
+        (void)y;
+        (void)right;
+        (void)dirty;
+        return;
+    }
     if (state->session_mode == 1) {
         /* fn_MouseMoveBy hotspot: carried icons click 8 pixels in. */
         if (right) {
@@ -1295,11 +1361,17 @@ static int session_done(const play_state *state)
     if (state->session_mode == 1) {
         return yt2_create_done(&state->create);
     }
+    if (state->session_mode == 3) {
+        return state->explore_done;
+    }
     return yt2_roster_done(&state->roster);
 }
 
 static const char *session_stage_name(const play_state *state)
 {
+    if (state->session_mode == 3) {
+        return "explore";
+    }
     if (state->session_mode == 1) {
         switch (state->create.stage) {
         case YT2_CREATE_STAGE_CLASS:
@@ -1346,6 +1418,9 @@ static int run_session(play_state *state, yt2_folder_out *out,
                        play_options *options, unsigned int *presented,
                        int *running)
 {
+    state->session_out = out;
+    state->session_presenter = presenter;
+    state->session_presented = presented;
     if (session_present(state, out, presenter, 1) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot present the session\n");
         return YT2_STATUS_ERROR;
@@ -1459,6 +1534,20 @@ static int run_session(play_state *state, yt2_folder_out *out,
         if (moved && session_present(state, out, presenter, 0) ==
             YT2_STATUS_OK) {
             (*presented)++;
+        }
+        if (state->session_mode == 3) {
+            /* The room ticks its own clock/sky/rotation countdowns and
+               presents the live palette over the settled framebuffer. */
+            if (yt2_room_tick(&state->room) != YT2_STATUS_OK) {
+                fprintf(stderr, "yt2p-play: room tick failed\n");
+                return YT2_STATUS_ERROR;
+            }
+            if (yt2_room_tick_dirty(&state->room) &&
+                session_present(state, out, presenter, 0) ==
+                    YT2_STATUS_OK) {
+                (*presented)++;
+            }
+            continue;
         }
         if (state->rotation_countdown > 0u) {
             state->rotation_countdown--;
@@ -1684,7 +1773,34 @@ int main(int argc, char **argv)
                 if (assigned == 0u) {
                     printf("play: audio %u sfx 3\n", state.tick);
                 } else {
-                    printf("play: embark unported\n");
+                    uint16_t seed = (uint16_t)yt2_pit_now();
+
+                    printf("play: explore start\n");
+                    state.session_out = &out;
+                    state.session_presenter = &presenter;
+                    state.session_presented = &presented;
+                    if (yt2_room_init(&state.room, &state.world,
+                                      &state.pictures, &state.save,
+                                      &state.save.party,
+                                      seed) != YT2_STATUS_OK ||
+                        yt2_room_embark(&state.room, &state.surface,
+                                        explore_present,
+                                        &state) != YT2_STATUS_OK) {
+                        fprintf(stderr, "yt2p-play: cannot embark\n");
+                        break;
+                    }
+                    state.session_mode = 3;
+                    state.explore_done = 0;
+                    if (run_session(&state, &out, &in, &presenter, &options,
+                                    &presented, &running) != YT2_STATUS_OK) {
+                        break;
+                    }
+                    state.session_mode = 0;
+                    if (yt2_save_write(&state.save, state.save_path) ==
+                        YT2_STATUS_OK) {
+                        printf("play: save written\n");
+                    }
+                    printf("play: explore done\n");
                 }
             }
             if (!running ||
