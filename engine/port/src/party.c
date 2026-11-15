@@ -9,6 +9,9 @@
 #define PARTY_HEADER_FACING 0x96u
 #define PARTY_HEADER_X 0x98u
 #define PARTY_HEADER_Y 0x9Au
+#define PARTY_HEADER_DAY 0x9Cu
+#define PARTY_HEADER_MONTH 0x9Eu
+#define PARTY_HEADER_YEAR 0xA0u
 #define PARTY_HEADER_SCENE 0xA2u
 #define PARTY_HEADER_ACTIVE 0xA4u
 #define PARTY_HEADER_ASSIGNED 0x1ECu
@@ -24,6 +27,10 @@
 #define CHARACTER_EXPERIENCE 0x18u
 #define CHARACTER_WEIGHT 0x1Bu
 #define CHARACTER_STATUS 0x1Cu
+#define CHARACTER_READY 0x1Eu
+#define CHARACTER_BUFFS 0x20u
+#define CHARACTER_ICON_SEL 0xB4u
+#define CHARACTER_OVERLAY 0x15Eu
 #define CHARACTER_SPELLBOOK 0xCAu
 #define CHARACTER_CURRENT 0x3Cu
 #define CHARACTER_MAXIMUM 0x7Cu
@@ -145,12 +152,18 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     character->experience = yt2_read_u32(slot + CHARACTER_EXPERIENCE);
     character->weight = slot[CHARACTER_WEIGHT];
     character->status = yt2_read_u16(slot + CHARACTER_STATUS);
+    character->ready = yt2_read_u16(slot + CHARACTER_READY);
+    for (unsigned int buff = 0; buff < YT2_BUFF_SLOTS; buff++) {
+        character->buffs[buff] =
+            yt2_read_u16(slot + CHARACTER_BUFFS + buff * 2u);
+    }
     for (unsigned int leg = 0; leg < YT2_SPELLBOOK_WORDS; leg++) {
         character->spellbook[leg] =
             yt2_read_u16(slot + CHARACTER_SPELLBOOK + leg * 2u);
     }
     parse_stats(slot + CHARACTER_CURRENT, &character->current);
     parse_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
+    character->icon_sel = yt2_read_u16(slot + CHARACTER_ICON_SEL);
     character->carried_weight = yt2_read_u16(slot + CHARACTER_CARRIED_WEIGHT);
 
     for (unsigned int index = 0; index < YT2_PACK_SLOTS; index++) {
@@ -170,6 +183,7 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
             yt2_read_u16(slot + CHARACTER_EFFECTS + index * 2u);
     }
     character->flags = yt2_read_u16(slot + CHARACTER_FLAGS);
+    character->overlay = yt2_read_u16(slot + CHARACTER_OVERLAY);
 }
 
 static int signature_valid(const uint8_t *block)
@@ -191,6 +205,9 @@ int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
     party->facing = yt2_read_u16(block + PARTY_HEADER_FACING);
     party->x = yt2_read_u16(block + PARTY_HEADER_X);
     party->y = yt2_read_u16(block + PARTY_HEADER_Y);
+    party->day = yt2_read_u16(block + PARTY_HEADER_DAY);
+    party->month = yt2_read_u16(block + PARTY_HEADER_MONTH);
+    party->year = yt2_read_u16(block + PARTY_HEADER_YEAR);
     party->scene = yt2_read_u16(block + PARTY_HEADER_SCENE);
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         party->active[index] =
@@ -269,12 +286,18 @@ static void write_character(uint8_t *slot, const yt2_character *character)
     yt2_write_u32(slot + CHARACTER_EXPERIENCE, character->experience);
     slot[CHARACTER_WEIGHT] = character->weight;
     yt2_write_u16(slot + CHARACTER_STATUS, character->status);
+    yt2_write_u16(slot + CHARACTER_READY, character->ready);
+    for (unsigned int buff = 0; buff < YT2_BUFF_SLOTS; buff++) {
+        yt2_write_u16(slot + CHARACTER_BUFFS + buff * 2u,
+                      character->buffs[buff]);
+    }
     for (unsigned int leg = 0; leg < YT2_SPELLBOOK_WORDS; leg++) {
         yt2_write_u16(slot + CHARACTER_SPELLBOOK + leg * 2u,
                       character->spellbook[leg]);
     }
     write_stats(slot + CHARACTER_CURRENT, &character->current);
     write_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
+    yt2_write_u16(slot + CHARACTER_ICON_SEL, character->icon_sel);
     yt2_write_u16(slot + CHARACTER_CARRIED_WEIGHT, character->carried_weight);
 
     for (unsigned int index = 0; index < YT2_PACK_SLOTS; index++) {
@@ -294,6 +317,7 @@ static void write_character(uint8_t *slot, const yt2_character *character)
                       character->effects[index]);
     }
     yt2_write_u16(slot + CHARACTER_FLAGS, character->flags);
+    yt2_write_u16(slot + CHARACTER_OVERLAY, character->overlay);
 }
 
 int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
@@ -307,6 +331,9 @@ int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
     yt2_write_u16(block + PARTY_HEADER_FACING, party->facing);
     yt2_write_u16(block + PARTY_HEADER_X, party->x);
     yt2_write_u16(block + PARTY_HEADER_Y, party->y);
+    yt2_write_u16(block + PARTY_HEADER_DAY, party->day);
+    yt2_write_u16(block + PARTY_HEADER_MONTH, party->month);
+    yt2_write_u16(block + PARTY_HEADER_YEAR, party->year);
     yt2_write_u16(block + PARTY_HEADER_SCENE, party->scene);
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         yt2_write_u16(block + PARTY_HEADER_ACTIVE + index * 2u,

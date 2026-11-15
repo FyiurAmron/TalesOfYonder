@@ -50,7 +50,9 @@ deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
   `fn_13EC4`/`fn_1C354`/`fn_13F2E` in `engine/port/src/create.c`, wired
   into `yt2p-play`'s menu loop with `CURGAME` persistence) is ported and
   gated framebuffer-exact against the 19 M5 creation/roster checkpoints.
-  Next is the embark/walk slice; every slice stays gated differentially
+  The embark/walk slice (room renderer, explore session, movement) is
+  ported and gated pixel-exact (cursor-free) plus live (`live_explore.py`).
+  Next is the combat/loot slice; every slice stays gated differentially
   against B1 and the DOS oracle. B1 is frozen as the oracle.
 - M7 details: the pseudo-port is instruction-level emitted C over a 16-bit
   guest model. It is the executable spec, not the product; no new gameplay

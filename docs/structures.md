@@ -65,10 +65,10 @@ CONAN in slot 0 and the four recruitable characters in slots 5..8).
 | `096` | `facing` | `4000h` south |
 | `098` | `x` | party tile coordinate (`v_94E7`) |
 | `09A` | `y` | party tile coordinate (`v_94E9`) |
-| `09C` | `field_9c` | `v_94EB` |
-| `09E` | `field_9e` | `v_94ED` |
-| `0A0` | `field_a0` | `v_94EF` |
-| `0A2` | `scene` | scene id (`v_94F1`) |
+| `09C` | `day` | day of month, 1..30 (`v_94EB`; embark 4) |
+| `09E` | `month` | month, 1..12 (`v_94ED`; embark 11) |
+| `0A0` | `year` | year (`v_94EF`; embark 0x222) |
+| `0A2` | `scene` | time-of-day clock (`v_94F1`; embark 0x1A4, +1 per 91 game ticks, wraps 0x5A1 to 1 and rolls the date; see "Exploration time") |
 | `0A4` | `active[5]` | `v_94F3` highlight slots (opaque words; the roster clears entries on unassign, the game sets them in play) |
 | `0AE..1EB` | reserved | rest of the header snapshot (room.c drives the level-record cursor at `0xAE`/`0xB0`) |
 | `1EC` | `assigned[4]` | `v_963B` assigned party, 1-based roster slots (0 = empty); kept in sync with the per-slot `0x800` flags on every roster toggle (`fn_1C354`), compacted by DONE (`sub_1C576`), cleared with the flags by new-game setup (`fn_1B9D0`); `party_ok` (`v_505E` bit `0x200`) is derived from its sum (`fn_0D36C`), never stored |
@@ -305,6 +305,169 @@ The nine palettes are loaded with `fn_1821A` (offset table at DS:0CE6F,
 record size `300h`): palette 0 is the title/attract palette (FNV-1a 64
 `E3275EE3AE459FB5`), and the intro/story code fades only selected ranges of a
 palette.  Palettes are stored as 6-bit DAC values, not 8-bit.
+
+The exploration palette is palette 0 with two animated ranges.  `D0h..DFh` is
+the 4-phase rotator (`sub_100F3`, every 5 game ticks, base at DS:4C06h; see
+"Cursor and palette animation").  `E0h..FFh` is a 32-entry window that steps
+one scene (+3 bytes) per 91 game ticks from the palette-data record at
+`WORLD.DAT 0x82D0A` (`sub_10208`, from DS:4A56h + `v_9581`); the rotation base
+is the same record at offset `0x1B0` (file `0x82EBA`).  Embark continues at
+`v_9581 = 0xED` (menu history, M5-pinned), stepping up (`v_9583 = 3`) while
+`v_95E5` counts down from `0x22`.  `fn_0FE77` re-syncs the window on location
+changes (`v_9581 = (scene - 0x168) * 3` for scenes `0x168..0x1D9`).
+
+## Exploration (dungeon window, room renderer, movement, time)
+
+B2 paths: `engine/port/include/yt2/room.h`, `engine/port/src/room.c`;
+`yt2p-play` embarks with the menu `E` + `ESC` flow and walks with the arrow
+keys.  Facings are bits: `8000h` north (`-y`), `4000h` south (`+y`), `1000h`
+east (`+x`), `2000h` west (`-x`).  The M5 arc stays on one dungeon level:
+embark `(166,36)` west, scene `0x1A4`, through the terrain-7 doorway at
+`(162,31)` (which double-steps to `(161,31)`), to the spider and the chest.
+
+### Dungeon window (`fn_10BF6`)
+
+The window is 78x78 8-byte cells at `v_0CFC`, origin (`v_0CF6`, `v_0CFE`).
+`fn_10BF6` recomputes the origin as party minus `0x27`, clamped to
+`[min - 15, max - 15]` per axis (bounds `v_519E/v_519C = 0x28/0x2F7`,
+`v_51A6/v_51A4 = 0x18/0x77`), then reads 78 rows: 800-tile `WORLD.DAT` grid
+rows (`fn_1854A`, 4 bytes per tile) plus the save visited bitmask
+(`fn_1838A`, 100 bytes per row).  A cell is `terrain`, `object`, `misc`
+(object-record id) and `flags` (`0x8000` visited, `0x400` has object,
+`0x6000` door/special, bit 0 hidden).  The party cell pointer is `v_506E =
+(y - origin_y) * 0x270 + (x - origin_x) * 8`.  After every move the engine
+re-renders and reloads the window only past the 9-cell inner margin
+(origin `+9` / `+0x45`); `fn_1203A` marks the 3x3 around the party visited
+and persists the bits (`fn_11FCC`).
+
+### Terrain and object tables
+
+DGROUP:`0E5B3h` holds 62 12-byte terrain rows: `+0` floor picture (group 4),
+`+2` ceiling picture (group 5), `+4`/`+6`/`+8` wall pictures/params,
+`+0Ah` overhead icon.  Terrains 2..15 are walls (floor = ceiling = 0),
+16..57 open ground, 0..1 void; the wall faces come from `PICTURES.VGA`
+group 1 (210x105).  DGROUP:`0E1D7h` holds 68 10-byte object rows: four
+facing pictures (group 1) plus the overhead icon at `+8`.  The picture
+cache classes (`yt2_picture_class`, DS:`7834h`) map cache id to group:
+`0x10` group 1, `0x20`/`0x30` groups 2/3 (object sprites), `0x40` group 4
+floor, `0x50` group 5 ceiling, `0x60` group 6 overlays, `0x70` group 7
+portraits, `0x80` group 8 icons/arrows/cursors, `0x90` group 9 budget
+icons.
+
+### Perspective table and column blitter (`fn_1A0A9`)
+
+The column geometry is a 0x499C-byte table at `WORLD.DAT 0x19C826`
+(`fn_18268`), with nine sub-table bases set at boot (`v_516C..v_5180` =
+`0/0x386/0xBF2/0x13B6/0x3B76/0x3CA8/0x3DF2/0x41D2/0x4316/0x4460/0x4858`).
+`fn_1A0A9` dispatches on `v_50B4`: 0 front faces, 1 floor, 2 ceiling,
+3/4 side walls, 6 far-wall strips (7x113 from group 6), 7 near objects,
+8 far objects, `9..E` overlays.  `v_50C8` is the perspective column,
+`v_50C2` the distance shade added per pixel and clamped to its 16-entry
+palette row (`sub_1ABED`, skipped at/above `0xD0`), `v_0CCA` the picture,
+`v_0CCC` the cache class, `v_0B26` nonzero for `FFh` transparency,
+`v_5120` an optional clip, `v_50CE` a source offset (mode 6).  Entries are
+6 bytes (`x`, `y`, strip-list pointer; screen offset is `y * 320 + x` via
+`sub_1AC1B`) and strips are 6-byte (`reps`, `run`, `skip`) runs copied by
+`sub_1AB23` (horizontal) and `sub_1AB91` (vertical); mode 0 additionally
+honours the `v_5060` sprite shade table and the `v_5120` clip.
+
+### View gather and passes (`fn_10E42`)
+
+`sub_1152A` gathers 51 columns into the view line at DGROUP:`0x6D66` (8
+bytes per column, same layout as window cells): groups of 17/17/5/3/3/3/3
+cells walking the lateral axis, stepping one depth row per group from six
+cells ahead back to the party row, per-facing.  `sub_11620`/`sub_11718`
+mark hidden columns (solid range `v_5134..v_5132`, pointer lists at
+DGROUP:`8` and `0xDA`).  `sub_10F53` blits the full ceiling then the full
+floor picture (`fn_19E12` at `(8,8)`/`(8,70)`) with the 62/74-row gradient
+postpass (`fn_1A590`, bands shaded with `v_5082..v_508E`), then the
+ceiling/floor detail columns (`sub_10EB2`, modes 2/1) where a neighbour
+picture differs (`sub_10EA0` pairs even/odd pictures).  `sub_111DB` draws
+the wall faces per column (front mode 0, sides modes 3/4, far group mode 6
+via `sub_1143B`), tile objects (`sub_113AB`, mode 7 in the `v_0CD6..v_0CDC`
+id ranges else 8) and runtime objects (`sub_114DC`, `0x400` cells), plus
+the three records at `0x51BC` in combat (`sub_1150F`).
+
+`fn_17D5A` selects the seven `v_5082..v_508E` shades from `v_9469`
+(`0x76D0`/`0x7732`/`0x7740`) or the scene table at `0x722E` (32-byte
+`[lo,hi]` + two shade sets), brightens them from `0x76DE`, and builds the
+63-word column map at `0x774E` (read by the minimap draw).
+
+### Runtime objects
+
+Eighty `0x9C`-byte records live at DGROUP:`0xF20`.  `fn_12D72` claims an
+empty slot and loads the 106-byte definition (`WORLD.DAT 0x1A792A` via
+`fn_1850E`, index `0x1A92D6` via `fn_1852C`); `fn_12E82` finds a record by
+id; `sub_136FF` culls past column `0x21..0x2C` by `+0x94` flags.
+`sub_11078` draws the sprite (group 3 if `+0x92` bit 0 else group 2, mode
+`+0xA`, transparent, clip `+0x18`, animation from `+0x4C`), a second layer
+(`+0xC` bit 4, picture `+0x1A`), and a group-6 overlay (`+0xC` bit 3) at
+mode-dependent positions with picture `v_5188`/`v_5186`/`v_5184`.
+Taken/killed state is a bit per object id in the save world-map chunk
+(`sub_12F48`/`fn_12F8F`).  Stepping onto an occupied cell picks the record
+up (`loc_012D4`: moves it to `0x5258`, clears the cell).  After every step
+`fn_13056` walks each monster up to 5 cells toward the party (`fn_00ECD`
+collision) or attacks (`fn_12EA0` + `fn_13420`).
+
+### Explore UI
+
+`PICTURES.VGA` group 0 picture 1 is the explore backdrop (viewport frame,
+chapter panel, icons, message well, arrows, portrait wells); scenes save
+it to a scratch buffer (`fn_12691`) that `fn_126DE`/`fn_1270C` restore per
+frame before the dynamic bits.  `fn_12602`/`fn_1274F` draw the four
+portraits from layout `0x61C8` (rect, three status icons from roster
+`+0x1C` bits, buff icon, three `0x26`-wide 5-row bars via `sub_12A06` with
+HP at `+0x52`/`+0x92`, the `fn_1A03C` glyph or group-9 picture `0x15`, and
+`DEAD` from `0x7AB1`).  `fn_11754` prints the compass (`   NORTH`/`   SOUTH`/
+`    EAST`/`    WEST` at `0x78D4`) when `v_946F & 0x400`; `fn_11836` fills
+the 9x7 minimap buffer at `0xD00` when `v_946F & 0x4000` (drawn top-right
+with per-cell `0x774E` shades).  `v_946F` `0x1000`/`0x2000`/`0x4000`
+select the combat/explore/map panel (`fn_1755C` + 9 group-8 icons from
+layout `0x6372`, `fn_1270C`, `fn_11836` + `fn_117AC`).  Arrow feedback
+flashes group-8 pictures through the `v_50A0` tables at `0x6420..0x6452`
+(`sub_013DB`).
+
+### Movement (`fn_00FBA`)
+
+Up/down/left/right (`0x48`/`0x50`/`0x4B`/`0x4D`, `0x73` strafes) set the
+`v_0B9C`/`v_0BA0`/`v_0B9E` step from the facing; left cycles
+`8000h->2000h->4000h->1000h`, right the reverse.  Bounds are
+`x 0x28..0x2F7`, `y 0x18..0x77`.  The destination cell decides:
+`+6 & 0x6000` prints the door message (`fn_11914` record lookup in the
+`v_0CF4` door table via `sub_11A93`, key/item checks, text from
+`0x7BBA..` at `(240,96)` via `fn_0784D`) and blocks; terrain `6..11`
+(`v_5146`/`v_5144`) plays the step animation and moves twice
+(`sub_013FF` + the shared tail, verified: the west step through terrain 7
+at `(162,31)` lands on `(161,31)`); otherwise `fn_00E6C` blocks void
+`0..1`, walls `2..5`/`11..15` and `58+` (code 2 is a silent bump) and
+`fn_00EA6` blocks objects `0x21..0x23`/`0x25`/`0x27..0x2A`, else the party
+moves one cell with the step sound (`v_5142`) and bump sound (`v_5148`).
+Post-move order is pickup scan, `fn_1203A`, monster AI, action cells
+(`fn_09F1C`: table `0xD22B` matches object ids `0x11..0x14`/`0x3F..0x43`
+to actions, `0x4000` teleports), render, portraits, edge reload.
+
+### Exploration time
+
+`v_94F1` is the game clock, serviced by the INT 1Ch ISR alongside the
+D0-DF rotator: with `v_50F6` bits `0x4000`/`0x2000`/`0x1000` set,
+countdowns B/C/D (`v_50EA`/`v_50EC`/`v_50EE` = 91/91/5) fire `fn_10073`
+(`+1` scene, wrap `0x5A1` to 1 rolling day/month/year, re-init at
+`0x168`/`0x438`), `sub_10208` (E0-FF window step + `fn_17D5A`), and
+`sub_100F3` (rotation).  Explore mode runs `0x7000`; menus, combat and
+chest UIs clear `0x6000` (clock and sky pause, rotation continues).
+Resting adds `0x3C` per round (`loc_0E892`).  M5 pins the schedule: gates
+on at embark (~tick 3972, `fn_0FF27`), first fire at tick 4063, E0-FF at
+`v_9581 = 0xED` stepping `+3` (menu history, M5-pinned), room frame (tick
+4165) at scene `0x1A5`+1 fire with E0-FF window file offset `0x82DFA`.
+
+### Embark
+
+Menu `E` on a fresh roster writes a new `CURGAME` (party header, zeroed
+visited/object/level/world/cache chunks) and places the party at
+`(0xA6,0x24)` facing west with day/month/year `4/11/0x222`, scene `0x1A4`
+and music `0xC`.  Menu `ESC` runs `fn_0F2C0`: fade out, window load,
+neighbour probe, backdrop save, portraits, full render, fade in, then
+`fn_0FF27` enables the clock gates.
 
 ## Clue-book maps (F1)
 
@@ -619,10 +782,11 @@ the catalog `BC1E5BFF608CB41B` and the help page `7F29E8DA4ED08B2F`.
 The palette rotator (sub_100F3, serviced from the tick ISR every 5 ticks)
 rewrites the live entries `D0h..DFh` from a 48-byte base: four groups of four
 (blues, greens, magentas, ambers), each stepped one entry forward per call, so
-the sequence repeats every four steps. The base is the head of the 768-byte
-WORLD.DAT record at `82EBA` that the game reads into DS:4A56h at startup (the
-record's tail is scratch the fade engine tramples); its last byte is `11h`,
-not palette 0's `1Bh`. B1's stream interleaves single-entry D0 messages
+the sequence repeats every four steps. The base is the 768-byte WORLD.DAT
+record at `82D0A` (read into DS:4A56h at startup) at offset `0x1B0` (file
+`82EBA`); the record's head is the E0h..FFh sky window source and its tail is
+scratch the fade engine tramples. The base's last byte is `11h`, not palette
+0's `1Bh`. B1's stream interleaves single-entry D0 messages
 between the full 16-entry rotation writes, but a port trace proves the guest
 emits only clean 16-entry writes: the singles are B1's present-path sampling
 and have no meaning on hardware. (An older log entry called this rotation

@@ -17,6 +17,7 @@ LIB_SOURCES := src/boot.c src/catalog.c src/classes.c src/clock.c \
                src/lists.c src/mapview.c src/titlemenu.c src/monster_detail.c \
                src/monsters.c src/palette.c src/pcx.c \
                src/party.c src/pictures.c src/present.c src/protocol.c \
+               src/room.c \
                src/savefile.c src/spell_detail.c src/spells.c src/surface.c \
                src/item_detail.c \
                src/text.c \
@@ -28,7 +29,7 @@ TEST_SOURCES := tests/test_boot.c tests/test_catalog.c tests/test_classes.c \
                 tests/test_main.c tests/test_mapview.c \
                 tests/test_monster_detail.c tests/test_monsters.c \
                 tests/test_palette.c tests/test_party.c tests/test_pictures.c \
-                tests/test_present.c tests/test_protocol.c \
+                tests/test_present.c tests/test_protocol.c tests/test_room.c \
                 tests/test_savefile.c tests/test_spells.c tests/test_surface.c \
                 tests/test_text.c tests/test_transport.c tests/test_walkthrough.c \
                 tests/test_world.c
@@ -40,7 +41,8 @@ all: $(BUILD)/yt2p-boot $(BUILD)/yt2p-catalog $(BUILD)/yt2p-classes \
      $(BUILD)/yt2p-cluebook $(BUILD)/yt2p-info $(BUILD)/yt2p-intro \
      $(BUILD)/yt2p-items \
      $(BUILD)/yt2p-mapview $(BUILD)/yt2p-monsters $(BUILD)/yt2p-pictures \
-     $(BUILD)/yt2p-play $(BUILD)/yt2p-render $(BUILD)/yt2p-spells \
+     $(BUILD)/yt2p-play $(BUILD)/yt2p-render $(BUILD)/yt2p-room \
+     $(BUILD)/yt2p-spells \
      $(BUILD)/yt2p-walkthrough $(BUILD)/yt2p-world $(BUILD)/yt2p-tests
 
 test: all
@@ -95,6 +97,10 @@ $(BUILD)/yt2p-spells: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_spells.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(BUILD)/yt2p-render: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_render.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-room: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_room.o
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 

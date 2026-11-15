@@ -96,6 +96,8 @@ typedef struct yt2_item {
 /* Known spellbook bits (sub_17FD1 addresses +0xCA legs by spell/16). */
 #define YT2_SPELLBOOK_WORDS 16u
 
+#define YT2_BUFF_SLOTS 9u
+
 typedef struct yt2_character {
     char name[YT2_CHARACTER_NAME_SIZE]; /* always NUL-terminated */
     yt2_class class_id;
@@ -106,14 +108,18 @@ typedef struct yt2_character {
     uint32_t experience;     /* +0x18: shown hex as EMP (fn_09C46) */
     uint8_t weight;
     uint16_t status;
+    uint16_t ready;                 /* +0x1E: ready cell glyph when set */
+    uint16_t buffs[YT2_BUFF_SLOTS]; /* +0x20: buff counters, icon 0xE if any */
     uint16_t spellbook[YT2_SPELLBOOK_WORDS]; /* +0xCA bit legs */
     yt2_stats current;
     yt2_stats maximum;
+    uint16_t icon_sel; /* +0xB4: ready-cell picture (0x14 when set, 0x15) */
     uint16_t carried_weight;
     yt2_item pack[YT2_PACK_SLOTS];
     yt2_item equipment[YT2_EQUIPMENT_SLOTS];
     uint16_t effects[YT2_EFFECT_SLOTS];
     uint16_t flags;
+    uint16_t overlay; /* +0x15E: 0x8000 paints the skull overlay */
 } yt2_character;
 
 typedef struct yt2_party {
@@ -121,6 +127,9 @@ typedef struct yt2_party {
     uint16_t x;
     uint16_t y;
     uint16_t facing;
+    uint16_t day;
+    uint16_t month;
+    uint16_t year;
     uint16_t scene;
     /* Header 0xA4: v_94F3 highlight slots (opaque words, preserved). */
     uint16_t active[YT2_PARTY_ACTIVE_MAX];

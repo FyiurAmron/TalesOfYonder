@@ -89,6 +89,7 @@ YT2_SAVE="$SAVE" YT2_SAVE_ROUNDTRIP="$RUN/roundtrip.save" \
     YT2_PICTURES="$PICTURES" YT2_PORT_TMP="$RUN/unit-tmp" \
     YT2_WORLD_SPELLTEXT="$SPELLTEXT" \
     YT2_WORLD_SPELLTEXT_COMPLETE="$SPELLTEXT_COMPLETE" \
+    YT2_ROOM_SAVE="$ROOT/tests/data/m5-room-curgame" \
     "$BUILD/yt2p-tests" >"$RUN/tests.log"
 cat "$RUN/tests.log"
 
@@ -379,6 +380,19 @@ EOF
         exit 1
     fi
     echo "port: walkthrough composes"
+
+    # The M5 room checkpoint (B1 frame 1743): cursor-free composition with
+    # the live palette (scene 0x1A6, sky window 0xF0, rotation phase 3).
+    "$BUILD/yt2p-room" "$WORLD" "$PICTURES" \
+        "$ROOT/tests/data/m5-room-curgame" "$RUN/room.ppm" \
+        --scene 0x1A6 --sky 0xF0 --phase 3 >"$RUN/room.txt"
+    if ! grep -q "pixels D15A2DDFCFF5F8C4 palette EA991CB49988BA23" \
+            "$RUN/room.txt"; then
+        echo "port: room frame does not match the original" >&2
+        cat "$RUN/room.txt" >&2
+        exit 1
+    fi
+    echo "port: first-person room renders to the original frame"
 
     mkdir -p "$RUN/boot"
     "$BUILD/yt2p-boot" "$PICTURES" "$WORLD" "$RUN/boot" >"$RUN/boot.txt"
