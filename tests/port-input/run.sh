@@ -21,13 +21,14 @@ make -C "$ROOT/engine/port" BUILD="$ROOT/build/port" all >"$RUN/build.log" 2>&1
 cp "$ROOT/_ref/orig-bin/YT2/WORLD.DAT" "$ROOT/_ref/orig-bin/YT2/PICTURES.VGA" \
     "$RUN/game/"
 
-"$ROOT/build/port/yt2p-play" "$RUN/game" --tick-ms 10 >"$RUN/play.log" 2>&1 &
+"$ROOT/build/port/yt2p-play" "$RUN/game" --tick-ms 10 --no-intro --scene 1 \
+    >"$RUN/play.log" 2>&1 &
 PPID=$!
 trap 'kill "$PPID" 2>/dev/null || true; wait 2>/dev/null || true' EXIT INT TERM
 sleep 1
-# One step per round trip: hello, keyframe, ESC (skip logo), ESC (skip
-# attract to the menu), C (create: the unported slice lands in the scene
-# demo), Down, Down, Enter, ESC, legend pick (Up, Up, Enter, marker click,
+# One step per round trip: hello, keyframe, then the scene demo tour
+# (--no-intro opens it directly; the menu loop owns C now): Down, Down,
+# Enter, ESC, legend pick (Up, Up, Enter, marker click,
 # ESC), two MORE-downs, one MORE-up, four Ups and a double-click (opens
 # plus the stale-latch legend), ESC, F1, a click on catalog row 5 (abs +
 # button together), F2, Down, a double-click on monster row 0, ESC, Down,
@@ -68,9 +69,6 @@ with open(path, "wb") as stream:
     stream.flush()
     emit(stream, (5, bytes([0, 1, 0])), (5, bytes([4])))
     steps = [
-        [(3, bytes([0, 1, 0x01, 0x1B]))],  # ESC -> skip logo
-        [(3, bytes([0, 1, 0x01, 0x1B]))],  # ESC -> skip attract to menu
-        [(3, bytes([0, 1, 0x2E, 0x43]))],  # C -> demo scenes
         [(3, bytes([0, 1, 0x50, 0x00]))],  # Down -> sel 1
         [(3, bytes([0, 1, 0x50, 0x00]))],  # Down -> sel 2
         [(3, bytes([0, 1, 0x1C, 0x0D]))],  # Enter -> overhead
@@ -172,8 +170,6 @@ if kill -0 "$PPID" 2>/dev/null; then
     exit 1
 fi
 wait "$PPID" 2>/dev/null || true
-grep -q "play: intro transition create" "$RUN/play.log" ||
-    { echo "port-input: FAIL - boot menu missed" >&2; cat "$RUN/play.log" >&2; exit 1; }
 grep -q "scene 1 sel 1" "$RUN/play.log" ||
     { echo "port-input: FAIL - first Down missed" >&2; cat "$RUN/play.log" >&2; exit 1; }
 grep -q "scene 1 sel 2" "$RUN/play.log" ||

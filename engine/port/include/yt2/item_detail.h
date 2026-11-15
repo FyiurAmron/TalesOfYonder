@@ -49,4 +49,21 @@ int yt2_item_page_render(yt2_surface *surface, const yt2_pictures *pictures,
 unsigned int yt2_item_plus_count(const yt2_items *items, unsigned int file,
                                 unsigned int category);
 
+/*
+ * Raw 58-byte record for `file` (fn_02262's copy source), or NULL out of
+ * range.  Creation passes id - 1: its item ids are 1-based.
+ */
+const uint8_t *yt2_item_record(const yt2_items *items, unsigned int file);
+
+/*
+ * Parameter row for a record (fn_02262's v_0CE2 copy source), or NULL
+ * when the record selects no table.  Word 0 is damage/absorption, word
+ * 1 the mode/skill flags.
+ */
+const uint8_t *yt2_item_param_row(const yt2_items *items,
+                                  const uint8_t *record);
+
+/* Plain %u with thousands commas (fn_08070 + fn_15A06). */
+void yt2_item_format_commas(char *buffer, size_t size, unsigned int value);
+
 #endif /* YT2_ITEM_DETAIL_H */

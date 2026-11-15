@@ -69,7 +69,9 @@ CONAN in slot 0 and the four recruitable characters in slots 5..8).
 | `09E` | `field_9e` | `v_94ED` |
 | `0A0` | `field_a0` | `v_94EF` |
 | `0A2` | `scene` | scene id (`v_94F1`) |
-| `0A4..1F3` | reserved | rest of the header snapshot |
+| `0A4` | `active[5]` | `v_94F3` highlight slots (opaque words; the roster clears entries on unassign, the game sets them in play) |
+| `0AE..1EB` | reserved | rest of the header snapshot (room.c drives the level-record cursor at `0xAE`/`0xB0`) |
+| `1EC` | `assigned[4]` | `v_963B` assigned party, 1-based roster slots (0 = empty); kept in sync with the per-slot `0x800` flags on every roster toggle (`fn_1C354`), compacted by DONE (`sub_1C576`), cleared with the flags by new-game setup (`fn_1B9D0`); `party_ok` (`v_505E` bit `0x200`) is derived from its sum (`fn_0D36C`), never stored |
 
 Only the fields the port and the gates use are named; the reserved spans keep
 the layout exact.  The DGROUP labels for the rest are game-state globals, not
@@ -80,19 +82,22 @@ a second structure.
 | offset | field | notes |
 |---|---|---|
 | `000` | `name[14]` | ASCIIZ |
-| `00E` | `class_id` | 1..8 |
+| `00E` | `class_id` | 1..9 (creation order) |
 | `010` | `sex` | 1 male, 2 female |
-| `012` | `age` | |
-| `014` | `level` | 0 for a newly created character |
-| `016` | `field_16` | always 1 in the shipped roster |
-| `018` | `field_18` | |
+| `012` | `portrait_pic` | group-7 picture id (`0x13` + index) |
+| `014` | `portrait_index` | 0..17, even male, odd female |
+| `016` | `level` | 1 for a newly created character |
+| `018` | `experience` | u32, shown hex as EMP (`fn_09C46`) |
 | `01A` | `field_1a` | byte |
 | `01B` | `weight` | 37 in most shipped slots, 0 for one recruit |
-| `01C` | `status` | condition/roster flags |
-| `01E..03B` | reserved | |
+| `01C` | `status` | condition/roster/spell-school flags |
+| `01E..031` | reserved | |
+| `032..03B` | hidden bases | current-side combat bases (`+32h` ranged ACC, `+34h` melee ACC, `+36h` ranged DAM, `+38h` melee DAM, `+3Ah` ABS; `fn_0B3D2` copies them over, zero in creation) |
 | `03C` | `current` | 64-byte stat block, current values |
 | `07C` | `maximum` | 64-byte stat block, displayed/maximum values |
-| `0BC..117` | reserved | |
+| `0BC..0C9` | reserved | |
+| `0CA` | `spellbook[16]` | known-spell bit legs (`sub_17FD1`: leg `spell/16`) |
+| `0EA..117` | reserved | |
 | `118` | `carried_weight` | equipment weight; compared with `carry_capacity` |
 | `11A` | `pack[8]` | 4-byte item entries |
 | `13A` | `equipment[6]` | 4-byte item entries; entry 0 is `021Eh` (bare hands) |
@@ -104,6 +109,39 @@ a second structure.
 
 A 4-byte item entry is `id` (`u16`) + `count/state` (`u16`); see
 `yt2_party_item`.
+
+### Creation and roster (`fn_13EC4`, `fn_1C354`, `fn_13F2E`)
+
+The driver loops class → portrait → sheet → items → name → preview per
+character; `Q` aborts any stage (the items stage leaks its slot: no wipe),
+`KEEP` grants starting spells and writes the 5000-byte party block, then
+the next free slot opens. Preview re-picks re-enter one stage with
+`v_5064` bit `0x8000` (`RETURN`/`E` instead of `QUIT`). Rolls are
+`45 + fn_1797C(15)` per attribute in STR/DEX/INT/WIS/CHA/STA order, HP is
+25% STA, MP and casting are class formulas over INT/WIS maxima, capacity
+is 10x STR, and the thirteen skills derive in `sub_1426E` (verified
+against the M5 CONAN roll). Rating is the attribute mean: ≤49 POOR,
+≤52 AVERAGE, ≤55 GOOD, else GREAT (level 1 only). The take list is fixed
+for every class (files 542/412/418/424/363/312/6/54, at most four);
+drops land by item flags (ranged `0x8000` → slot 0, weapons `0x4000` →
+slot 2, the rest → pack), equipment recomputes in `fn_0B3D2` (weapon
+skill by `0x4000/0x2000/0x1000` flags, armor and effects add ABS). The
+name editor takes 12 characters (off-by-one on the 13 budget), rejects
+the empty name, trims trailing blanks, and stores uppercase (the input
+layer uppercases `a-z`). The portrait screen's sex label names the
+toggle target (`FEMALE` while male). The roster assigns up to four slots:
+each toggle flips the slot's `0x800` flag and its `v_963B..41` entry
+together (unassign also clears `v_94F3`; a flag with no entry detours to
+the sheet, `loc_1C477`), `F1..F9`/clicks view the sheet, `D` compacts
+and derives `v_505E` bit `0x200` from the entry sum; delete refuses
+quest-flagged carriers (`flags & 1`, effects read stride 4) behind
+`ARE YOU SURE`. B2 keeps this record in the party struct (no session
+copy, no seeding) and persists both sides, so a written save reloads to
+the same party and B1 reads B2 saves byte-identically.
+Mouse tables: `66DCh` class, `6742h` portrait, `5F84h` options,
+`606Eh/6098h` items, `60F4h` doll (origin 116,60), `5B58h` roster; clicks
+shift `+8,+8` while a carried icon is the cursor, and the cursor window
+is `(1,8)-(316,195)`.
 
 ### Stat block (64 bytes, twice per slot)
 
@@ -125,10 +163,14 @@ The field order is the stat panel's name table at DS:540Ch; `fn_0AB61` sets
 | `014` | `absorption` | | `030` | `thievery` |
 | `016` | `hit_points` | | `032` | `linguistics` |
 | `018` | `magic_points` | | `034` | `chemistry` |
-| `01A` | `carry_capacity` | | `036..03F` | reserved |
+| `01A` | `carry_capacity` | | `036..03F` | max-side hidden combat bases |
 
 In the shipped roster the two copies differ only in `hit_points` (CONAN has 4
 current / 13 maximum); the second copy is what the character sheet displays.
+Only the current copy's `036h..03Eh` tail is live: it holds the
+maximum-side hidden combat bases (`+72h` ranged ACC, `+74h` melee ACC,
+`+76h` ranged DAM, `+78h` melee DAM, `+7Ah` ABS); the maximum copy's tail
+is unused.
 
 ## `PICTURES.VGA`
 

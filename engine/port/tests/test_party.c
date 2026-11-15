@@ -50,6 +50,7 @@ int test_party(void)
     yt2_write_u16(block + TEST_SLOT_BASE + 0x10, 1u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x12, 19u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x14, 0u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x16, 1u);
     block[TEST_SLOT_BASE + 0x1B] = 37u;
     yt2_write_u16(block + TEST_SLOT_BASE + 0x1C, 0u);
 
@@ -115,7 +116,9 @@ int test_party(void)
     CHECK(strcmp(party.roster[0].name, "CONAN") == 0);
     CHECK(party.roster[0].class_id == YT2_CLASS_FIGHTER);
     CHECK(party.roster[0].sex == YT2_SEX_MALE);
-    CHECK(party.roster[0].age == 19u && party.roster[0].level == 0u);
+    CHECK(party.roster[0].portrait_pic == 19u);
+    CHECK(party.roster[0].portrait_index == 0u);
+    CHECK(party.roster[0].level == 1u);
     CHECK(party.roster[0].weight == 37u);
     CHECK(party.roster[0].current.attributes.strength == 50u);
     CHECK(party.roster[0].current.attributes.charisma == 49u);

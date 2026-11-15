@@ -85,13 +85,13 @@ python3 "$ROOT/tests/c/saveload.py" "$RUN/dump" "$RUN/game"
 "$BUILD/yt2saveinfo" "$RUN/game/SAVGAME1" >"$RUN/saveinfo.txt"
 for line in \
     "party: position 00A1:0022 facing 4000 speed 5" \
-    "slot 0: CONAN class 1 sex 1 age 19 level 0 weight 37 status 0000" \
+    "slot 0: CONAN class 1 sex 1 pic 19 idx 0 level 1 weight 37 status 0000" \
     "  current: str 50 dex 49 sta 50 int 52 wis 60 cha 49" \
     "    proj 55/1 battle 54/3 absorb 0 hp 4 mp 0 carry 500" \
     "  maximum: str 50 dex 49 sta 50 int 52 wis 60 cha 49" \
     "    proj 55/1 battle 54/3 absorb 0 hp 13 mp 0 carry 500" \
     "  gear: carried 19 flags 0880" \
-    "slot 5: SQUIRE class 2 sex 1 age 33 level 14 weight 37 status 0000"
+    "slot 5: SQUIRE class 2 sex 1 pic 33 idx 14 level 1 weight 37 status 0000"
 do
     if ! grep -q "^$line" "$RUN/saveinfo.txt"; then
         cat "$RUN/saveinfo.txt" >&2

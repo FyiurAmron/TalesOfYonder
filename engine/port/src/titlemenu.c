@@ -102,9 +102,8 @@ menu_top:
             if (hit == 3) {
                 return YT2_INTRO_TRANSITION_EMBARK;
             }
-            if (hit == 4) {
-                return YT2_INTRO_TRANSITION_RULES;
-            }
+            /* Hit 4 (B1 fn_01488, the credits screen) is unported:
+               fall through instead of fading to nothing. */
             if (hit == 5) {
                 goto instructions;
             }
@@ -122,9 +121,8 @@ menu_top:
             if (key == 'E') {
                 return YT2_INTRO_TRANSITION_EMBARK;
             }
-            if (key == 'R') {
-                return YT2_INTRO_TRANSITION_RULES;
-            }
+            /* 'R' (B1 fn_01488, the credits screen) is unported:
+               fall through to the idle count like unknown keys. */
             if (key == 'I') {
                 goto instructions;
             }

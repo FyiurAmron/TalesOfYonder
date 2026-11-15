@@ -2795,3 +2795,53 @@ items now live in `docs/roadmap.md`).
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-15 - M8/B2 first gameplay slice (creation + roster):
+  - **engine**: `engine/port/src/create.c` (`yt2_create`/`yt2_roster`,
+    ~2400 lines) ports `fn_13EC4` (class/portrait/sheet/items/name/
+    preview/keep), `fn_1C354` (roster grid/toggle/DONE) and `fn_13F2E`
+    (sheet viewer + delete) verbatim: RNG `fn_1797C`, roll/derive/equip
+    formulas, rating rule, spell grants, name editor (12-char cap,
+    empty-reject, rtrim), all seven mouse tables, carried-cursor +8
+    hotspot, re-pick mode, quirks kept (sex label shows the toggle
+    target, items-Q leaks its slot, delete reads effects stride 4).
+  - **model fixes**: `+12h` is the portrait pic (not age), `+14h` the
+    portrait index, `+16h` the level; new `experience`/`spellbook`
+    fields; B1's `yt2saveinfo` fixed to match; 9 classes, not 8.
+  - **wiring**: `yt2p-play` runs the menu loop (C creation, A roster,
+    `CURGAME` persistence, embark/rules markers); the scene demo moved
+    behind `--no-intro`; `port-input` tours the demo direct,
+    `port-live` drives live creation (F/1) through the client.
+  - **model**: party assignment is one persistent record: `yt2_party`
+    owns `assigned[4]` (header `0x1EC`) and `active[5]` (header `0xA4`),
+    parsed and written; the roster operates on them directly (no
+    session copy, no seeding) - toggles flip flag and entry together,
+    DONE compacts in place, `party_ok` derives from the sum. A written
+    save reloads to the same party; B1 reads B2 saves byte-identically
+    (unit round-trip test pins it).
+  - **gates**: 19/19 M5 creation/roster framebuffer checkpoints match
+    B1 bit-for-bit (cursor composited at B1's own positions; name and
+    setup frames are cursor-free); `yt2p-tests: OK`, `port: OK`,
+    `port-input: OK`, `port-live: OK`.
+  - **fades**: the menu re-entry fade-out darkens the outgoing session
+    screen: `yt2_intro_adopt_screen` hands the live screen to the intro
+    at every menu entry instead of a stale intro frame.
+  - **cursor**: mouse moves coalesce to one present per input drain (a
+    30-move burst adds a single present over idle).
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - spurious menu fade on title Credits (R / row 4):
+  - **found**: the reporter's session shows a full fade-out/in
+    with no content after clicking Credits. R and row 4 returned
+    the RULES transition for B1 fn_01488 (unported credits screen),
+    and tool_play re-ran the title menu for it (fades on entry).
+    B1 fades to real content (title card, credits list).
+  - **fix**: R and row 4 fall through like unbound keys (no
+    transition, no fade, stays on title); the dead rules branch
+    is gone. The credits screen itself (fn_01488) stays a
+    follow-up. Verified headless: click + R produce no transition
+    and the brightness profile matches a pure-idle run (the
+    remaining fade-out/logo cycle is B1's attract loop).
+  - **gates**: `yt2p-tests: OK`, `port: OK`,
+    `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

@@ -19,6 +19,8 @@
 #define YT2_CHARACTER_NAME_SIZE (YT2_CHARACTER_NAME_LENGTH + 1u)
 #define YT2_ROSTER_SLOTS 9u
 #define YT2_PARTY_BLOCK_SIZE 0x1388u
+#define YT2_PARTY_ASSIGNED_MAX 4u
+#define YT2_PARTY_ACTIVE_MAX 5u
 #define YT2_PACK_SLOTS 8u
 #define YT2_EQUIPMENT_SLOTS 6u
 #define YT2_EFFECT_SLOTS 5u
@@ -91,14 +93,20 @@ typedef struct yt2_item {
     uint16_t count;
 } yt2_item;
 
+/* Known spellbook bits (sub_17FD1 addresses +0xCA legs by spell/16). */
+#define YT2_SPELLBOOK_WORDS 16u
+
 typedef struct yt2_character {
     char name[YT2_CHARACTER_NAME_SIZE]; /* always NUL-terminated */
     yt2_class class_id;
     yt2_sex sex;
-    uint16_t age;
-    uint16_t level;
+    uint16_t portrait_pic;   /* +0x12: group-7 picture id (19 + index) */
+    uint16_t portrait_index; /* +0x14: 0..17, even male, odd female */
+    uint16_t level;          /* +0x16: 1 for a newly created character */
+    uint32_t experience;     /* +0x18: shown hex as EMP (fn_09C46) */
     uint8_t weight;
     uint16_t status;
+    uint16_t spellbook[YT2_SPELLBOOK_WORDS]; /* +0xCA bit legs */
     yt2_stats current;
     yt2_stats maximum;
     uint16_t carried_weight;
@@ -114,6 +122,14 @@ typedef struct yt2_party {
     uint16_t y;
     uint16_t facing;
     uint16_t scene;
+    /* Header 0xA4: v_94F3 highlight slots (opaque words, preserved). */
+    uint16_t active[YT2_PARTY_ACTIVE_MAX];
+    /* Header 0x1EC: v_963B assigned party, 1-based roster slots
+       (0 = empty).  The roster keeps this and the per-slot 0x800
+       flags in sync on every toggle (fn_1C354); DONE compacts it
+       in place (sub_1C576); party_ok is derived from its sum
+       (fn_0D36C), never stored. */
+    uint16_t assigned[YT2_PARTY_ASSIGNED_MAX];
     unsigned int roster_count; /* non-empty roster slots */
     yt2_character roster[YT2_ROSTER_SLOTS];
 } yt2_party;

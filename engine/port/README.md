@@ -48,12 +48,13 @@ The first vertical slice is the state core and the save loader:
 | `include/yt2/file.h` | the small platform file service |
 | `include/yt2/endian.h` | explicit little-endian reads/writes |
 | `include/yt2/intro.h` | the boot/menu state machine + attract cutscene (`yt2_intro`) |
+| `include/yt2/create.h` | character creation + roster sessions (`yt2_create`, `yt2_roster`) |
 | `src/party.c` | parses the 5000-byte party block into live state and writes it back |
 | `src/savefile.c` | loads/writes the 77509-byte save, validates the chunks, owns the bytes |
 | `src/world.c` | parses the map grid, descriptors, names and nine palettes |
 | `src/pictures.c` | indexes the ten picture groups and their packed images |
 | `src/surface.c` | clears and blits into the indexed surface |
-| `src/text.c` | draws transparent 6x6 glyphs |
+| `src/text.c` | draws transparent/opaque 6x6 glyphs |
 | `src/cluebook.c` | composes picture, text and the command icon bar |
 | `src/cursor.c` | draws the masked 16x16 cursor at a position |
 | `src/palette.c` | writes one rotation phase over D0h..DFh |
@@ -75,6 +76,7 @@ The first vertical slice is the state core and the save loader:
 | `src/walkthrough.c` | the text pages plus the F6 screen |
 | `src/boot.c` | composes the webfoot, story-text, attract, title and menu scenes |
 | `src/intro.c` | the boot/menu flow and the animated attract loop over `yt2_intro` |
+| `src/create.c` | creation/roster engine: stages, RNG, roll/derive/equip, composers |
 | `src/tool_info.c` | `yt2p-info`, the differential save reader |
 | `src/tool_world.c` | `yt2p-world`, the map-database reader |
 | `src/tool_pictures.c` | `yt2p-pictures`, the picture-group reader |
@@ -87,7 +89,7 @@ The first vertical slice is the state core and the save loader:
 | `src/tool_classes.c` | `yt2p-classes`, the class list/detail renderer |
 | `src/tool_items.c` | `yt2p-items`, the F5 screen renderer |
 | `src/tool_walkthrough.c` | `yt2p-walkthrough`, the F6 page renderer |
-| `src/tool_play.c` | `yt2p-play`, the boundary demo (scenes + input + ticks) |
+| `src/tool_play.c` | `yt2p-play`, menu loop (creation/roster live) + scene demo |
 | `src/tool_boot.c` | `yt2p-boot`, the start-up scene renderer |
 | `src/tool_intro.c` | `yt2p-intro`, the attract-loop frame/audio renderer |
 | `tests/` | unit tests and the gate |

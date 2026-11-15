@@ -1,8 +1,10 @@
 /* yt2p-play: the B2 boundary demo.  Boots the scripted start-up sequence
  * (Webfoot logo, story cutscene, attract pictures, menu) with the port
- * engine, then falls through to the scene demo for the slices the menu
- * selects; presents everything over the folder link, and answers input,
- * ticks and the palette rotation on the engine side of protocol v0.
+ * engine, then runs the menu loop: character creation and the roster are
+ * live slices (persisted to CURGAME); embark prints a marker
+ * until its slice lands; presents everything over the folder link, and
+ * answers input, ticks and the palette rotation on the engine side of
+ * protocol v0.
  *
  *   yt2p-play DIR [--scene N] [--cursor X,Y] [--frames N] [--tick-ms N]
  *       [--spelltext] [--no-intro]
@@ -15,8 +17,10 @@
  * DIR holds WORLD.DAT and PICTURES.VGA; OUTPUT.BIN is created there and
  * INPUT.BIN is followed there.  During the intro, ESC skips the cutscene
  * and attract to the menu; in the menu the letter keys (C/A/E/R/I) and
- * clicks select, Enter toggles the music, Q quits.  Menu selections whose
- * slices are unported land in the scene demo instead.  There, keys 1-6
+ * clicks select, Enter toggles the music, Q quits.  C opens character
+ * creation and A the roster; E/R are unported and return to the menu.
+ * --no-intro skips the menu loop and opens the scene demo instead.
+ * There, keys 1-6
  * switch scenes (help, catalog, overhead map, title, menu, monsters);
  * F1-F6, arrows, PgDn/PgUp, Enter and ESC work as in the game (F3 opens
  * the spells, F4 the class list, Enter a line's spells, F5 the categories,
@@ -35,7 +39,9 @@
 #include "yt2/classes.h"
 #include "yt2/clock.h"
 #include "yt2/cluebook.h"
+#include "yt2/create.h"
 #include "yt2/cursor.h"
+#include "yt2/savefile.h"
 #include "yt2/intro.h"
 #include "yt2/items.h"
 #include "yt2/lists.h"
@@ -125,15 +131,29 @@ typedef struct play_state {
     unsigned int key_count;
     int cursor_x;
     int cursor_y;
+    yt2_surface frame; /* session present copy (cursor composites here) */
+    int have_frame;
     int spelltext;
     unsigned int rotation_countdown;
     unsigned int rotation_phase;
     int hello_sent;
+    /* Creation/roster sessions (menu loop; the demo never touches these). */
+    int session_mode; /* 0: demo, 1: create, 2: roster */
+    yt2_create create;
+    yt2_roster roster;
+    yt2_save save;
+    int have_save;
+    char save_path[1024];
+    /* No party copy: assigned[] lives in save.party (header 0x1EC)
+       and party_ok is derived from its sum at embark (fn_0D36C). */
+    unsigned int create_sfx_seen;
+    unsigned int roster_sfx_seen;
 } play_state;
 
 /* IBM set-1 scancodes of the clue-book keys. */
 #define PLAY_SCAN_ESC 0x01u
 #define PLAY_SCAN_ENTER 0x1Cu
+#define PLAY_SCAN_BS 0x0Eu
 #define PLAY_SCAN_F1 0x3Bu
 #define PLAY_SCAN_F2 0x3Cu
 #define PLAY_SCAN_F3 0x3Du
@@ -1138,6 +1158,323 @@ static int play_intro_vbe_show(const uint8_t *indices, const uint8_t *palette,
     return 0;
 }
 
+/* Creation/roster sessions: the menu loop behind the ported slices. */
+
+static unsigned int session_ascii(const yt2_input_event *event)
+{
+    if (event->scancode == PLAY_SCAN_ESC) {
+        return 0x1Bu;
+    }
+    if (event->scancode == PLAY_SCAN_ENTER) {
+        return 0x0Du;
+    }
+    if (event->scancode == PLAY_SCAN_BS) {
+        return 0x08u;
+    }
+    if (event->ascii >= 'a' && event->ascii <= 'z') {
+        return (unsigned int)event->ascii - 32u;
+    }
+    return event->ascii;
+}
+
+static int session_present(play_state *state, yt2_folder_out *out,
+                           yt2_presenter *presenter, int force)
+{
+    const yt2_palette *base = yt2_world_palette(&state->world, 0u);
+    unsigned int cursor = YT2_CREATE_CURSOR_ARROW;
+    int shown = 1;
+
+    if (base == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    if (state->session_mode == 1) {
+        cursor = yt2_create_cursor(&state->create);
+        shown = yt2_create_cursor_shown(&state->create);
+    }
+    if (!state->have_frame) {
+        return YT2_STATUS_ERROR;
+    }
+    memcpy(state->frame.pixels, state->surface.pixels,
+           (size_t)PLAY_WIDTH * PLAY_HEIGHT);
+    if (shown &&
+        yt2_cursor_draw(&state->frame, &state->pictures, cursor,
+                        state->cursor_x, state->cursor_y) != YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    state->palette = *base;
+    if (yt2_palette_rotate(&state->palette, state->anim_base,
+                           state->rotation_phase) != YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    return yt2_present_frame(presenter, out, &state->frame, &state->palette,
+                             force, state->tick);
+}
+
+static void session_drain_sfx(play_state *state)
+{
+    if (state->session_mode == 1) {
+        unsigned int count = yt2_create_sfx_count(&state->create);
+
+        while (state->create_sfx_seen < count) {
+            printf("play: audio %u sfx %u\n", state->tick,
+                   yt2_create_sfx(&state->create, state->create_sfx_seen));
+            state->create_sfx_seen++;
+        }
+    } else if (state->session_mode == 2) {
+        unsigned int count = yt2_roster_sfx_count(&state->roster);
+
+        while (state->roster_sfx_seen < count) {
+            printf("play: audio %u sfx %u\n", state->tick,
+                   yt2_roster_sfx(&state->roster, state->roster_sfx_seen));
+            state->roster_sfx_seen++;
+        }
+    }
+}
+
+static void session_key(play_state *state, const yt2_input_event *event,
+                        int *dirty)
+{
+    unsigned int ascii;
+
+    if (event->down != 1) {
+        return;
+    }
+    if (state->session_mode == 2 && event->scancode >= PLAY_SCAN_F1 &&
+        event->scancode <= PLAY_SCAN_F1 + 8u) {
+        if (yt2_roster_fkey(&state->roster,
+                            event->scancode - PLAY_SCAN_F1 + 1u) ==
+            YT2_STATUS_OK) {
+            *dirty = 1;
+        }
+        return;
+    }
+    ascii = session_ascii(event);
+    if (state->session_mode == 1) {
+        if (yt2_create_key(&state->create, ascii) == YT2_STATUS_OK) {
+            *dirty = 1;
+        }
+    } else if (yt2_roster_key(&state->roster, ascii) == YT2_STATUS_OK) {
+        *dirty = 1;
+    }
+    session_drain_sfx(state);
+}
+
+static void session_click(play_state *state, int x, int y, int right,
+                          int *dirty)
+{
+    if (state->session_mode == 1) {
+        /* fn_MouseMoveBy hotspot: carried icons click 8 pixels in. */
+        if (right) {
+            if (yt2_create_right_click(&state->create, x, y) ==
+                YT2_STATUS_OK) {
+                *dirty = 1;
+            }
+            session_drain_sfx(state);
+            return;
+        }
+        if (yt2_create_cursor(&state->create) !=
+            YT2_CREATE_CURSOR_ARROW) {
+            x += 8;
+            y += 8;
+        }
+        if (yt2_create_click(&state->create, x, y) == YT2_STATUS_OK) {
+            *dirty = 1;
+        }
+        session_drain_sfx(state);
+        return;
+    }
+    if (!right &&
+        yt2_roster_click(&state->roster, x, y) == YT2_STATUS_OK) {
+        *dirty = 1;
+    }
+    session_drain_sfx(state);
+}
+
+static int session_done(const play_state *state)
+{
+    if (state->session_mode == 1) {
+        return yt2_create_done(&state->create);
+    }
+    return yt2_roster_done(&state->roster);
+}
+
+static const char *session_stage_name(const play_state *state)
+{
+    if (state->session_mode == 1) {
+        switch (state->create.stage) {
+        case YT2_CREATE_STAGE_CLASS:
+            return "class";
+        case YT2_CREATE_STAGE_PORTRAIT:
+            return "portrait";
+        case YT2_CREATE_STAGE_SHEET:
+            return "sheet";
+        case YT2_CREATE_STAGE_ITEMS:
+            return "items";
+        case YT2_CREATE_STAGE_NAME:
+            return "name";
+        case YT2_CREATE_STAGE_PREVIEW:
+            return "preview";
+        case YT2_CREATE_STAGE_KEEP:
+            return "keep";
+        case YT2_CREATE_STAGE_QUIT:
+            return "quit";
+        default:
+            return "?";
+        }
+    }
+    switch (state->roster.view) {
+    case YT2_ROSTER_VIEW_GRID:
+        return "grid";
+    case YT2_ROSTER_VIEW_SHEET:
+        return "sheet";
+    case YT2_ROSTER_VIEW_CONFIRM:
+        return "confirm";
+    case YT2_ROSTER_VIEW_DONE:
+        return "done";
+    default:
+        return "?";
+    }
+}
+
+/*
+ * One modal session: poll the link, apply every input with its own
+ * present (the original presents once per input poll), and return when
+ * the session ends, quits, or hits the frame cap.
+ */
+static int run_session(play_state *state, yt2_folder_out *out,
+                       yt2_folder_in *in, yt2_presenter *presenter,
+                       play_options *options, unsigned int *presented,
+                       int *running)
+{
+    if (session_present(state, out, presenter, 1) != YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-play: cannot present the session\n");
+        return YT2_STATUS_ERROR;
+    }
+    (*presented)++;
+    while (*running && !session_done(state) &&
+           (options->frames == 0u || *presented < options->frames)) {
+        const uint8_t *frame;
+        uint32_t length;
+        int moved = 0;
+        int poll;
+
+        yt2_sleep_ms(options->tick_ms);
+        state->tick++;
+        if (yt2_folder_in_take_wrapped(in)) {
+            state->hello_sent = 0;
+        }
+        for (;;) {
+            yt2_input_event event;
+
+            poll = yt2_folder_in_poll(in, &frame, &length);
+            if (poll <= 0) {
+                break;
+            }
+            if (yt2_input_decode_frame(frame, length, &event) != 1) {
+                continue;
+            }
+            switch (event.kind) {
+            case YT2_INPUT_EVENT_HELLO:
+                if (event.role == YT2_ROLE_CLIENT && event.version == 0 &&
+                    !state->hello_sent) {
+                    if (yt2_present_hello(presenter, out) != YT2_STATUS_OK ||
+                        yt2_present_pace(presenter, out, options->tick_ms) !=
+                            YT2_STATUS_OK) {
+                        *running = 0;
+                    }
+                    state->hello_sent = 1;
+                }
+                break;
+            case YT2_INPUT_EVENT_KEYFRAME_REQUEST:
+                if (session_present(state, out, presenter, 1) ==
+                    YT2_STATUS_OK) {
+                    (*presented)++;
+                }
+                break;
+            case YT2_INPUT_EVENT_KEY:
+                if (event.down == 1) {
+                    const char *before = session_stage_name(state);
+                    int dirty = 0;
+
+                    session_key(state, &event, &dirty);
+                    if (dirty &&
+                        session_present(state, out, presenter, 0) ==
+                            YT2_STATUS_OK) {
+                        (*presented)++;
+                    }
+                    if (session_stage_name(state) != before) {
+                        printf("play: %s %s\n",
+                               state->session_mode == 1 ? "create" : "roster",
+                               session_stage_name(state));
+                    }
+                }
+                break;
+            case YT2_INPUT_EVENT_MOUSE_MOVE:
+                state->cursor_x += event.dx;
+                state->cursor_y += event.dy;
+                clamp_cursor(state);
+                /* Coalesced below: a burst of moves presents once. */
+                moved = 1;
+                break;
+            case YT2_INPUT_EVENT_MOUSE_ABS:
+                state->cursor_x = (int)event.x;
+                state->cursor_y = (int)event.y;
+                clamp_cursor(state);
+                moved = 1;
+                break;
+            case YT2_INPUT_EVENT_MOUSE_BUTTON:
+                if (event.down == 1u &&
+                    (event.button == 0u || event.button == 2u)) {
+                    const char *before = session_stage_name(state);
+                    int dirty = 0;
+
+                    session_click(state, state->cursor_x, state->cursor_y,
+                                  event.button == 2u, &dirty);
+                    if (dirty &&
+                        session_present(state, out, presenter, 0) ==
+                            YT2_STATUS_OK) {
+                        (*presented)++;
+                    }
+                    if (session_stage_name(state) != before) {
+                        printf("play: %s %s\n",
+                               state->session_mode == 1 ? "create" : "roster",
+                               session_stage_name(state));
+                    }
+                }
+                break;
+            case YT2_INPUT_EVENT_QUIT:
+                *running = 0;
+                break;
+            default:
+                break;
+            }
+            if (session_done(state)) {
+                break;
+            }
+        }
+        if (poll < 0) {
+            fprintf(stderr, "yt2p-play: input failure\n");
+            return YT2_STATUS_ERROR;
+        }
+        if (moved && session_present(state, out, presenter, 0) ==
+            YT2_STATUS_OK) {
+            (*presented)++;
+        }
+        if (state->rotation_countdown > 0u) {
+            state->rotation_countdown--;
+        }
+        if (state->rotation_countdown == 0u) {
+            state->rotation_countdown = PLAY_ROTATION_TICKS;
+            state->rotation_phase =
+                (state->rotation_phase + 1u) % YT2_PALETTE_ANIM_PHASES;
+            if (session_present(state, out, presenter, 0) == YT2_STATUS_OK) {
+                (*presented)++;
+            }
+        }
+    }
+    return YT2_STATUS_OK;
+}
+
 int main(int argc, char **argv)
 {
     play_options options;
@@ -1147,7 +1484,6 @@ int main(int argc, char **argv)
     yt2_presenter presenter;
     char path[1024];
     unsigned int presented = 0u;
-    unsigned int qi;
     int running = 1;
     int result = 1;
 
@@ -1190,6 +1526,9 @@ int main(int argc, char **argv)
     state.have_vbe =
         yt2_surface_init(&state.vbe, YT2_INTRO_VBE_WIDTH,
                          YT2_INTRO_VBE_HEIGHT) == YT2_STATUS_OK;
+    state.have_frame =
+        yt2_surface_init(&state.frame, PLAY_WIDTH, PLAY_HEIGHT) ==
+        YT2_STATUS_OK;
     if (yt2_world_anim_base(&state.world, state.anim_base) != YT2_STATUS_OK ||
         yt2_monsters_load(&state.monsters, &state.world) != YT2_STATUS_OK ||
         yt2_spells_load(&state.spells, &state.world) != YT2_STATUS_OK ||
@@ -1242,15 +1581,23 @@ int main(int argc, char **argv)
         printf("play: intro transition %s frames %u\n",
                play_intro_transition_name(transition), presented);
         state.tick = (unsigned int)intro.tick;
-        /* Keys the wire delivered while the intro owned it belong to the
-           demo now, oldest first; the demo queue holds the same 15. */
-        for (qi = 0; qi < bridge.key_count; qi++) {
-            state.key_queue[qi] = bridge.keys[qi];
-        }
-        state.key_count = bridge.key_count;
-        yt2_intro_free(&intro);
         if (bridge.failed) {
             fprintf(stderr, "yt2p-play: intro failure\n");
+            yt2_intro_free(&intro);
+            goto done;
+        }
+        snprintf(state.save_path, sizeof(state.save_path), "%s/CURGAME",
+                 argv[1]);
+        if (yt2_save_load(state.save_path, &state.save) == YT2_STATUS_OK) {
+            state.have_save = 1;
+            printf("play: save loaded\n");
+        } else if (yt2_save_start(&state.world, &state.save) ==
+                   YT2_STATUS_OK) {
+            state.have_save = 1;
+            printf("play: new party\n");
+        } else {
+            fprintf(stderr, "yt2p-play: cannot start the party\n");
+            yt2_intro_free(&intro);
             goto done;
         }
         if (bridge.quit ||
@@ -1258,8 +1605,111 @@ int main(int argc, char **argv)
             (options.frames != 0u && presented >= options.frames)) {
             printf("play: %u frames\n", presented);
             result = 0;
+            yt2_intro_free(&intro);
             goto done;
         }
+        while (running && (transition == YT2_INTRO_TRANSITION_CREATE ||
+                            transition == YT2_INTRO_TRANSITION_LOAD ||
+                            transition == YT2_INTRO_TRANSITION_EMBARK) &&
+               (options.frames == 0u || presented < options.frames)) {
+            if (transition == YT2_INTRO_TRANSITION_CREATE) {
+                uint16_t seed = (uint16_t)yt2_pit_now();
+
+                printf("play: create start\n");
+                if (yt2_create_begin(&state.create, &state.save.party,
+                                     &state.items, &state.pictures,
+                                     &state.surface,
+                                     seed) != YT2_STATUS_OK) {
+                    printf("play: roster full\n");
+                } else {
+                    unsigned int bi;
+
+                    yt2_create_open_class(&state.create);
+                    state.session_mode = 1;
+                    state.create_sfx_seen = 0u;
+                    /* The BIOS ring survives the menu: drain leftovers. */
+                    for (bi = 0; bi < bridge.key_count; bi++) {
+                        int dirty = 0;
+
+                        session_key(&state, &bridge.keys[bi], &dirty);
+                    }
+                    bridge.key_count = 0;
+                    if (run_session(&state, &out, &in, &presenter, &options,
+                                    &presented, &running) != YT2_STATUS_OK) {
+                        break;
+                    }
+                    state.session_mode = 0;
+                    if (state.create.dirty &&
+                        yt2_save_write(&state.save, state.save_path) ==
+                            YT2_STATUS_OK) {
+                        printf("play: save written\n");
+                    }
+                    printf("play: create done\n");
+                }
+            } else if (transition == YT2_INTRO_TRANSITION_LOAD) {
+                printf("play: roster start\n");
+                if (yt2_roster_begin(&state.roster, &state.save.party,
+                                     &state.items, &state.pictures,
+                                     &state.surface) != YT2_STATUS_OK) {
+                    fprintf(stderr, "yt2p-play: cannot open roster\n");
+                    break;
+                }
+                state.session_mode = 2;
+                state.roster_sfx_seen = 0u;
+                if (run_session(&state, &out, &in, &presenter, &options,
+                                &presented, &running) != YT2_STATUS_OK) {
+                    break;
+                }
+                state.session_mode = 0;
+                if (state.roster.dirty &&
+                    yt2_save_write(&state.save, state.save_path) ==
+                        YT2_STATUS_OK) {
+                    printf("play: save written\n");
+                }
+                printf("play: roster done party %u %u %u %u\n",
+                       state.save.party.assigned[0],
+                       state.save.party.assigned[1],
+                       state.save.party.assigned[2],
+                       state.save.party.assigned[3]);
+            } else if (transition == YT2_INTRO_TRANSITION_EMBARK) {
+                unsigned int assigned =
+                    (unsigned int)state.save.party.assigned[0] +
+                    (unsigned int)state.save.party.assigned[1] +
+                    (unsigned int)state.save.party.assigned[2] +
+                    (unsigned int)state.save.party.assigned[3];
+
+                /* fn_0D36C derives v_505E bit 0x200 from this sum on
+                   the menu path; an empty party buzzes instead of
+                   embarking. */
+                if (assigned == 0u) {
+                    printf("play: audio %u sfx 3\n", state.tick);
+                } else {
+                    printf("play: embark unported\n");
+                }
+            }
+            if (!running ||
+                (options.frames != 0u && presented >= options.frames)) {
+                break;
+            }
+            yt2_intro_adopt_screen(&intro, state.surface.pixels,
+                                   state.palette.rgb);
+            transition = yt2_titlemenu_run(&titlemenu);
+            printf("play: intro transition %s frames %u\n",
+                   play_intro_transition_name(transition), presented);
+            if (bridge.failed) {
+                fprintf(stderr, "yt2p-play: intro failure\n");
+                break;
+            }
+            state.tick = (unsigned int)intro.tick;
+        }
+        yt2_intro_free(&intro);
+        if (state.have_save) {
+            yt2_save_free(&state.save);
+            state.have_save = 0;
+        }
+        printf("play: %u frames\n", presented);
+        result = 0;
+        goto done;
     }
     if (render_scene(&state) != YT2_STATUS_OK ||
         yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
@@ -1441,6 +1891,12 @@ done:
     yt2_presenter_done(&presenter);
     yt2_folder_in_close(&in);
     yt2_folder_out_close(&out);
+    if (state.have_save) {
+        yt2_save_free(&state.save);
+    }
+    if (state.have_frame) {
+        yt2_surface_free(&state.frame);
+    }
     yt2_surface_free(&state.vbe);
     yt2_surface_free(&state.surface);
     yt2_world_free(&state.world);

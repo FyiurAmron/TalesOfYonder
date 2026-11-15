@@ -46,9 +46,12 @@ deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
   The boot/menu state machine and the animated story intro (attract loop)
   are ported and gated behaviorally against B1 (`check_intro.py`, two
   cycles, audio triggers exact).  MORE-up/down is DOS-verified at ±14
-  rows, matching B2.  Next is the next gameplay slice; every slice is
-  gated differentially against B1 and the DOS oracle. B1 is frozen as
-  the oracle.
+  rows, matching B2.  The first gameplay slice (party creation + roster:
+  `fn_13EC4`/`fn_1C354`/`fn_13F2E` in `engine/port/src/create.c`, wired
+  into `yt2p-play`'s menu loop with `CURGAME` persistence) is ported and
+  gated framebuffer-exact against the 19 M5 creation/roster checkpoints.
+  Next is the embark/walk slice; every slice stays gated differentially
+  against B1 and the DOS oracle. B1 is frozen as the oracle.
 - M7 details: the pseudo-port is instruction-level emitted C over a 16-bit
   guest model. It is the executable spec, not the product; no new gameplay
   work goes into it.

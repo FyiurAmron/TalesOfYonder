@@ -23,6 +23,13 @@
 void yt2_text_draw(yt2_surface *surface, int x, int y, const char *text,
                    uint8_t color);
 
+/*
+ * Opaque variant (fn_1A03C with v_0B26 == 0): unset glyph pixels paint
+ * `background`, so redraws erase the previous contents.
+ */
+void yt2_text_draw_opaque(yt2_surface *surface, int x, int y, const char *text,
+                          uint8_t color, uint8_t background);
+
 /* Width in pixels of a zero-terminated line, six per byte. */
 unsigned int yt2_text_width(const char *text);
 
