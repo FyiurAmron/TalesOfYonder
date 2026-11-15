@@ -284,6 +284,18 @@ void yt2_intro_fade_in(yt2_intro *intro)
     yt2_intro_fade(intro, 1u, 63u, 256u, 0u);
 }
 
+void yt2_intro_adopt_screen(yt2_intro *intro, const uint8_t *pixels,
+                            const uint8_t *palette)
+{
+    if (intro == NULL || pixels == NULL || palette == NULL) {
+        return;
+    }
+    memcpy(intro->presented, pixels, INTRO_FRAME_SIZE);
+    memcpy(intro->palettes.shown.rgb, palette, YT2_PALETTE_SIZE);
+    memcpy(intro->dac.rgb, palette, YT2_PALETTE_SIZE);
+    intro->have_last = 0;
+}
+
 void yt2_intro_fade_step(yt2_intro *intro, unsigned int entries,
                          unsigned int first)
 {

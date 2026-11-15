@@ -67,6 +67,41 @@ int yt2_save_load(const char *path, yt2_save *save)
     return YT2_STATUS_OK;
 }
 
+int yt2_save_start(const yt2_world *world, yt2_save *save)
+{
+    yt2_status status;
+
+    if (world == NULL || world->bytes == NULL || save == NULL ||
+        world->size < YT2_SAVE_TEMPLATE_OFFSET + YT2_SAVE_PARTY_SIZE ||
+        !chunks_cover_file()) {
+        return YT2_STATUS_ERROR;
+    }
+    memset(save, 0, sizeof(*save));
+    save->bytes = calloc(1u, YT2_SAVE_SIZE);
+    if (save->bytes == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    save->size = YT2_SAVE_SIZE;
+    memcpy(save->bytes + YT2_SAVE_PARTY_OFFSET,
+           world->bytes + YT2_SAVE_TEMPLATE_OFFSET, YT2_SAVE_PARTY_SIZE);
+    /* fn_1B9D0 clears the assignment both sides: v_963B and the
+       per-slot 0x800 flags.  Nothing is in the party yet. */
+    memset(save->bytes + YT2_SAVE_PARTY_OFFSET + 0x1ECu, 0, 8u);
+    for (unsigned int slot = 0; slot < YT2_ROSTER_SLOTS; slot++) {
+        uint8_t *flags = save->bytes + YT2_SAVE_PARTY_OFFSET + 0x1F4u +
+                         slot * 0x1F4u + 0x15Cu;
+
+        flags[1] = (uint8_t)(flags[1] & ~0x08u);
+    }
+    status = yt2_party_parse(save->bytes + YT2_SAVE_PARTY_OFFSET,
+                             YT2_SAVE_PARTY_SIZE, &save->party);
+    if (status != YT2_STATUS_OK) {
+        yt2_save_free(save);
+        return status;
+    }
+    return YT2_STATUS_OK;
+}
+
 int yt2_save_write(const yt2_save *save, const char *path)
 {
     uint8_t *image;

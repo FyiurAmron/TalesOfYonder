@@ -161,11 +161,11 @@ typedef struct yt2_party_item {
 
 typedef struct yt2_party_slot {
     char name[14];              /* 000 ASCIIZ */
-    uint16_t class_id;          /* 00E 1..8 */
+    uint16_t class_id;          /* 00E 1..9 */
     uint16_t sex;               /* 010 1 male, 2 female */
-    uint16_t age;               /* 012 */
-    uint16_t level;             /* 014 0 for a newly created character */
-    uint16_t field_16;          /* 016 always 1 */
+    uint16_t portrait_pic;      /* 012 group-7 picture (0x13 + index) */
+    uint16_t portrait_index;    /* 014 0..17, even male, odd female */
+    uint16_t level;             /* 016 1 for a newly created character */
     uint16_t field_18;          /* 018 */
     uint8_t field_1a;           /* 01A */
     uint8_t weight;             /* 01B 37 in most shipped slots, 0 in one */

@@ -100,10 +100,11 @@ int main(int argc, char **argv)
         if (character->name[0] == '\0') {
             continue;
         }
-        printf("slot %u: %.14s class %u sex %u age %u level %u "
+        printf("slot %u: %.14s class %u sex %u pic %u idx %u level %u "
                "weight %u status %04X\n",
                index, character->name, (unsigned)character->class_id,
-               (unsigned)character->sex, (unsigned)character->age,
+               (unsigned)character->sex, (unsigned)character->portrait_pic,
+               (unsigned)character->portrait_index,
                (unsigned)character->level, (unsigned)character->weight,
                (unsigned)character->status);
         print_stats("current", &character->current);

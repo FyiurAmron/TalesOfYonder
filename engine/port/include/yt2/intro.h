@@ -195,6 +195,15 @@ void yt2_intro_fade(yt2_intro *intro, unsigned int mode,
                     unsigned int first);
 void yt2_intro_fade_out(yt2_intro *intro);      /* fn_FadeOut */
 void yt2_intro_fade_in(yt2_intro *intro);       /* fn_FadeIn */
+/*
+ * Adopt the harness's live screen (320x200 indices + 768 DAC bytes) as
+ * the presented frame and DAC mirror, and drop the emission dedup.
+ * Sessions present outside the intro, so without this a menu re-entry
+ * fade-out would darken a stale intro frame instead of the outgoing
+ * screen. The caller refreshes this at every menu entry.
+ */
+void yt2_intro_adopt_screen(yt2_intro *intro, const uint8_t *pixels,
+                            const uint8_t *palette);
 
 /* One scratch fade-up step over `entries` at `first` (sub_05FED, bx = 1). */
 void yt2_intro_fade_step(yt2_intro *intro, unsigned int entries,
@@ -264,8 +273,8 @@ void yt2_intro_music_service(yt2_intro *intro);
 typedef enum yt2_intro_transition {
     YT2_INTRO_TRANSITION_NONE = 0,
     YT2_INTRO_TRANSITION_QUIT = 1,      /* ^Q */
-    YT2_INTRO_TRANSITION_CREATE = 2,    /* C: fn_13EC4, unported */
-    YT2_INTRO_TRANSITION_LOAD = 3,      /* A: fn_1C354, unported */
+    YT2_INTRO_TRANSITION_CREATE = 2,    /* C: fn_13EC4 (yt2_create) */
+    YT2_INTRO_TRANSITION_LOAD = 3,      /* A: fn_1C354 (yt2_roster) */
     YT2_INTRO_TRANSITION_EMBARK = 4,    /* E with a party, unported */
     YT2_INTRO_TRANSITION_RULES = 5      /* R: fn_01488, unported */
 } yt2_intro_transition;

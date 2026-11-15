@@ -5,9 +5,9 @@
 #   sh tests/port-live/run.sh
 #
 # Passes when the client window maps at 960x600, presents a 320x200 frame,
-# the scripted keys boot through the intro (ESC, ESC, C) into the scene
-# demo, and the engine answers the last key with a scene switch.  Needs
-# Xvfb, xwininfo and dotnet; skips cleanly without them.
+# the scripted keys boot through the intro (ESC, ESC, C) into character
+# creation, and the engine answers F and 1 with the portrait and sheet
+# screens.  Needs Xvfb, xwininfo and dotnet; skips cleanly without them.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 WORK="$ROOT/build/runs/port-live/$(date +%Y%m%d-%H%M%S)-$$"
@@ -64,7 +64,7 @@ DISPLAY="$DISP" SDL_VIDEODRIVER=x11 SDL_AUDIODRIVER=dummy \
     dotnet "$ROOT/build/client/bin/Release/net11.0/Yt2Client.dll" \
     --follow "$WORK/game/OUTPUT.BIN" --input "$WORK/game/INPUT.BIN" \
     --stats 0 --key 2:0x01:0x1B --key 4:0x01:0x1B --key 6:0x2E:0x43 \
-    --key 8:0x04:0x33 --mouse 10:20:10 \
+    --key 8:0x21:0x46 --key 10:0x02:0x31 --mouse 12:20:10 \
     >"$WORK/client.log" 2>&1 &
 CPID=$!
 
@@ -110,8 +110,18 @@ if ! grep -q "play: intro transition create" "$WORK/play.log"; then
     cat "$WORK/play.log" >&2
     exit 1
 fi
-if ! grep -q "present .* scene 2" "$WORK/play.log"; then
-    echo "port-live: FAIL - engine ignored the key" >&2
+if ! grep -q "play: create start" "$WORK/play.log"; then
+    echo "port-live: FAIL - creation did not start" >&2
+    cat "$WORK/play.log" >&2
+    exit 1
+fi
+if ! grep -q "play: create portrait" "$WORK/play.log"; then
+    echo "port-live: FAIL - engine ignored F" >&2
+    cat "$WORK/play.log" >&2
+    exit 1
+fi
+if ! grep -q "play: create sheet" "$WORK/play.log"; then
+    echo "port-live: FAIL - engine ignored 1" >&2
     cat "$WORK/play.log" >&2
     exit 1
 fi

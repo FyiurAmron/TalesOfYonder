@@ -454,7 +454,7 @@ if [ -x "$ROOT/build/c/yt2saveinfo" ]; then
     fi
     echo "port: save/party output matches B1"
 else
-    if ! grep -q "slot 0: CONAN class 1 sex 1 age 19 level 0 weight 37 status 0000" \
+    if ! grep -q "slot 0: CONAN class 1 sex 1 pic 19 idx 0 level 1 weight 37 status 0000" \
             "$RUN/port.txt"; then
         echo "port: save/party output lost CONAN" >&2
         exit 1

@@ -6,6 +6,7 @@
 
 #include "yt2/party.h"
 #include "yt2/status.h"
+#include "yt2/world.h"
 
 /*
  * CURGAME / SAVEGAMEn container.
@@ -63,6 +64,15 @@ typedef struct yt2_save {
 } yt2_save;
 
 int yt2_save_load(const char *path, yt2_save *save);
+
+/*
+ * Start a new game from the static template (fn_1B9D0): the party block
+ * comes from WORLD.DAT at DS:0CEBFh, every other chunk is zeroed.  The
+ * shipped template carries the 'S' signature and four preset characters.
+ */
+#define YT2_SAVE_TEMPLATE_OFFSET 0x1ACD6Eu
+
+int yt2_save_start(const yt2_world *world, yt2_save *save);
 
 /*
  * Write the save back: the unmodeled chunks are copied unchanged and the party

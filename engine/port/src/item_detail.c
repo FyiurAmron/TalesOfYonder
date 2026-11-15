@@ -109,6 +109,9 @@ static unsigned int read_bcd32(const uint8_t *at)
     return value;
 }
 
+static const uint8_t *param_row(const yt2_items *items,
+                                const uint8_t *record);
+
 static const uint8_t *record_at(const yt2_items *items, unsigned int file)
 {
     size_t offset;
@@ -157,6 +160,27 @@ static void format_commas(char *buffer, size_t size, unsigned int value)
         buffer[out++] = digits[i];
     }
     buffer[out] = 0;
+}
+
+const uint8_t *yt2_item_record(const yt2_items *items, unsigned int file)
+{
+    return record_at(items, file);
+}
+
+const uint8_t *yt2_item_param_row(const yt2_items *items, const uint8_t *record)
+{
+    if (record == NULL) {
+        return NULL;
+    }
+    return param_row(items, record);
+}
+
+void yt2_item_format_commas(char *buffer, size_t size, unsigned int value)
+{
+    if (buffer == NULL || size == 0u) {
+        return;
+    }
+    format_commas(buffer, size, value);
 }
 
 /* Plain %u with a decimal point before the last `places` digits and no

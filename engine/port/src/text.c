@@ -97,6 +97,47 @@ void yt2_text_draw(yt2_surface *surface, int x, int y, const char *text,
     }
 }
 
+void yt2_text_draw_opaque(yt2_surface *surface, int x, int y, const char *text,
+                          uint8_t color, uint8_t background)
+{
+    if (surface == NULL || surface->pixels == NULL || text == NULL) {
+        return;
+    }
+    for (const unsigned char *cursor = (const unsigned char *)text; *cursor != 0;
+         cursor++) {
+        unsigned int character = *cursor;
+        int glyph_x = x;
+
+        x += (int)YT2_TEXT_GLYPH_WIDTH;
+        if (character < YT2_TEXT_FIRST_CHAR ||
+            character > YT2_TEXT_LAST_CHAR) {
+            continue;
+        }
+        const uint8_t *glyph =
+            yt2_text_face +
+            (character - YT2_TEXT_FIRST_CHAR) * YT2_TEXT_GLYPH_HEIGHT;
+
+        for (unsigned int row = 0; row < YT2_TEXT_GLYPH_HEIGHT; row++) {
+            int pixel_y = y + (int)row;
+
+            if (pixel_y < 0 || (unsigned int)pixel_y >= surface->height) {
+                continue;
+            }
+            for (unsigned int column = 0; column < YT2_TEXT_GLYPH_WIDTH;
+                 column++) {
+                int pixel_x = glyph_x + (int)column;
+
+                if (pixel_x < 0 || (unsigned int)pixel_x >= surface->width) {
+                    continue;
+                }
+                surface->pixels[(size_t)pixel_y * surface->stride +
+                                (size_t)pixel_x] =
+                    (glyph[row] << column) & 0x80u ? color : background;
+            }
+        }
+    }
+}
+
 unsigned int yt2_text_width(const char *text)
 {
     size_t length = 0;

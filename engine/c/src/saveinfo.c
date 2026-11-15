@@ -173,10 +173,11 @@ int main(int argc, char **argv)
         if (slot->name[0] == '\0') {
             continue;
         }
-        printf("slot %u: %.14s class %u sex %u age %u level %u "
+        printf("slot %u: %.14s class %u sex %u pic %u idx %u level %u "
                "weight %u status %04X\n",
                index, slot->name, (unsigned)slot->class_id,
-               (unsigned)slot->sex, (unsigned)slot->age,
+               (unsigned)slot->sex, (unsigned)slot->portrait_pic,
+               (unsigned)slot->portrait_index,
                (unsigned)slot->level, (unsigned)slot->weight,
                (unsigned)slot->status);
         print_stats("current", &slot->current);

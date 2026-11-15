@@ -10,16 +10,21 @@
 #define PARTY_HEADER_X 0x98u
 #define PARTY_HEADER_Y 0x9Au
 #define PARTY_HEADER_SCENE 0xA2u
+#define PARTY_HEADER_ACTIVE 0xA4u
+#define PARTY_HEADER_ASSIGNED 0x1ECu
 #define PARTY_SLOT_BASE 0x1F4u
 #define PARTY_SLOT_SIZE 0x1F4u
 
 /* Character slot offsets. */
 #define CHARACTER_CLASS 0x0Eu
 #define CHARACTER_SEX 0x10u
-#define CHARACTER_AGE 0x12u
-#define CHARACTER_LEVEL 0x14u
+#define CHARACTER_PORTRAIT_PIC 0x12u
+#define CHARACTER_PORTRAIT_INDEX 0x14u
+#define CHARACTER_LEVEL 0x16u
+#define CHARACTER_EXPERIENCE 0x18u
 #define CHARACTER_WEIGHT 0x1Bu
 #define CHARACTER_STATUS 0x1Cu
+#define CHARACTER_SPELLBOOK 0xCAu
 #define CHARACTER_CURRENT 0x3Cu
 #define CHARACTER_MAXIMUM 0x7Cu
 #define CHARACTER_CARRIED_WEIGHT 0x118u
@@ -134,10 +139,16 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     character->name[YT2_CHARACTER_NAME_LENGTH] = '\0';
     character->class_id = (yt2_class)yt2_read_u16(slot + CHARACTER_CLASS);
     character->sex = (yt2_sex)yt2_read_u16(slot + CHARACTER_SEX);
-    character->age = yt2_read_u16(slot + CHARACTER_AGE);
+    character->portrait_pic = yt2_read_u16(slot + CHARACTER_PORTRAIT_PIC);
+    character->portrait_index = yt2_read_u16(slot + CHARACTER_PORTRAIT_INDEX);
     character->level = yt2_read_u16(slot + CHARACTER_LEVEL);
+    character->experience = yt2_read_u32(slot + CHARACTER_EXPERIENCE);
     character->weight = slot[CHARACTER_WEIGHT];
     character->status = yt2_read_u16(slot + CHARACTER_STATUS);
+    for (unsigned int leg = 0; leg < YT2_SPELLBOOK_WORDS; leg++) {
+        character->spellbook[leg] =
+            yt2_read_u16(slot + CHARACTER_SPELLBOOK + leg * 2u);
+    }
     parse_stats(slot + CHARACTER_CURRENT, &character->current);
     parse_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
     character->carried_weight = yt2_read_u16(slot + CHARACTER_CARRIED_WEIGHT);
@@ -181,6 +192,14 @@ int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
     party->x = yt2_read_u16(block + PARTY_HEADER_X);
     party->y = yt2_read_u16(block + PARTY_HEADER_Y);
     party->scene = yt2_read_u16(block + PARTY_HEADER_SCENE);
+    for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
+        party->active[index] =
+            yt2_read_u16(block + PARTY_HEADER_ACTIVE + index * 2u);
+    }
+    for (unsigned int index = 0; index < YT2_PARTY_ASSIGNED_MAX; index++) {
+        party->assigned[index] =
+            yt2_read_u16(block + PARTY_HEADER_ASSIGNED + index * 2u);
+    }
 
     for (unsigned int index = 0; index < YT2_ROSTER_SLOTS; index++) {
         const uint8_t *slot = block + PARTY_SLOT_BASE + index * PARTY_SLOT_SIZE;
@@ -244,10 +263,16 @@ static void write_character(uint8_t *slot, const yt2_character *character)
     write_name(slot, character->name);
     yt2_write_u16(slot + CHARACTER_CLASS, (uint16_t)character->class_id);
     yt2_write_u16(slot + CHARACTER_SEX, (uint16_t)character->sex);
-    yt2_write_u16(slot + CHARACTER_AGE, character->age);
+    yt2_write_u16(slot + CHARACTER_PORTRAIT_PIC, character->portrait_pic);
+    yt2_write_u16(slot + CHARACTER_PORTRAIT_INDEX, character->portrait_index);
     yt2_write_u16(slot + CHARACTER_LEVEL, character->level);
+    yt2_write_u32(slot + CHARACTER_EXPERIENCE, character->experience);
     slot[CHARACTER_WEIGHT] = character->weight;
     yt2_write_u16(slot + CHARACTER_STATUS, character->status);
+    for (unsigned int leg = 0; leg < YT2_SPELLBOOK_WORDS; leg++) {
+        yt2_write_u16(slot + CHARACTER_SPELLBOOK + leg * 2u,
+                      character->spellbook[leg]);
+    }
     write_stats(slot + CHARACTER_CURRENT, &character->current);
     write_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
     yt2_write_u16(slot + CHARACTER_CARRIED_WEIGHT, character->carried_weight);
@@ -283,6 +308,14 @@ int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
     yt2_write_u16(block + PARTY_HEADER_X, party->x);
     yt2_write_u16(block + PARTY_HEADER_Y, party->y);
     yt2_write_u16(block + PARTY_HEADER_SCENE, party->scene);
+    for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
+        yt2_write_u16(block + PARTY_HEADER_ACTIVE + index * 2u,
+                      party->active[index]);
+    }
+    for (unsigned int index = 0; index < YT2_PARTY_ASSIGNED_MAX; index++) {
+        yt2_write_u16(block + PARTY_HEADER_ASSIGNED + index * 2u,
+                      party->assigned[index]);
+    }
 
     for (unsigned int index = 0; index < YT2_ROSTER_SLOTS; index++) {
         write_character(block + PARTY_SLOT_BASE + index * PARTY_SLOT_SIZE,
