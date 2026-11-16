@@ -60,7 +60,13 @@ CONAN in slot 0 and the four recruitable characters in slots 5..8).
 
 | offset | field | notes |
 |---|---|---|
-| `000` | `signature[16]` | byte 0 `00` (save) or `'S'` (static template), then `MITHWARE PARTY` + NUL |
+| `000` | `signature[16]` | byte 0 `00` (save) or `'S'` (static template), then `MITHWARE PARTY` + NUL; a typed save name overwrites from byte 0 and vanilla loads it anyway (no check) |
+| `020` | `explore_flags` | `v_946F` explore/panel flags (boot 0x2000; skill bits ORed by `fn_0ABEC`) |
+| `046` | `mean_mapping` | party mean mapping (`v_9495`, `fn_0ABEC`, DGROUP-live) |
+| `048` | `mean_navigation` | party mean navigation (`v_9497`) |
+| `04A` | `mean_survival` | party mean survival (`v_9499`) |
+| `052` | `music_id` | music track (`v_94A1`; boot 0x0C) |
+| `086` | `sound_state` | music/sound present+enabled bits (boot 0x8000 no-sound; load clears bit 15 via its fixups) |
 | `088` | `game_speed` | 5 in the shipped state (`v_94D7`) |
 | `096` | `facing` | `4000h` south |
 | `098` | `x` | party tile coordinate (`v_94E7`) |
@@ -70,7 +76,7 @@ CONAN in slot 0 and the four recruitable characters in slots 5..8).
 | `0A0` | `year` | year (`v_94EF`; embark 0x222) |
 | `0A2` | `scene` | time-of-day clock (`v_94F1`; embark 0x1A4, +1 per 91 game ticks, wraps 0x5A1 to 1 and rolls the date; see "Exploration time") |
 | `0A4` | `active[5]` | `v_94F3` highlight slots (opaque words; the roster clears entries on unassign, the game sets them in play) |
-| `0AE..1EB` | reserved | rest of the header snapshot (room.c drives the level-record cursor at `0xAE`/`0xB0`) |
+| `0AE..1EB` | reserved | rest of the header snapshot |
 | `1EC` | `assigned[4]` | `v_963B` assigned party, 1-based roster slots (0 = empty); kept in sync with the per-slot `0x800` flags on every roster toggle (`fn_1C354`), compacted by DONE (`sub_1C576`), cleared with the flags by new-game setup (`fn_1B9D0`); `party_ok` (`v_505E` bit `0x200`) is derived from its sum (`fn_0D36C`), never stored |
 
 Only the fields the port and the gates use are named; the reserved spans keep
@@ -135,9 +141,10 @@ together (unassign also clears `v_94F3`; a flag with no entry detours to
 the sheet, `loc_1C477`), `F1..F9`/clicks view the sheet, `D` compacts
 and derives `v_505E` bit `0x200` from the entry sum; delete refuses
 quest-flagged carriers (`flags & 1`, effects read stride 4) behind
-`ARE YOU SURE`. B2 keeps this record in the party struct (no session
-copy, no seeding) and persists both sides, so a written save reloads to
-the same party and B1 reads B2 saves byte-identically.
+`ARE YOU SURE`. Toggles and DONE are memory-only; only a deletion
+writes the party block, at confirm time. B2 keeps this record in the
+party struct (no session copy, no seeding) and matches the file timing
+exactly.
 Mouse tables: `66DCh` class, `6742h` portrait, `5F84h` options,
 `606Eh/6098h` items, `60F4h` doll (origin 116,60), `5B58h` roster; clicks
 shift `+8,+8` while a carried icon is the cursor, and the cursor window
@@ -337,7 +344,7 @@ rows (`fn_1854A`, 4 bytes per tile) plus the save visited bitmask
 `0x6000` door/special, bit 0 hidden).  The party cell pointer is `v_506E =
 (y - origin_y) * 0x270 + (x - origin_x) * 8`.  After every move the engine
 re-renders and reloads the window only past the 9-cell inner margin
-(origin `+9` / `+0x45`); `fn_1203A` marks the 3x3 around the party visited
+(origin `+9` / `+0x45`); `fn_1203A` marks the current plus the ahead row/column visited (two rows facing north/south, two columns east/west)
 and persists the bits (`fn_11FCC`).
 
 ### Terrain and object tables
@@ -460,14 +467,35 @@ on at embark (~tick 3972, `fn_0FF27`), first fire at tick 4063, E0-FF at
 `v_9581 = 0xED` stepping `+3` (menu history, M5-pinned), room frame (tick
 4165) at scene `0x1A5`+1 fire with E0-FF window file offset `0x82DFA`.
 
-### Embark
+### Embark and the in-game menu (`fn_0EBD6`)
 
-Menu `E` on a fresh roster writes a new `CURGAME` (party header, zeroed
-visited/object/level/world/cache chunks) and places the party at
-`(0xA6,0x24)` facing west with day/month/year `4/11/0x222`, scene `0x1A4`
-and music `0xC`.  Menu `ESC` runs `fn_0F2C0`: fade out, window load,
-neighbour probe, backdrop save, portraits, full render, fade in, then
-`fn_0FF27` enables the clock gates.
+Boot (`fn_1B9D0`) rewrites `CURGAME` fresh from the template and never
+reads it: it zeroes `v_963B` and the slot flags, sets positions, date,
+scene, speed and music, then writes the block plus zeroed chunks. B2
+boots the same bytes (gated). Menu `E` with a party (the gate derives
+`v_505E` bit `0x200` from the `v_963B` sum, `fn_0D36C`) runs the skill
+averaging (`fn_0ABEC`), stops the music and returns from the menu into
+the in-game menu; an empty party buzzes.
+
+The in-game menu offers game speed (`A`, cycles 5/1/9), quit to DOS
+(`D`, confirm 1), music (`M`) and sound (`U`) toggles, new game (`N`,
+confirm 31, back to the menu), save (`S`) and load (`L`) slot lists,
+and continue (`R`/`ESC`/right-click). Each option carries a `v_505E`
+enable bit; fresh boots get mask `0x9D`, boots with saves on disk get
+`0x71` (load/new instead of save/speed/quit/continue), the in-explore
+`D` panel gets `0xFE`. `O` is a no-op (`fn_00000` always returns 1).
+Continue leaves for `fn_0F2C0`: window load, neighbour probe, backdrop
+save, portraits, full render, then `fn_0FF27` enables the clock gates.
+
+`CURGAME` is session scratch: roster, DONE and embark write nothing
+except the visited bits (`fn_1203A` persists one objects-chunk byte per
+touched row through `fn_11FCC`; entering explore writes exactly three).
+Persistence is the six `SAVGAME` slots. Saving (`sub_0F823`) strcpy's
+the typed name over the header start, refreshes `CURGAME`'s party block
+from live state, then copies `CURGAME` over the slot file. Loading
+copies every chunk back except objects (explored bits stay) and applies
+the sound-state fixups. The boot scan (`sub_01D84`) fills the slot list
+from the files' first 25 bytes. B2 matches all of it byte for byte.
 
 ## Clue-book maps (F1)
 

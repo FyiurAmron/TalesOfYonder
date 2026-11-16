@@ -84,14 +84,30 @@ int yt2_save_start(const yt2_world *world, yt2_save *save)
     save->size = YT2_SAVE_SIZE;
     memcpy(save->bytes + YT2_SAVE_PARTY_OFFSET,
            world->bytes + YT2_SAVE_TEMPLATE_OFFSET, YT2_SAVE_PARTY_SIZE);
-    /* fn_1B9D0 clears the assignment both sides: v_963B and the
-       per-slot 0x800 flags.  Nothing is in the party yet. */
-    memset(save->bytes + YT2_SAVE_PARTY_OFFSET + 0x1ECu, 0, 8u);
-    for (unsigned int slot = 0; slot < YT2_ROSTER_SLOTS; slot++) {
-        uint8_t *flags = save->bytes + YT2_SAVE_PARTY_OFFSET + 0x1F4u +
-                         slot * 0x1F4u + 0x15Cu;
+    /* fn_1B9D0 boot fixups over the template (byte-exact vs B1's boot
+       output): clear the assignment both sides (v_963B tail and the
+       per-slot 0x800 flags), set v_946F explore flags (0x2000) and the
+       v_94A1 music track (0x0C).  Positions/date/scene/speed already
+       match the template.  The three low bytes are B1-observed boot
+       values: 0x82/0x84 are the no-sound v_94D1/v_94D3 (0x01 with
+       sound, M9's detect path owns them), 0x87 is a stable 0x80 whose
+       writer is unidentified in the disassembly. */
+    {
+        uint8_t *party = save->bytes + YT2_SAVE_PARTY_OFFSET;
 
-        flags[1] = (uint8_t)(flags[1] & ~0x08u);
+        memset(party + 0x1ECu, 0, 8u);
+        for (unsigned int slot = 0; slot < YT2_ROSTER_SLOTS; slot++) {
+            uint8_t *flags = party + 0x1F4u + slot * 0x1F4u + 0x15Cu;
+
+            flags[1] = (uint8_t)(flags[1] & ~0x08u);
+        }
+        party[0x20u] = 0x00u;
+        party[0x21u] = 0x20u;
+        party[0x52u] = 0x0Cu;
+        party[0x53u] = 0x00u;
+        party[0x82u] = 0x03u;
+        party[0x84u] = 0x03u;
+        party[0x87u] = 0x80u;
     }
     status = yt2_party_parse(save->bytes + YT2_SAVE_PARTY_OFFSET,
                              YT2_SAVE_PARTY_SIZE, &save->party);

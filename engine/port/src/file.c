@@ -64,3 +64,24 @@ void yt2_file_free(uint8_t *data)
 {
     free(data);
 }
+
+int yt2_file_load_prefix(const char *path, uint8_t *data, size_t size,
+                         size_t *got)
+{
+    FILE *stream;
+    size_t count = 0u;
+
+    if (path == NULL || data == NULL || got == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    stream = fopen(path, "rb");
+    if (stream == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    if (size != 0u) {
+        count = fread(data, 1, size, stream);
+    }
+    fclose(stream);
+    *got = count;
+    return YT2_STATUS_OK;
+}

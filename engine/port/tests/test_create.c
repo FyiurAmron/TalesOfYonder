@@ -154,6 +154,11 @@ static void check_alloc(void)
     CHECK(yt2_create_alloc_slot(NULL) == -1);
 }
 
+static void test_flush_count(void *context)
+{
+    (*(unsigned int *)context)++;
+}
+
 static int load_fixtures(yt2_pictures *pictures, yt2_world *world,
                          yt2_items *items)
 {
@@ -561,7 +566,8 @@ static void check_roster_branches(void)
     CHECK(fix.save.party.assigned[1] == 0u);
     yt2_roster_key(&roster, 'D');
     CHECK(yt2_roster_done(&roster) && roster.party_ok);
-    CHECK(roster.dirty);
+    /* Toggles and DONE are memory-only; only a deletion dirties. */
+    CHECK(!roster.dirty);
     CHECK(fix.save.party.assigned[0] == 1u &&
           fix.save.party.assigned[1] == 7u &&
           fix.save.party.assigned[2] == 8u &&
@@ -621,17 +627,29 @@ static void check_roster_branches(void)
     CHECK(roster.view == YT2_ROSTER_VIEW_GRID);
     CHECK(yt2_roster_fkey(&roster, 2u) == YT2_STATUS_ERROR);
 
-    /* Delete needs Y; N returns to the sheet. */
-    yt2_roster_fkey(&roster, 1u);
-    CHECK(yt2_roster_key(&roster, 'D') == YT2_STATUS_OK);
-    CHECK(roster.view == YT2_ROSTER_VIEW_CONFIRM);
-    CHECK(yt2_roster_key(&roster, 'N') == YT2_STATUS_OK);
-    CHECK(roster.view == YT2_ROSTER_VIEW_SHEET);
-    CHECK(yt2_roster_key(&roster, 'D') == YT2_STATUS_OK);
-    CHECK(yt2_roster_key(&roster, 'Y') == YT2_STATUS_OK);
-    CHECK(roster.view == YT2_ROSTER_VIEW_GRID);
-    CHECK(fix.save.party.roster[0].class_id == YT2_CLASS_NONE);
-    CHECK(roster.dirty);
+    /* Delete needs Y; N returns to the sheet. The flush fires exactly
+       on confirm (vanilla writes the block mid-roster, not at DONE). */
+    {
+        unsigned int flushed = 0u;
+
+        roster.flush = test_flush_count;
+        roster.flush_context = &flushed;
+        yt2_roster_fkey(&roster, 1u);
+        CHECK(yt2_roster_key(&roster, 'D') == YT2_STATUS_OK);
+        CHECK(roster.view == YT2_ROSTER_VIEW_CONFIRM);
+        CHECK(flushed == 0u);
+        CHECK(yt2_roster_key(&roster, 'N') == YT2_STATUS_OK);
+        CHECK(roster.view == YT2_ROSTER_VIEW_SHEET);
+        CHECK(flushed == 0u);
+        CHECK(yt2_roster_key(&roster, 'D') == YT2_STATUS_OK);
+        CHECK(yt2_roster_key(&roster, 'Y') == YT2_STATUS_OK);
+        CHECK(roster.view == YT2_ROSTER_VIEW_GRID);
+        CHECK(fix.save.party.roster[0].class_id == YT2_CLASS_NONE);
+        CHECK(roster.dirty);
+        CHECK(flushed == 1u);
+        roster.flush = NULL;
+        roster.flush_context = NULL;
+    }
 
     /* A quest item blocks the delete. */
     fix.save.party.roster[5].pack[0].id = 30u;

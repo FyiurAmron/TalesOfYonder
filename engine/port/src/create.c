@@ -2137,7 +2137,6 @@ static void roster_done(yt2_roster *roster)
     }
     roster->party_ok = 1;
     roster_compact(roster);
-    roster->dirty = 1;
     roster->view = YT2_ROSTER_VIEW_DONE;
 }
 
@@ -2170,7 +2169,6 @@ static int roster_toggle(yt2_roster *roster, unsigned int slot)
                 break;
             }
         }
-        roster->dirty = 1;
         if (!found) {
             /* Stale flag (loc_1C477): view the sheet instead. */
             roster_view_sheet(roster, slot);
@@ -2190,7 +2188,6 @@ static int roster_toggle(yt2_roster *roster, unsigned int slot)
             roster->party->assigned[i] = number;
             character->flags =
                 (uint16_t)(character->flags | 0x800u);
-            roster->dirty = 1;
             roster_log_sfx(roster, 4u);
             paint_check(roster, slot, 1);
             return YT2_STATUS_OK;
@@ -2303,6 +2300,9 @@ static void delete_confirmed(yt2_roster *roster)
     roster->dirty = 1;
     roster->view = YT2_ROSTER_VIEW_GRID;
     paint_roster_grid(roster);
+    if (roster->flush != NULL) {
+        roster->flush(roster->flush_context);
+    }
 }
 
 static int confirm_key(yt2_roster *roster, unsigned int ascii)

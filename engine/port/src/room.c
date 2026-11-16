@@ -403,12 +403,27 @@ static void room_set_visited(yt2_room *room, unsigned int x, unsigned int y)
     uint8_t *bytes = room_save_bytes(room, YT2_SAVE_OBJECTS_OFFSET +
                                      (size_t)y * YT2_SAVE_OBJECT_SIZE,
                                      YT2_SAVE_OBJECT_SIZE);
+    uint8_t bit;
 
     if (bytes == NULL || x >= YT2_WORLD_TILES_X ||
         y >= YT2_WORLD_TILES_Y) {
         return;
     }
-    bytes[x / 8u] |= (uint8_t)(0x80u >> (x % 8u));
+    bit = (uint8_t)(0x80u >> (x % 8u));
+    if ((bytes[x / 8u] & bit) == 0u) {
+        bytes[x / 8u] |= bit;
+        room->save_dirty = 1;
+    }
+}
+
+int yt2_room_take_save_dirty(yt2_room *room)
+{
+    int dirty = room != NULL && room->save_dirty;
+
+    if (room != NULL) {
+        room->save_dirty = 0;
+    }
+    return dirty;
 }
 
 /* Object taken/killed bit in the save world-map chunk (sub_12F48). */
@@ -2122,11 +2137,12 @@ static void room_draw_bar(yt2_surface *dst, int x, int y, uint16_t cur,
 
 /* fn_1274F: one portrait slot with bars, icons and name cell. Reads the
    live roster like vanilla reads DGROUP, never the file image. */
-static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
-                               unsigned int slot)
+static void room_draw_portrait_at(const yt2_party *party,
+                                    const yt2_pictures *pictures,
+                                    yt2_surface *dst, unsigned int slot)
 {
     const uint16_t *layout = room_portraits[slot];
-    unsigned int member = room->party->assigned[slot];
+    unsigned int member = party->assigned[slot];
     const yt2_character *character;
     const uint8_t *pic;
     const yt2_picture_group *group;
@@ -2146,10 +2162,9 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
     if (member == 0u || member > YT2_ROSTER_SLOTS) {
         return;
     }
-    member--;
-    character = &room->party->roster[member];
-    group = yt2_pictures_group(room->pictures, 7u);
-    pic = yt2_picture_data(room->pictures, 7u, character->portrait_pic);
+    character = &party->roster[member - 1u];
+    group = yt2_pictures_group(pictures, 7u);
+    pic = yt2_picture_data(pictures, 7u, character->portrait_pic);
     if (group == NULL || pic == NULL) {
         return;
     }
@@ -2158,7 +2173,7 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
     status = character->status;
     overlay = character->overlay;
     if ((status & 0x1C40u) != 0u || (overlay & 0x8000u) != 0u) {
-        pic = yt2_picture_data(room->pictures, 7u, 0xE0u);
+        pic = yt2_picture_data(pictures, 7u, 0xE0u);
         if (pic != NULL) {
             yt2_surface_blit_transparent(dst, (int)layout[0], (int)layout[2],
                                          pic, group->width, group->height,
@@ -2204,10 +2219,10 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
                     break;
                 }
             }
-            pic = yt2_picture_data(room->pictures, 9u, pics[i][p]);
+            pic = yt2_picture_data(pictures, 9u, pics[i][p]);
             if (pic != NULL) {
                 const yt2_picture_group *g9 =
-                    yt2_pictures_group(room->pictures, 9u);
+                    yt2_pictures_group(pictures, 9u);
 
                 yt2_surface_blit(dst, (int)layout[rows[i]],
                                  (int)layout[rows[i] + 2], pic,
@@ -2219,10 +2234,10 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
     for (i = 0u; i < YT2_BUFF_SLOTS; i++) {
         buffs += character->buffs[i];
     }
-    pic = yt2_picture_data(room->pictures, 9u, buffs != 0u ? 0x0Eu : 0x15u);
+    pic = yt2_picture_data(pictures, 9u, buffs != 0u ? 0x0Eu : 0x15u);
     if (pic != NULL) {
         const yt2_picture_group *g9 =
-            yt2_pictures_group(room->pictures, 9u);
+            yt2_pictures_group(pictures, 9u);
 
         yt2_surface_blit(dst, (int)layout[25], (int)layout[27], pic,
                          g9->width, g9->height);
@@ -2230,11 +2245,11 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
     /* Ready cell: group-9 picture 0x15, or the fn_1A03C glyph. */
     ready = character->ready;
     icon_sel = character->icon_sel;
-    pic = yt2_picture_data(room->pictures, 9u,
+    pic = yt2_picture_data(pictures, 9u,
                            icon_sel != 0u ? 0x14u : 0x15u);
     if (pic != NULL) {
         const yt2_picture_group *g9 =
-            yt2_pictures_group(room->pictures, 9u);
+            yt2_pictures_group(pictures, 9u);
 
         yt2_surface_blit(dst, (int)layout[30], (int)layout[32], pic,
                          g9->width, g9->height);
@@ -2245,10 +2260,10 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
         yt2_text_draw(dst, (int)layout[20] + 2, (int)layout[22] + 2, glyph,
                       0x0Fu);
     } else {
-        pic = yt2_picture_data(room->pictures, 9u, 0x15u);
+        pic = yt2_picture_data(pictures, 9u, 0x15u);
         if (pic != NULL) {
             const yt2_picture_group *g9 =
-                yt2_pictures_group(room->pictures, 9u);
+                yt2_pictures_group(pictures, 9u);
 
             yt2_surface_blit(dst, (int)layout[20], (int)layout[22], pic,
                              g9->width, g9->height);
@@ -2260,13 +2275,23 @@ static void room_draw_portrait(yt2_room *room, yt2_surface *dst,
     }
 }
 
+
+/* fn_12602: the four portraits over the current surface. */
+void yt2_room_paint_portraits(const yt2_party *party,
+                              const yt2_pictures *pictures, yt2_surface *dst)
+{
+    for (unsigned int slot = 0u; slot < 4u; slot++) {
+        room_draw_portrait_at(party, pictures, dst, slot);
+    }
+}
+
 /* fn_11754: compass label. */
 static void room_draw_compass(yt2_room *room, yt2_surface *dst)
 {
     unsigned int facing = room->party->facing;
     const char *label = room_compass[3];
 
-    if ((room->r946f & 0x0400u) == 0u) {
+    if ((room->party->explore_flags & 0x0400u) == 0u) {
         return;
     }
     if (facing == YT2_ROOM_FACING_NORTH) {
@@ -2293,19 +2318,19 @@ int yt2_room_render(yt2_room *room, yt2_surface *surface)
     room->blit_transparent = 0u;
     room_draw_picture(room, surface, 1, 1);
     room_render_3d(room, surface);
-    if ((room->r946f & 0x1000u) != 0u) {
+    if ((room->party->explore_flags & 0x1000u) != 0u) {
         /* Combat panel (fn_1755C): the combat slice draws it. */
-    } else if ((room->r946f & 0x2000u) != 0u) {
+    } else if ((room->party->explore_flags & 0x2000u) != 0u) {
         room->blit_pic = 0x15u;
         room->blit_class = ROOM_CLASS_OVERLAY;
         room->blit_transparent = 1u;
         room_draw_picture(room, surface, 0xF8, 9);
     }
     for (i = 0u; i < 4u; i++) {
-        room_draw_portrait(room, surface, i);
+        room_draw_portrait_at(room->party, room->pictures, surface, i);
     }
     room_draw_compass(room, surface);
-    if ((room->r946f & 0x4000u) != 0u) {
+    if ((room->party->explore_flags & 0x4000u) != 0u) {
         /* Minimap (fn_11836/fn_117AC): a later slice draws it. */
     }
     return YT2_STATUS_OK;
@@ -2686,14 +2711,28 @@ static void room_flash_arrow(yt2_room *room, yt2_surface *dst,
     }
 }
 
-/* fn_1203A: mark the 3x3 around the party visited (window + save). */
+/* fn_1203A: mark the current plus the ahead row/column visited (window +
+   save). North/south mark two rows, east/west two columns. */
 static void room_probe_neighbours(yt2_room *room)
 {
     int dx;
     int dy;
+    int dx0 = -1;
+    int dx1 = 1;
+    int dy0 = -1;
+    int dy1 = 1;
 
-    for (dy = -1; dy <= 1; dy++) {
-        for (dx = -1; dx <= 1; dx++) {
+    if (room->party->facing == YT2_ROOM_FACING_NORTH) {
+        dy1 = 0;
+    } else if (room->party->facing == YT2_ROOM_FACING_SOUTH) {
+        dy0 = 0;
+    } else if (room->party->facing == YT2_ROOM_FACING_EAST) {
+        dx0 = 0;
+    } else {
+        dx1 = 0;
+    }
+    for (dy = dy0; dy <= dy1; dy++) {
+        for (dx = dx0; dx <= dx1; dx++) {
             int x = (int)room->party->x + dx;
             int y = (int)room->party->y + dy;
             yt2_room_cell *cell = room_window_cell(room, x, y);
@@ -2707,7 +2746,7 @@ static void room_probe_neighbours(yt2_room *room)
 }
 
 /* fn_0ABEC: average mapping/navigation/survival sets the skill flags. */
-static void room_update_skill_flags(yt2_room *room)
+void yt2_room_update_skill_flags(yt2_party *party)
 {
     unsigned int mapping = 0u;
     unsigned int navigation = 0u;
@@ -2715,15 +2754,15 @@ static void room_update_skill_flags(yt2_room *room)
     unsigned int count = 0u;
     unsigned int i;
 
-    room->r946f &= 0x70FFu;
+    party->explore_flags &= 0x70FFu;
     for (i = 0u; i < 4u; i++) {
-        unsigned int member = room->party->assigned[i];
+        unsigned int member = party->assigned[i];
         const yt2_character *ch;
 
         if (member == 0u || member > YT2_ROSTER_SLOTS) {
             continue;
         }
-        ch = &room->party->roster[member - 1u];
+        ch = &party->roster[member - 1u];
         if ((ch->status & 0x1C40u) != 0u) {
             continue;
         }
@@ -2737,35 +2776,31 @@ static void room_update_skill_flags(yt2_room *room)
         navigation /= count;
         survival /= count;
     }
-    if (room->save != NULL && room->save->bytes != NULL &&
-        room->save->size >= 0x4Cu) {
-        room->save->bytes[0x46u] = (uint8_t)(mapping & 0xFFu);
-        room->save->bytes[0x47u] = (uint8_t)(mapping >> 8);
-        room->save->bytes[0x48u] = (uint8_t)(navigation & 0xFFu);
-        room->save->bytes[0x49u] = (uint8_t)(navigation >> 8);
-        room->save->bytes[0x4Au] = (uint8_t)(survival & 0xFFu);
-        room->save->bytes[0x4Bu] = (uint8_t)(survival >> 8);
-    }
+    /* DGROUP-live like vanilla (v_9495/97/99); the save block picks the
+       means up at the next save, never before. */
+    party->mean_mapping = (uint16_t)mapping;
+    party->mean_navigation = (uint16_t)navigation;
+    party->mean_survival = (uint16_t)survival;
     if (mapping < 45u) {
         return;
     }
-    room->r946f |= 0x0400u;
+    party->explore_flags |= 0x0400u;
     if (mapping < 50u) {
         return;
     }
-    room->r946f |= 0x8000u;
+    party->explore_flags |= 0x8000u;
     if (mapping < 60u) {
         return;
     }
-    room->r946f |= 0x0200u;
+    party->explore_flags |= 0x0200u;
     if (mapping < 70u) {
         return;
     }
-    room->r946f |= 0x0800u;
+    party->explore_flags |= 0x0800u;
     if (mapping < 80u) {
         return;
     }
-    room->r946f |= 0x0100u;
+    party->explore_flags |= 0x0100u;
 }
 
 /* Pick up the record on the party cell, if any (loc_012D4). */
@@ -3216,16 +3251,15 @@ int yt2_room_init(yt2_room *room, const yt2_world *world,
     for (i = 0u; i < 6u; i++) {
         room->terrain60[i] = 0u;
     }
-    room->r946f = 0x2000u;
+    /* v_946F comes from the party (boot 0x2000); vanilla never resets it. */
     return YT2_STATUS_OK;
 }
 
-/* Menu E: fresh CURGAME chunks, party placed at Port Hope.
-   The world chunks are zeroed like the original's fresh CURGAME,
-   but membership (flags, assigned[], active[]) is kept: the original
-   can drop it because it never loads CURGAME back (boot truncates it
-   unread and the session continues from DGROUP), while B2 loads
-   CURGAME at boot so the file is a live save and must resume. */
+/* Embark file state (fn_0F2C0): vanilla writes nothing here except the
+   visited bits via fn_1203A (3 bytes on a fresh file); positions and the
+   party block come from boot, and the world chunks are already fresh. The
+   zeroing below is a no-op on fresh files (the only vanilla-reachable
+   case) and keeps fixture-driven tools on the same bytes. */
 static void room_embark_fresh(yt2_room *room)
 {
     uint8_t *bytes = room->save->bytes;
@@ -3253,21 +3287,6 @@ static void room_embark_fresh(yt2_room *room)
     }
     if (YT2_SAVE_CACHE_OFFSET + YT2_SAVE_CACHE_SIZE <= size) {
         memset(bytes + YT2_SAVE_CACHE_OFFSET, 0, YT2_SAVE_CACHE_SIZE);
-    }
-    room->party->x = 0xA6u;
-    room->party->y = 0x24u;
-    room->party->facing = YT2_ROOM_FACING_WEST;
-    room->party->day = 4u;
-    room->party->month = 11u;
-    room->party->year = 0x222u;
-    room->party->scene = YT2_ROOM_EMBARK_SCENE;
-    yt2_party_write(room->save->bytes, room->save->size, room->party);
-    /* Level-record cursor (v_95FD/v_95FF, header 0xAE/0xB0). */
-    if (size >= 0xB2u) {
-        bytes[0xAEu] = 2u;
-        bytes[0xAFu] = 0u;
-        bytes[0xB0u] = 0u;
-        bytes[0xB1u] = 0u;
     }
 }
 
@@ -3297,8 +3316,7 @@ int yt2_room_embark(yt2_room *room, yt2_surface *surface,
     room->cd_rotation = YT2_ROOM_ROTATION_RELOAD;
     room->speed_left = room->party->game_speed;
     room->r9469 = 0u;
-    room->r946f = 0x2000u;
-    room_update_skill_flags(room);
+    yt2_room_update_skill_flags(room->party);
     yt2_room_render(room, surface);
     if (present != NULL) {
         present(context);
