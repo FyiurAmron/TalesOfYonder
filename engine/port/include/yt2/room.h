@@ -137,9 +137,8 @@ typedef struct yt2_room {
     uint16_t blit_mode;
     /* Sprite shade bytes (v_0C28/v_0C2A) for the v_5060 shade table. */
     uint8_t shade_src[6];
-    /* Render-mode and engine flags. */
+    /* Render-mode and engine flags (v_946F lives in the party). */
     uint16_t r9469;
-    uint16_t r946f;
     uint16_t f505e;
     uint16_t f5060;
     uint16_t f5062;
@@ -171,10 +170,24 @@ typedef struct yt2_room {
     unsigned int rotation_phase;
     /* Set when the last tick fired a clock/sky/rotation event. */
     int tick_dirty;
+    /* Set when save bytes changed (visited bits); vanilla flushes per cell. */
+    int save_dirty;
 } yt2_room;
 
 /* Present callback: the engine calls it after every presented frame. */
 typedef int (*yt2_room_present_fn)(void *context);
+
+/* Returns and clears the save-dirty flag for the caller to flush. */
+int yt2_room_take_save_dirty(yt2_room *room);
+
+/* fn_12602: paint the four portrait wells for the assigned party. Shared
+   with the in-game menu, which shows them under its chrome at boot. */
+void yt2_room_paint_portraits(const yt2_party *party,
+                              const yt2_pictures *pictures, yt2_surface *dst);
+
+/* fn_0ABEC: recompute the skill means and flags from the party. Runs on
+   menu E (like vanilla) and at explore entry. */
+void yt2_room_update_skill_flags(yt2_party *party);
 
 int yt2_room_init(yt2_room *room, const yt2_world *world,
                   const yt2_pictures *pictures, yt2_save *save,

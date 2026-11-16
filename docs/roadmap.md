@@ -48,10 +48,13 @@ deliverable, next), host boundary = M9, **C# = M10** (the real forward effort).
   cycles, audio triggers exact).  MORE-up/down is DOS-verified at ±14
   rows, matching B2.  The first gameplay slice (party creation + roster:
   `fn_13EC4`/`fn_1C354`/`fn_13F2E` in `engine/port/src/create.c`, wired
-  into `yt2p-play`'s menu loop with `CURGAME` persistence) is ported and
-  gated framebuffer-exact against the 19 M5 creation/roster checkpoints.
-  The embark/walk slice (room renderer, explore session, movement) is
-  ported and gated pixel-exact (cursor-free) plus live (`live_explore.py`).
+  into `yt2p-play`'s menu loop) is ported and gated framebuffer-exact
+  against the 19 M5 creation/roster checkpoints.  The embark/walk slice
+  (room renderer, explore session, movement) is ported and gated
+  pixel-exact (cursor-free) plus live (`live_explore.py`).  The in-game
+  menu (`fn_0EBD6`: options, save/load slot panel) is ported with
+  vanilla file roles (fresh boot, `CURGAME` scratch, `SAVGAME` slots)
+  and gated pixel-exact plus byte-identical saves against B1.
   Next is the combat/loot slice; every slice stays gated differentially
   against B1 and the DOS oracle. B1 is frozen as the oracle.
 - M7 details: the pseudo-port is instruction-level emitted C over a 16-bit

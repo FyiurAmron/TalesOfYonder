@@ -15,6 +15,12 @@
 #define PARTY_HEADER_SCENE 0xA2u
 #define PARTY_HEADER_ACTIVE 0xA4u
 #define PARTY_HEADER_ASSIGNED 0x1ECu
+#define PARTY_HEADER_EXPLORE_FLAGS 0x20u
+#define PARTY_HEADER_MUSIC_ID 0x52u
+#define PARTY_HEADER_SOUND_STATE 0x86u
+#define PARTY_HEADER_MEAN_MAPPING 0x46u
+#define PARTY_HEADER_MEAN_NAVIGATION 0x48u
+#define PARTY_HEADER_MEAN_SURVIVAL 0x4Au
 #define PARTY_SLOT_BASE 0x1F4u
 #define PARTY_SLOT_SIZE 0x1F4u
 
@@ -186,17 +192,12 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     character->overlay = yt2_read_u16(slot + CHARACTER_OVERLAY);
 }
 
-static int signature_valid(const uint8_t *block)
-{
-    /* Byte 00h is 00 in a written save and 'S' in the static template;
-       the signature proper starts at 01h. */
-    return memcmp(block + 1, "MITHWARE PARTY", 14) == 0 && block[15] == 0u;
-}
-
 int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
 {
-    if (block == NULL || party == NULL || size < YT2_PARTY_BLOCK_SIZE ||
-        !signature_valid(block)) {
+    /* No signature check, like vanilla's loader: a typed save name
+       overwrites the header bytes via strcpy, and the game loads such
+       saves blindly. */
+    if (block == NULL || party == NULL || size < YT2_PARTY_BLOCK_SIZE) {
         return YT2_STATUS_ERROR;
     }
 
@@ -209,6 +210,13 @@ int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
     party->month = yt2_read_u16(block + PARTY_HEADER_MONTH);
     party->year = yt2_read_u16(block + PARTY_HEADER_YEAR);
     party->scene = yt2_read_u16(block + PARTY_HEADER_SCENE);
+    party->explore_flags = yt2_read_u16(block + PARTY_HEADER_EXPLORE_FLAGS);
+    party->music_id = yt2_read_u16(block + PARTY_HEADER_MUSIC_ID);
+    party->sound_state = yt2_read_u16(block + PARTY_HEADER_SOUND_STATE);
+    party->mean_mapping = yt2_read_u16(block + PARTY_HEADER_MEAN_MAPPING);
+    party->mean_navigation =
+        yt2_read_u16(block + PARTY_HEADER_MEAN_NAVIGATION);
+    party->mean_survival = yt2_read_u16(block + PARTY_HEADER_MEAN_SURVIVAL);
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         party->active[index] =
             yt2_read_u16(block + PARTY_HEADER_ACTIVE + index * 2u);
@@ -322,8 +330,7 @@ static void write_character(uint8_t *slot, const yt2_character *character)
 
 int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
 {
-    if (block == NULL || party == NULL || size < YT2_PARTY_BLOCK_SIZE ||
-        !signature_valid(block)) {
+    if (block == NULL || party == NULL || size < YT2_PARTY_BLOCK_SIZE) {
         return YT2_STATUS_ERROR;
     }
 
@@ -335,6 +342,13 @@ int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
     yt2_write_u16(block + PARTY_HEADER_MONTH, party->month);
     yt2_write_u16(block + PARTY_HEADER_YEAR, party->year);
     yt2_write_u16(block + PARTY_HEADER_SCENE, party->scene);
+    yt2_write_u16(block + PARTY_HEADER_EXPLORE_FLAGS, party->explore_flags);
+    yt2_write_u16(block + PARTY_HEADER_MUSIC_ID, party->music_id);
+    yt2_write_u16(block + PARTY_HEADER_SOUND_STATE, party->sound_state);
+    yt2_write_u16(block + PARTY_HEADER_MEAN_MAPPING, party->mean_mapping);
+    yt2_write_u16(block + PARTY_HEADER_MEAN_NAVIGATION,
+                  party->mean_navigation);
+    yt2_write_u16(block + PARTY_HEADER_MEAN_SURVIVAL, party->mean_survival);
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         yt2_write_u16(block + PARTY_HEADER_ACTIVE + index * 2u,
                       party->active[index]);

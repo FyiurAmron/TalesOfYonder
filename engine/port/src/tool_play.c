@@ -35,12 +35,14 @@
  */
 
 #include "yt2/boot.h"
+#include "yt2/ingamemenu.h"
 #include "yt2/catalog.h"
 #include "yt2/classes.h"
 #include "yt2/clock.h"
 #include "yt2/cluebook.h"
 #include "yt2/create.h"
 #include "yt2/cursor.h"
+#include "yt2/file.h"
 #include "yt2/savefile.h"
 #include "yt2/intro.h"
 #include "yt2/items.h"
@@ -138,15 +140,20 @@ typedef struct play_state {
     unsigned int rotation_countdown;
     unsigned int rotation_phase;
     int hello_sent;
-    /* Creation/roster sessions (menu loop; the demo never touches these). */
-    int session_mode; /* 0: demo, 1: create, 2: roster, 3: explore */
+    /* Creation/roster/explore sessions and the in-game menu (the demo never touches these). */
+    int session_mode; /* 0: demo, 1: create, 2: roster, 3: explore, 4: in-game menu */
     yt2_create create;
     yt2_roster roster;
     yt2_room room;
-    int explore_done;
+    yt2_ingamemenu ingamemenu;
+    yt2_ingamemenu_slot ingamemenu_slots[YT2_INGAMEMENU_SLOTS];
+    int ingamemenu_scanned;
+    int ingametitlemenu_requested; /* explore D: run the in-game menu nested */
+    int titlemenu_requested; /* N: unwind to the title menu loop */
     yt2_save save;
     int have_save;
     char save_path[1024];
+    char game_dir[1024];
     /* No party copy: assigned[] lives in save.party (header 0x1EC)
        and party_ok is derived from its sum at embark (fn_0D36C). */
     /* Live session I/O for the explore present callback. */
@@ -155,6 +162,7 @@ typedef struct play_state {
     unsigned int *session_presented;
     unsigned int create_sfx_seen;
     unsigned int roster_sfx_seen;
+    unsigned int ingamemenu_sfx_seen;
 } play_state;
 
 /* IBM set-1 scancodes of the clue-book keys. */
@@ -931,6 +939,19 @@ static void play_intro_pace(play_intro_bridge *bridge, unsigned long tick)
     }
 }
 
+/*
+ * Forward-sync the intro clock after a session: the stream tick jumps
+ * ahead for monotonicity, but wall pacing rebases to the jump instead
+ * of sleeping through the session's ticks.
+ */
+static void play_intro_resync(play_intro_bridge *bridge, yt2_intro *intro,
+                              unsigned long tick)
+{
+    intro->tick = tick;
+    bridge->paced_tick = tick;
+    bridge->have_paced = 1;
+}
+
 static const char *play_intro_audio_name(yt2_intro_audio_op op)
 {
     switch (op) {
@@ -1262,6 +1283,33 @@ static void session_drain_sfx(play_state *state)
                    yt2_roster_sfx(&state->roster, state->roster_sfx_seen));
             state->roster_sfx_seen++;
         }
+    } else if (state->session_mode == 4) {
+        unsigned int count = yt2_ingamemenu_sfx_count(&state->ingamemenu);
+
+        while (state->ingamemenu_sfx_seen < count) {
+            printf("play: audio %u sfx %u\n", state->tick,
+                   yt2_ingamemenu_sfx(&state->ingamemenu, state->ingamemenu_sfx_seen));
+            state->ingamemenu_sfx_seen++;
+        }
+    }
+}
+
+/* Roster delete flush (vanilla writes the block at confirm time). */
+static void roster_flush_save(void *context)
+{
+    play_state *state = context;
+
+    yt2_save_write(&state->save, state->save_path);
+}
+
+/* Explore flush (vanilla persists visited bits per newly seen cell). Raw
+   image write: the party block on disk keeps its boot bytes until a save
+   refreshes it, like vanilla's row-sized fn_11FCC writes. */
+static void explore_flush_save(play_state *state)
+{
+    if (yt2_room_take_save_dirty(&state->room)) {
+        yt2_file_save(state->save_path, state->save.bytes,
+                      state->save.size);
     }
 }
 
@@ -1273,15 +1321,26 @@ static void session_key(play_state *state, const yt2_input_event *event,
     if (event->down != 1) {
         return;
     }
-    if (state->session_mode == 3) {
-        /* ESC returns to the menu (camp/menu lands in a later slice). */
-        if (getenv("YT2_PLAY_KEYTRACE") != NULL) {
-            fprintf(stderr, "explore key scan=%02X\n", event->scancode);
-        }
-        if (event->scancode == PLAY_SCAN_ESC) {
-            state->explore_done = 1;
+    if (state->session_mode == 4) {
+        ascii = session_ascii(event);
+        if (ascii == 0u) {
+            if (yt2_ingamemenu_fkey(&state->ingamemenu, event->scancode) ==
+                YT2_STATUS_OK) {
+                *dirty = 1;
+            }
+            session_drain_sfx(state);
             return;
         }
+        if (yt2_ingamemenu_key(&state->ingamemenu, ascii) == YT2_STATUS_OK) {
+            *dirty = 1;
+        }
+        session_drain_sfx(state);
+        return;
+    }
+    if (state->session_mode == 3) {
+        /* Main-loop dispatch (tbl_KeyDispatch/tbl_ScanDispatch): arrows
+           move, D opens the in-game menu, R opens the game menu (unported),
+           everything else is silent (loc_00817 ignores ESC/Q/junk). */
         if (event->scancode == PLAY_SCAN_UP ||
             event->scancode == PLAY_SCAN_DOWN ||
             event->scancode == PLAY_SCAN_LEFT ||
@@ -1294,6 +1353,28 @@ static void session_key(play_state *state, const yt2_input_event *event,
                 printf("play: audio %u sfx %u\n", state->tick,
                        state->room.last_sfx);
             }
+            explore_flush_save(state);
+            return;
+        }
+        ascii = session_ascii(event);
+        if (ascii == 'D') {
+            state->ingametitlemenu_requested = 1;
+            return;
+        }
+        if (ascii == 'R' ||
+            ascii == 'M' || ascii == 'P' || ascii == 'S' ||
+            ascii == 'T' || ascii == 'W' || ascii == 'C' ||
+            ascii == 'A' || ascii == 'K' || ascii == 'V' ||
+            ascii == ' ' || (ascii >= '1' && ascii <= '4')) {
+            fprintf(stderr, "play: explore key %02X unported\n", ascii);
+            return;
+        }
+        if (event->ascii == 0u &&
+            ((event->scancode >= PLAY_SCAN_F1 &&
+              event->scancode <= PLAY_SCAN_F1 + 4u) ||
+             event->scancode == PLAY_SCAN_F1 + 6u)) {
+            fprintf(stderr, "play: explore key scan %02X unported\n",
+                    event->scancode);
         }
         return;
     }
@@ -1326,6 +1407,13 @@ static void session_click(play_state *state, int x, int y, int right,
         (void)y;
         (void)right;
         (void)dirty;
+        return;
+    }
+    if (state->session_mode == 4) {
+        if (yt2_ingamemenu_click(&state->ingamemenu, x, y, right) == YT2_STATUS_OK) {
+            *dirty = 1;
+        }
+        session_drain_sfx(state);
         return;
     }
     if (state->session_mode == 1) {
@@ -1362,7 +1450,10 @@ static int session_done(const play_state *state)
         return yt2_create_done(&state->create);
     }
     if (state->session_mode == 3) {
-        return state->explore_done;
+        return state->titlemenu_requested;
+    }
+    if (state->session_mode == 4) {
+        return yt2_ingamemenu_done(&state->ingamemenu);
     }
     return yt2_roster_done(&state->roster);
 }
@@ -1371,6 +1462,9 @@ static const char *session_stage_name(const play_state *state)
 {
     if (state->session_mode == 3) {
         return "explore";
+    }
+    if (state->session_mode == 4) {
+        return "ingamemenu";
     }
     if (state->session_mode == 1) {
         switch (state->create.stage) {
@@ -1407,6 +1501,12 @@ static const char *session_stage_name(const play_state *state)
         return "?";
     }
 }
+
+/* Forward: the explore D key nests the in-game menu mid-session. */
+static int run_ingamemenu(play_state *state, yt2_folder_out *out,
+                    yt2_folder_in *in, yt2_presenter *presenter,
+                    play_options *options, unsigned int *presented,
+                    int *running, uint16_t mask, int explore);
 
 /*
  * One modal session: poll the link, apply every input with its own
@@ -1479,7 +1579,8 @@ static int run_session(play_state *state, yt2_folder_out *out,
                     }
                     if (session_stage_name(state) != before) {
                         printf("play: %s %s\n",
-                               state->session_mode == 1 ? "create" : "roster",
+                               state->session_mode == 1 ? "create" :
+                               state->session_mode == 4 ? "ingamemenu" : "roster",
                                session_stage_name(state));
                     }
                 }
@@ -1512,7 +1613,8 @@ static int run_session(play_state *state, yt2_folder_out *out,
                     }
                     if (session_stage_name(state) != before) {
                         printf("play: %s %s\n",
-                               state->session_mode == 1 ? "create" : "roster",
+                               state->session_mode == 1 ? "create" :
+                               state->session_mode == 4 ? "ingamemenu" : "roster",
                                session_stage_name(state));
                     }
                 }
@@ -1534,6 +1636,23 @@ static int run_session(play_state *state, yt2_folder_out *out,
         if (moved && session_present(state, out, presenter, 0) ==
             YT2_STATUS_OK) {
             (*presented)++;
+        }
+        if (state->ingametitlemenu_requested && state->session_mode == 3) {
+            int mode = state->session_mode;
+            yt2_ingamemenu_exit exit;
+
+            state->ingametitlemenu_requested = 0;
+            if (run_ingamemenu(state, out, in, presenter, options, presented,
+                         running, 0xFEu, 1) != YT2_STATUS_OK) {
+                return YT2_STATUS_ERROR;
+            }
+            state->session_mode = mode;
+            exit = yt2_ingamemenu_result(&state->ingamemenu);
+            if (exit == YT2_INGAMEMENU_EXIT_QUIT) {
+                *running = 0;
+            } else if (exit == YT2_INGAMEMENU_EXIT_MENU) {
+                state->titlemenu_requested = 1;
+            }
         }
         if (state->session_mode == 3) {
             /* The room ticks its own clock/sky/rotation countdowns and
@@ -1562,6 +1681,39 @@ static int run_session(play_state *state, yt2_folder_out *out,
         }
     }
     return YT2_STATUS_OK;
+}
+
+/* One in-game menu to an exit (boot mask or explore 0xFE). */
+static int run_ingamemenu(play_state *state, yt2_folder_out *out,
+                    yt2_folder_in *in, yt2_presenter *presenter,
+                    play_options *options, unsigned int *presented,
+                    int *running, uint16_t mask, int explore)
+{
+    int result;
+
+    printf("play: ingamemenu start\n");
+    if (yt2_ingamemenu_begin(&state->ingamemenu, &state->save.party, &state->save,
+                       state->ingamemenu_slots, &state->pictures, &state->surface,
+                       state->game_dir, mask, 0, explore,
+                       0u) != YT2_STATUS_OK) {
+        fprintf(stderr, "yt2p-play: cannot open the in-game menu\n");
+        return YT2_STATUS_ERROR;
+    }
+    state->session_mode = 4;
+    state->ingamemenu_sfx_seen = 0u;
+    result = run_session(state, out, in, presenter, options, presented,
+                         running);
+    state->session_mode = 0;
+    if (result == YT2_STATUS_OK) {
+        static const char *const names[] = {
+            "none", "continue", "quit", "menu",
+        };
+        yt2_ingamemenu_exit exit = yt2_ingamemenu_result(&state->ingamemenu);
+
+        printf("play: ingamemenu done %s\n",
+               exit <= YT2_INGAMEMENU_EXIT_MENU ? names[exit] : "?");
+    }
+    return result;
 }
 
 int main(int argc, char **argv)
@@ -1645,6 +1797,19 @@ int main(int argc, char **argv)
         bridge.presented = &presented;
         bridge.frames_cap = options.frames;
         bridge.force = 1;
+        snprintf(state.save_path, sizeof(state.save_path), "%s/CURGAME",
+                 argv[1]);
+        snprintf(state.game_dir, sizeof(state.game_dir), "%s", argv[1]);
+        /* Vanilla boot (fn_1B9D0): fresh party from the template, written
+           straight back before anything shows; CURGAME is never read. */
+        if (yt2_save_start(&state.world, &state.save) != YT2_STATUS_OK ||
+            yt2_save_write(&state.save, state.save_path) != YT2_STATUS_OK) {
+            fprintf(stderr, "yt2p-play: cannot start the party\n");
+            goto done;
+        }
+        state.have_save = 1;
+        state.ingamemenu_scanned = yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
+        printf("play: new party\n");
         printf("play: intro start\n");
         if (yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
             yt2_present_pace(&presenter, &out, options.tick_ms) !=
@@ -1672,20 +1837,6 @@ int main(int argc, char **argv)
         state.tick = (unsigned int)intro.tick;
         if (bridge.failed) {
             fprintf(stderr, "yt2p-play: intro failure\n");
-            yt2_intro_free(&intro);
-            goto done;
-        }
-        snprintf(state.save_path, sizeof(state.save_path), "%s/CURGAME",
-                 argv[1]);
-        if (yt2_save_load(state.save_path, &state.save) == YT2_STATUS_OK) {
-            state.have_save = 1;
-            printf("play: save loaded\n");
-        } else if (yt2_save_start(&state.world, &state.save) ==
-                   YT2_STATUS_OK) {
-            state.have_save = 1;
-            printf("play: new party\n");
-        } else {
-            fprintf(stderr, "yt2p-play: cannot start the party\n");
             yt2_intro_free(&intro);
             goto done;
         }
@@ -1744,6 +1895,10 @@ int main(int argc, char **argv)
                     fprintf(stderr, "yt2p-play: cannot open roster\n");
                     break;
                 }
+                /* Deletions flush at confirm time; toggles/DONE stay in
+                   memory like vanilla. */
+                state.roster.flush = roster_flush_save;
+                state.roster.flush_context = &state;
                 state.session_mode = 2;
                 state.roster_sfx_seen = 0u;
                 if (run_session(&state, &out, &in, &presenter, &options,
@@ -1751,11 +1906,6 @@ int main(int argc, char **argv)
                     break;
                 }
                 state.session_mode = 0;
-                if (state.roster.dirty &&
-                    yt2_save_write(&state.save, state.save_path) ==
-                        YT2_STATUS_OK) {
-                    printf("play: save written\n");
-                }
                 printf("play: roster done party %u %u %u %u\n",
                        state.save.party.assigned[0],
                        state.save.party.assigned[1],
@@ -1767,6 +1917,7 @@ int main(int argc, char **argv)
                     (unsigned int)state.save.party.assigned[1] +
                     (unsigned int)state.save.party.assigned[2] +
                     (unsigned int)state.save.party.assigned[3];
+                yt2_ingamemenu_exit ingamemenu_exit;
 
                 /* fn_0D36C derives v_505E bit 0x200 from this sum on
                    the menu path; an empty party buzzes instead of
@@ -1776,6 +1927,36 @@ int main(int argc, char **argv)
                 } else {
                     uint16_t seed = (uint16_t)yt2_pit_now();
 
+                    yt2_room_update_skill_flags(&state.save.party);
+                    if (run_ingamemenu(&state, &out, &in, &presenter, &options,
+                                 &presented, &running,
+                                 state.ingamemenu_scanned ? 0x71u : 0x9Du,
+                                 0) != YT2_STATUS_OK) {
+                        break;
+                    }
+                    ingamemenu_exit = yt2_ingamemenu_result(&state.ingamemenu);
+                    if (ingamemenu_exit == YT2_INGAMEMENU_EXIT_QUIT) {
+                        running = 0;
+                        break;
+                    }
+                    if (ingamemenu_exit != YT2_INGAMEMENU_EXIT_CONTINUE) {
+                        /* The stream tick jumps ahead (never backwards),
+                           pacing rebases, and the fade-out darkens the
+                           in-game menu, not a stale intro frame. */
+                        play_intro_resync(&bridge, &intro, state.tick);
+                        yt2_intro_adopt_screen(&intro, state.surface.pixels,
+                                               state.palette.rgb);
+                        transition = yt2_titlemenu_run(&titlemenu);
+                        printf("play: intro transition %s frames %u\n",
+                               play_intro_transition_name(transition),
+                               presented);
+                        if (bridge.failed) {
+                            fprintf(stderr, "yt2p-play: intro failure\n");
+                            break;
+                        }
+                        state.tick = (unsigned int)intro.tick;
+                        continue;
+                    }
                     printf("play: explore start\n");
                     state.session_out = &out;
                     state.session_presenter = &presenter;
@@ -1790,17 +1971,14 @@ int main(int argc, char **argv)
                         fprintf(stderr, "yt2p-play: cannot embark\n");
                         break;
                     }
+                    explore_flush_save(&state);
                     state.session_mode = 3;
-                    state.explore_done = 0;
+                    state.titlemenu_requested = 0;
                     if (run_session(&state, &out, &in, &presenter, &options,
                                     &presented, &running) != YT2_STATUS_OK) {
                         break;
                     }
                     state.session_mode = 0;
-                    if (yt2_save_write(&state.save, state.save_path) ==
-                        YT2_STATUS_OK) {
-                        printf("play: save written\n");
-                    }
                     printf("play: explore done\n");
                 }
             } else {
@@ -1810,6 +1988,7 @@ int main(int argc, char **argv)
                 (options.frames != 0u && presented >= options.frames)) {
                 break;
             }
+            play_intro_resync(&bridge, &intro, state.tick);
             yt2_intro_adopt_screen(&intro, state.surface.pixels,
                                    state.palette.rgb);
             transition = yt2_titlemenu_run(&titlemenu);

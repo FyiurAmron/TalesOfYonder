@@ -85,6 +85,11 @@ fields, settled hash and markers. Compare columns, not memories:
 
 ## Gotchas
 
+- B1's DOS findfirst (`AH=4Eh`) is stubbed to always report "not found", so
+  B1 never sees save files at boot (menu mask stays `0x9D`, `L` unreachable
+  there). B2 follows the DOS oracle (`sub_01D84` over real files) instead;
+  cover the `0x71` menu by unit test plus code review, and the slot mechanics
+  through the explore panel (mask `0xFE`), which B1 exercises fully.
 - Both menus idle into the attract cycle fast. B1 scripts must act within a
   few hundred guest ticks of the menu; B2 drivers must close the loop.
 - B1 `--link` runs as fast as the host; guest ticks still order the log.
