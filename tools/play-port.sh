@@ -49,10 +49,28 @@ else
     PLAYER_FLAGS=
 fi
 
+# Transport files are per-session: drop stale ones so a previous run's
+# bytes can never leak into this link (CURGAME stays: it is the save).
+rm -f "$PLAY/INPUT.BIN" "$PLAY/OUTPUT.BIN"
 # shellcheck disable=SC2086
 "$ROOT/build/port/yt2p-play" "$PLAY" $PLAYER_FLAGS >"$PLAY/player.log" 2>&1 &
 PLAYER=$!
-trap 'kill "$PLAYER" 2>/dev/null || true' EXIT INT TERM
+trap 'kill "$PLAYER" "$CLIENT" 2>/dev/null || true' EXIT INT TERM
 sleep 1
 
-dotnet "$CLIENT" --follow "$PLAY/OUTPUT.BIN" --input "$PLAY/INPUT.BIN" "$@"
+# Either side may exit first (window close stops the client, quit to
+# DOS stops the player); stop the other instead of hanging. kill -0
+# succeeds on the unreaped zombie, so read the state from /proc.
+dotnet "$CLIENT" --follow "$PLAY/OUTPUT.BIN" --input "$PLAY/INPUT.BIN" "$@" &
+CLIENT=$!
+alive() {
+    case $(awk '{print $3}' "/proc/$1/stat" 2>/dev/null) in
+        R|S|D|T|t) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+while alive "$PLAYER" && alive "$CLIENT"; do
+    sleep 1
+done
+kill "$PLAYER" "$CLIENT" 2>/dev/null || true
+wait 2>/dev/null || true

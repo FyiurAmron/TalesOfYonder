@@ -3205,7 +3205,6 @@ items now live in `docs/roadmap.md`).
     (quiescent bytes unchanged).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-WATCHDOG-ENTRY-STAGED-SEPARATELY
 - 2026-11-21 - formal starts a keypress late; arrows walk in formal:
   - **found**: B1 enters the formal loop on the engaging S/step
     (border + leading monster turns at once, no extra key) and

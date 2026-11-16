@@ -1,6 +1,7 @@
 # B2 real C port: ordinary C11, no generated code, no guest CPU/memory.
 #
-#   make -C engine/port            # build into build/port
+#   make -C engine/port            # build the player and the unit tests
+#   make -C engine/port tools      # also build every yt2p-* dev tool
 #   make -C engine/port test       # build and run the unit tests
 #
 # BUILD and CFLAGS may be overridden from the environment.
@@ -37,16 +38,22 @@ TEST_SOURCES := tests/test_boot.c tests/test_ingamemenu.c tests/test_catalog.c \
                 tests/test_world.c
 TEST_OBJECTS := $(patsubst tests/%.c,$(BUILD)/obj/tests/%.o,$(TEST_SOURCES))
 
-.PHONY: all test clean
+.PHONY: all tools combat test clean
 
-all: $(BUILD)/yt2p-boot $(BUILD)/yt2p-ingamemenu $(BUILD)/yt2p-catalog \
+TOOLS := $(BUILD)/yt2p-boot $(BUILD)/yt2p-ingamemenu $(BUILD)/yt2p-catalog \
      $(BUILD)/yt2p-classes $(BUILD)/yt2p-combat \
      $(BUILD)/yt2p-cluebook $(BUILD)/yt2p-info $(BUILD)/yt2p-intro \
      $(BUILD)/yt2p-items \
      $(BUILD)/yt2p-mapview $(BUILD)/yt2p-monsters $(BUILD)/yt2p-pictures \
      $(BUILD)/yt2p-play $(BUILD)/yt2p-render $(BUILD)/yt2p-room \
      $(BUILD)/yt2p-spells \
-     $(BUILD)/yt2p-walkthrough $(BUILD)/yt2p-world $(BUILD)/yt2p-tests
+     $(BUILD)/yt2p-walkthrough $(BUILD)/yt2p-world
+
+all: $(BUILD)/yt2p-play $(BUILD)/yt2p-tests
+
+tools: $(TOOLS)
+
+combat: $(BUILD)/yt2p-combat
 
 test: all
 	$(BUILD)/yt2p-tests
@@ -136,12 +143,6 @@ $(BUILD)/obj/tests/%.o: tests/%.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -rf $(BUILD)/obj $(BUILD)/yt2p-boot $(BUILD)/yt2p-catalog \
-	       $(BUILD)/yt2p-classes $(BUILD)/yt2p-cluebook $(BUILD)/yt2p-info \
-	       $(BUILD)/yt2p-intro \
-	       $(BUILD)/yt2p-items $(BUILD)/yt2p-mapview \
-	       $(BUILD)/yt2p-monsters $(BUILD)/yt2p-pictures $(BUILD)/yt2p-play \
-	       $(BUILD)/yt2p-render $(BUILD)/yt2p-spells $(BUILD)/yt2p-walkthrough \
-	       $(BUILD)/yt2p-world $(BUILD)/yt2p-tests
+	rm -rf $(BUILD)/obj $(TOOLS) $(BUILD)/yt2p-tests
 
 -include $(wildcard $(BUILD)/obj/src/*.d $(BUILD)/obj/tests/*.d)

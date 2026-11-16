@@ -13,7 +13,7 @@ FIX="$ROOT/tests/port-cancel"
 COMBAT="$ROOT/tests/port-combat"
 
 mkdir -p "$RUN"
-sh "$ROOT/engine/port/tools/build.sh" >"$RUN/build.log" 2>&1
+sh "$ROOT/engine/port/tools/build.sh" combat >"$RUN/build.log" 2>&1
 "$ROOT/build/port/yt2p-combat" "$COMBAT/spider.sav" \
     "$ROOT/_ref/orig-bin/YT2/PICTURES.VGA" \
     "$ROOT/_ref/orig-bin/YT2/WORLD.DAT" "$RUN/matrix" \

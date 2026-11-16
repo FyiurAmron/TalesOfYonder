@@ -113,6 +113,11 @@ model yet; they are preserved, not interpreted.
     sh engine/port/tests/run.sh
     sh tests/port-live/run.sh
 
+The default build ships the player and the unit tests only; the
+per-slice `yt2p-*` dev tools below build on request:
+
+    sh engine/port/tools/build.sh tools
+
 The intro gate renders two attract cycles and checks them behaviorally
 against the frozen B1 log (frames on stdout, audio triggers on stderr):
 

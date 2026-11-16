@@ -26,7 +26,7 @@ done
 
 mkdir -p "$RUN"
 if [ "$DO_BUILD" = yes ]; then
-    make -C "$PORT" BUILD="$BUILD" all
+    make -C "$PORT" BUILD="$BUILD" all tools
 fi
 
 SAVE=$(ls -dt "$ROOT"/build/runs/saveload/*/game/SAVGAME1 2>/dev/null | head -1)
