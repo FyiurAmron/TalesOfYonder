@@ -207,9 +207,11 @@ int test_party(void)
     CHECK(yt2_party_write(block, YT2_PARTY_BLOCK_SIZE, NULL) ==
           YT2_STATUS_ERROR);
 
+    /* No signature check, like vanilla's loader: a typed save name
+       overwrites the header bytes and still loads. */
     block[5] = 'X';
     CHECK(yt2_party_parse(block, YT2_PARTY_BLOCK_SIZE, &party) ==
-          YT2_STATUS_ERROR);
+          YT2_STATUS_OK);
     block[5] = 'M';
     CHECK(yt2_party_parse(block, YT2_PARTY_BLOCK_SIZE - 1u, &party) ==
           YT2_STATUS_ERROR);

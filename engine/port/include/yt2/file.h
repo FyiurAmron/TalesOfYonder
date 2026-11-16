@@ -15,4 +15,12 @@ int yt2_file_load(const char *path, uint8_t **data, size_t *size);
 int yt2_file_save(const char *path, const uint8_t *data, size_t size);
 void yt2_file_free(uint8_t *data);
 
+/*
+ * Read up to size bytes from the start of a file (sub_01D84 reads the
+ * 25 slot-name bytes). Returns YT2_STATUS_OK with *got set, or
+ * YT2_STATUS_ERROR when the file cannot be opened.
+ */
+int yt2_file_load_prefix(const char *path, uint8_t *data, size_t size,
+                         size_t *got);
+
 #endif /* YT2_FILE_H */

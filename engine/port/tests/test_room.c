@@ -89,6 +89,15 @@ static void synthetic_save(yt2_save *save, uint8_t *bytes)
     save->size = YT2_SAVE_SIZE;
     CHECK(yt2_party_parse(bytes, YT2_SAVE_SIZE, &save->party) ==
           YT2_STATUS_OK);
+    /* Boot state (fn_1B9D0): embark keeps it, like vanilla. */
+    save->party.x = 0xA6u;
+    save->party.y = 0x24u;
+    save->party.facing = YT2_ROOM_FACING_WEST;
+    save->party.day = 4u;
+    save->party.month = 11u;
+    save->party.year = 0x222u;
+    save->party.scene = YT2_ROOM_EMBARK_SCENE;
+    save->party.explore_flags = 0x2000u;
 }
 
 static void test_movement(void)

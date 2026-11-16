@@ -131,6 +131,17 @@ typedef struct yt2_party {
     uint16_t month;
     uint16_t year;
     uint16_t scene;
+    /* Header 0x20: v_946F explore/panel flags (boot 0x2000). */
+    uint16_t explore_flags;
+    /* Header 0x52: v_94A1 music track (boot 0x0C). */
+    uint16_t music_id;
+    /* Header 0x86: v_SoundState music/sound present+enabled bits. */
+    uint16_t sound_state;
+    /* Header 0x46/0x48/0x4A: party mean mapping/navigation/survival
+       (fn_0ABEC, DGROUP-live; saved with the block, never pre-set). */
+    uint16_t mean_mapping;
+    uint16_t mean_navigation;
+    uint16_t mean_survival;
     /* Header 0xA4: v_94F3 highlight slots (opaque words, preserved). */
     uint16_t active[YT2_PARTY_ACTIVE_MAX];
     /* Header 0x1EC: v_963B assigned party, 1-based roster slots

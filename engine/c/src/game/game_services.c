@@ -914,6 +914,42 @@ static uint16_t yt2_dos_largest_free(const yt2_machine *machine)
     return largest;
 }
 
+/* DOS 4Eh: the game's save-slot scan (sub_01D84) probes six literal
+   SAVGAMEd names and never reads the DTA (it opens/reads by name on
+   success), so existence is the whole contract. Wildcards never arrive
+   from this game and are reported not found. */
+static void yt2_dos_findfirst(yt2_machine *machine)
+{
+    char name[256];
+    FILE *stream;
+    int found;
+
+    yt2_dos_string(machine, machine->r.ds, machine->r.dx, name, sizeof(name));
+    if (strchr(name, '*') != NULL || strchr(name, '?') != NULL) {
+        if (machine->trace_api) {
+            fprintf(stderr, "yt2: dos findfirst %s -> wildcard (unsupported)\n",
+                    name);
+        }
+        yt2_dos_result(machine, 2u, 1);
+        return;
+    }
+    stream = yt2_open_host(machine, name, "rb", 0);
+    found = 0;
+    if (stream != NULL) {
+        /* A literal probe must not match directories (CX=0
+           excludes them); reads error on a directory stream. */
+        if (fgetc(stream) != EOF || !ferror(stream)) {
+            found = 1;
+        }
+        fclose(stream);
+    }
+    if (machine->trace_api) {
+        fprintf(stderr, "yt2: dos findfirst %s -> %s\n", name,
+                found ? "found" : "not found");
+    }
+    yt2_dos_result(machine, found ? 0u : 2u, found ? 0 : 1);
+}
+
 static void yt2_dos_open(yt2_machine *machine)
 {
     char name[256];
@@ -1215,8 +1251,12 @@ int yt2_dos_int21(yt2_machine *machine)
         machine->exit_code = al;
         break;
     case 0x4Eu:
-        /* No save files in the staged directory yet. */
-        yt2_dos_result(machine, 2u, 1);
+        yt2_dos_findfirst(machine);
+        break;
+    case 0x4Fu:
+        /* No search state is kept: the only FindFirst caller probes
+           literals and never continues, so DOS reports no more files. */
+        yt2_dos_result(machine, 18u, 1);
         break;
     case 0x51u:
         machine->r.bx = YT2_PSP_SEG;

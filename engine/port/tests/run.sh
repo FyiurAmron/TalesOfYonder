@@ -394,6 +394,29 @@ EOF
     fi
     echo "port: first-person room renders to the original frame"
 
+    # The in-game menu (B1 P4 plus the save flow): base, slot list, editor
+    # (cursor hidden while typing), confirm, and the saved bytes.
+    mkdir -p "$RUN/ingamemenu/game" "$RUN/ingamemenu/out"
+    cp "$WORLD" "$PICTURES" "$RUN/ingamemenu/game/"
+    "$BUILD/yt2p-ingamemenu" "$PICTURES" "$WORLD" "$RUN/ingamemenu/game" "$RUN/ingamemenu/out" \
+        >"$RUN/ingamemenu.txt"
+    for want in "base+cursor frame C8BBE9E19A39BC70" \
+            "save-list+cursor frame 6E67E19FEF3688FD" \
+            "save-editor.bin frame 23A66EC70832733E" \
+            "save-confirm+cursor frame F63CA19B33529A4D"; do
+        if ! grep -q "^ingamemenu $want\$" "$RUN/ingamemenu.txt"; then
+            echo "port: in-game menu frame does not match: $want" >&2
+            cat "$RUN/ingamemenu.txt" >&2
+            exit 1
+        fi
+    done
+    if [ "$(md5sum "$RUN/ingamemenu/game/SAVGAME1" | cut -d' ' -f1)" != \
+            de8329ac6f518c01ae62364ed00fa7bc ]; then
+        echo "port: in-game menu save bytes do not match B1" >&2
+        exit 1
+    fi
+    echo "port: in-game menu screen renders and saves like the original"
+
     mkdir -p "$RUN/boot"
     "$BUILD/yt2p-boot" "$PICTURES" "$WORLD" "$RUN/boot" >"$RUN/boot.txt"
     cat >"$RUN/boot-expected.txt" <<'EOF'

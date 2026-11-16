@@ -2870,3 +2870,49 @@ items now live in `docs/roadmap.md`).
   - **gates**: `yt2p-tests: OK`, `port: OK` (room smoke included).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-16 - M8/B2 in-game menu + vanilla file roles (parity-driven):
+  - **found by matrix**: B2 loaded `CURGAME` at boot while B1 rewrites it
+    fresh; B2 wrote at DONE, B1 never; B2 skipped the in-game menu `fn_0EBD6`
+    (save/load/options between menu E and explore); B2 ended explore on
+    ESC, vanilla ignores it; B2 marked a 3x3, vanilla marks facing 2x3
+    strips; B2 leaked skill means into file bytes, vanilla keeps them in
+    DGROUP; B2's stream TICK ran two counters backwards across sessions.
+  - **fix**: `engine/port/src/ingamemenu.c` ports `fn_0EBD6` whole (options with
+    `v_505E` masks 0x9D/0x71/0xFE, slot browser, 23-char editor, confirms,
+    save `sub_0F823`, load flow); boot writes fresh bytes; DONE is
+    memory-only (delete flushes at confirm); explore ignores ESC/Q, `D`
+    opens the panel; embark persists exactly the visited bytes; TICK is
+    one monotonic timeline. Saves/loads are byte-identical with B1.
+  - **gates**: menu frames pixel-exact (base/list/editor/confirm +
+    load-list region); `SAVGAME1` md5-pinned; boot bytes unit-pinned;
+    `yt2p-tests: OK`, `port: OK`, `port-input: OK`, live loop reworked
+    onto save/load (`live-explore: OK` both modes).
+  - **known gaps**: in-explore `R` menu (`fn_0E7B2`, next slice); B1's DOS
+    findfirst is stubbed so the 0x71 menu is unit+review covered only;
+    delete drops (vanilla spills items) unported.
+  - **pacing**: the menu re-entry forward-syncs the intro clock for
+    stream monotonicity and rebases wall pacing at the jump
+    (`play_intro_resync`) instead of sleeping through the session.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - B1 DOS FindFirst stubbed (play-c saves invisible):
+  - **found**: DOS AH=4Eh unconditionally returned error 2, so the
+    boot save-slot scan (sub_01D84) never marked slots found and
+    every load list showed "- EMPTY -" even with saves on disk
+    (saving itself always worked - files are written and the
+    scripted load-by-name passes). The game probes six literal
+    SAVGAMEd names and never reads the DTA nor calls FindNext.
+  - **fix**: FindFirst answers literal existence via the existing
+    host-path mapping (case-insensitive, directories excluded);
+    wildcards report not found and FindNext reports error 18
+    (no search state is kept - the only caller never continues).
+    Staged saves now show by name in the load list (screenshot:
+    slot 4 "SMITHWARE PARTY" over five "- EMPTY -" rows).
+  - **gates**: new `yt2game-tests` DOS case (found exact/upper,
+    missing, wildcard, FindNext; 6 failures with the fix
+    reverted), new `tests/c/ffscan.sh` boot-scan gate wired into
+    `tests/c/run.sh`, full `tests/c/run.sh: OK` incl. the Windows
+    cross-build.
+  - **not changed**: no assembly edit (`swreg.asm` untouched; the
+    C build re-assembles it clean as part of emission);
+    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.

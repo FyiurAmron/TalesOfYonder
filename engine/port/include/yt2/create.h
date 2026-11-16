@@ -146,6 +146,11 @@ typedef enum yt2_roster_view {
     YT2_ROSTER_VIEW_DONE     /* D accepted: caller returns to the menu */
 } yt2_roster_view;
 
+/* Delete flush: vanilla writes the party block to CURGAME the moment a
+   deletion confirms (fn_13F2E tail), not at DONE. The caller sets this to
+   persist; without it the deletion stays memory-only until the next save. */
+typedef void (*yt2_roster_flush_fn)(void *context);
+
 typedef struct yt2_roster {
     yt2_party *party; /* owns assigned[]/active[]; the session keeps no copy */
     const yt2_items *items;
@@ -154,7 +159,9 @@ typedef struct yt2_roster {
     yt2_roster_view view;
     unsigned int slot; /* fn_13F2E v_5070 index */
     int party_ok;      /* v_505E bit 0x200 after DONE */
-    int dirty;
+    int dirty;         /* a deletion confirmed: the save needs a rewrite */
+    yt2_roster_flush_fn flush;
+    void *flush_context;
     unsigned int sfx_count;
     unsigned int sfx[YT2_CREATE_SFX_LOG];
 } yt2_roster;

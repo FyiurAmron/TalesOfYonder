@@ -1,5 +1,6 @@
 #include "test.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -1263,6 +1264,101 @@ static void test_play_sfx_sample(void)
     free(buffer);
 }
 
+/* DOS 4Eh/4Fh: the save-slot scan probes literal names, so FindFirst
+   answers existence (case-insensitive like DOS); wildcards and
+   FindNext report not found / no more files. Fixtures live in the
+   working directory (no mkdir needed) and are removed afterwards. */
+static void test_dos_findfirst(void)
+{
+    static const char name[] = "yt2-ff-exists.tmp";
+    char saved_root[sizeof(g_m.root)];
+    uint16_t saved_ds = g_m.r.ds;
+    uint16_t saved_dx = g_m.r.dx;
+    uint16_t saved_ax = g_m.r.ax;
+    uint16_t saved_cx = g_m.r.cx;
+    FILE *fixture;
+
+    memcpy(saved_root, g_m.root, sizeof(saved_root));
+    memset(g_m.root, 0, sizeof(g_m.root));
+    remove(name);
+    fixture = fopen(name, "wb");
+    CHECK(fixture != NULL);
+    if (fixture == NULL) {
+        goto done;
+    }
+    CHECK(fputc('x', fixture) == 'x');
+    CHECK(fclose(fixture) == 0);
+    g_m.r.ds = TEST_SEG;
+    g_m.r.dx = 0x0100u;
+    g_m.r.cx = 0u;
+
+    /* Exact-case literal: found. */
+    for (size_t i = 0; i < sizeof(name); i++) {
+        test_write8((uint16_t)(0x0100u + i), (uint8_t)name[i]);
+    }
+    g_m.r.ax = 0x4E00u;
+    CHECK(yt2_dos_int21(&g_m) == 0);
+    CHECK(!yt2_cpu_get_flag(&g_m.r, YT2_FLAG_CF));
+    CHECK(g_m.r.ax == 0u);
+
+    /* DOS case-insensitivity: the uppercase probe finds it too. */
+    for (size_t i = 0; i < sizeof(name); i++) {
+        uint8_t value = (uint8_t)name[i];
+
+        if (value >= 'a' && value <= 'z') {
+            value = (uint8_t)(value - 'a' + 'A');
+        }
+        test_write8((uint16_t)(0x0100u + i), value);
+    }
+    g_m.r.ax = 0x4E00u;
+    CHECK(yt2_dos_int21(&g_m) == 0);
+    CHECK(!yt2_cpu_get_flag(&g_m.r, YT2_FLAG_CF));
+    CHECK(g_m.r.ax == 0u);
+
+    /* Missing literal: error 2. */
+    {
+        static const char missing[] = "yt2-ff-missing.tmp";
+
+        for (size_t i = 0; i < sizeof(missing); i++) {
+            test_write8((uint16_t)(0x0100u + i),
+                        (uint8_t)missing[i]);
+        }
+    }
+    g_m.r.ax = 0x4E00u;
+    CHECK(yt2_dos_int21(&g_m) == 0);
+    CHECK(yt2_cpu_get_flag(&g_m.r, YT2_FLAG_CF));
+    CHECK(g_m.r.ax == 2u);
+
+    /* Wildcards are not implemented: not found, like DOS without
+       a match. */
+    {
+        static const char pattern[] = "yt2-ff-*.tmp";
+
+        for (size_t i = 0; i < sizeof(pattern); i++) {
+            test_write8((uint16_t)(0x0100u + i),
+                        (uint8_t)pattern[i]);
+        }
+    }
+    g_m.r.ax = 0x4E00u;
+    CHECK(yt2_dos_int21(&g_m) == 0);
+    CHECK(yt2_cpu_get_flag(&g_m.r, YT2_FLAG_CF));
+    CHECK(g_m.r.ax == 2u);
+
+    /* FindNext without search state: error 18. */
+    g_m.r.ax = 0x4F00u;
+    CHECK(yt2_dos_int21(&g_m) == 0);
+    CHECK(yt2_cpu_get_flag(&g_m.r, YT2_FLAG_CF));
+    CHECK(g_m.r.ax == 18u);
+
+    remove(name);
+done:
+    memcpy(g_m.root, saved_root, sizeof(g_m.root));
+    g_m.r.ds = saved_ds;
+    g_m.r.dx = saved_dx;
+    g_m.r.ax = saved_ax;
+    g_m.r.cx = saved_cx;
+}
+
 int main(void)
 {
     yt2_game_init(&g_m, NULL);
@@ -1285,6 +1381,7 @@ int main(void)
     test_mouse_int33();
     test_speaker_beep();
     test_play_sfx_sample();
+    test_dos_findfirst();
     yt2_game_shutdown(&g_m);
     if (test_failures != 0) {
         fprintf(stderr, "yt2game-tests: %d failure(s)\n", test_failures);
