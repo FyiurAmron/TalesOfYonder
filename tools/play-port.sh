@@ -49,6 +49,9 @@ else
     PLAYER_FLAGS=
 fi
 
+# Transport files are per-session: drop stale ones so a previous run's
+# bytes can never leak into this link (CURGAME stays: it is the save).
+rm -f "$PLAY/INPUT.BIN" "$PLAY/OUTPUT.BIN"
 # shellcheck disable=SC2086
 "$ROOT/build/port/yt2p-play" "$PLAY" $PLAYER_FLAGS >"$PLAY/player.log" 2>&1 &
 PLAYER=$!
