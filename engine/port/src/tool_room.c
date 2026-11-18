@@ -170,6 +170,7 @@ int main(int argc, char **argv)
     save.party.y = (uint16_t)pos_y;
     save.party.facing = (uint16_t)facing;
     save.party.scene = (uint16_t)scene;
+    room.shade_scene = (uint16_t)scene;
     room.sky = (uint16_t)sky;
     room.rotation_phase = phase;
     if (yt2_room_relocate(&room) != YT2_STATUS_OK) {

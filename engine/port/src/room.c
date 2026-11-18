@@ -441,6 +441,22 @@ static int room_object_bit(const yt2_room *room, unsigned int id)
     return (bytes[byte] & (uint8_t)(0x80u >> bit)) != 0;
 }
 
+/* fn_12D72 marks the id spawned (vanilla never respawns it). */
+static void room_object_set_bit(yt2_room *room, unsigned int id)
+{
+    uint8_t *bytes;
+    unsigned int byte = id / 8u;
+    unsigned int bit = id % 8u;
+
+    if (room->save == NULL || room->save->bytes == NULL ||
+        YT2_SAVE_WORLD_MAP_OFFSET + byte >= room->save->size) {
+        return;
+    }
+    bytes = room->save->bytes + YT2_SAVE_WORLD_MAP_OFFSET;
+    bytes[byte] |= (uint8_t)(0x80u >> bit);
+    room->save_dirty = 1;
+}
+
 /* Door record lookup (sub_11A93): (y, flags, data) at world (x, y). */
 static int room_door_at(const yt2_room *room, unsigned int x, unsigned int y,
                         uint16_t *flags, uint16_t *data)
@@ -663,6 +679,9 @@ static void room_stamp_window(yt2_room *room)
     int wx;
     int wy;
     unsigned int i;
+    /* The door probe reports through f5062; window hygiene keeps the
+       gameplay flags untouched (vanilla only sets them on steps). */
+    uint16_t f5062 = room->f5062;
 
     for (wy = 0; wy < (int)YT2_ROOM_WINDOW_SIDE; wy++) {
         for (wx = 0; wx < (int)YT2_ROOM_WINDOW_SIDE; wx++) {
@@ -721,6 +740,7 @@ static void room_stamp_window(yt2_room *room)
         cell->misc = obj->id;
         cell->flags |= YT2_ROOM_CELL_OBJECT;
     }
+    room->f5062 = f5062;
 }
 
 /* sub_1ABED: add the distance shade, clamped to the 16-entry palette row. */
@@ -1296,7 +1316,7 @@ static void room_select_shades(yt2_room *room)
     } else if ((room->r9469 & 1u) != 0u) {
         set = room_shade_default;
     } else {
-        unsigned int scene = room->party->scene;
+        unsigned int scene = room->shade_scene;
         const int16_t *row = NULL;
         unsigned int r;
 
@@ -1675,6 +1695,76 @@ static yt2_room_object *room_object_by_id(yt2_room *room, unsigned int id,
     return NULL;
 }
 
+unsigned int yt2_room_column_hit(yt2_room *room, unsigned int col,
+                                 yt2_room_object **hit)
+{
+    const yt2_room_cell *cell;
+    yt2_room_object *obj;
+
+    if (hit != NULL) {
+        *hit = NULL;
+    }
+    if (room == NULL || col >= YT2_ROOM_VIEW_COLUMNS) {
+        return 0u;
+    }
+    cell = &room->view[col];
+    if ((cell->flags & YT2_ROOM_CELL_OBJECT) != 0u) {
+        obj = room_object_by_id(room, cell->misc, col);
+        if (obj != NULL) {
+            if (hit != NULL) {
+                *hit = obj;
+            }
+            return 4u;
+        }
+    }
+    if (room_cell_solid(cell) ||
+        (cell->flags & YT2_ROOM_CELL_DOOR) != 0u) {
+        return 3u;
+    }
+    if (cell->terrain >= 2u && cell->terrain <= 0x0Fu) {
+        return 1u;
+    }
+    if (cell->object == 0u) {
+        return 0u;
+    }
+    if (cell->object >= 0x11u && cell->object <= 0x14u) {
+        return 0u;
+    }
+    if (cell->object >= 0x3Fu && cell->object <= 0x43u) {
+        return 0u;
+    }
+    return 2u;
+}
+
+void yt2_room_draw_missiles(yt2_room *room, yt2_surface *dst,
+                            const uint8_t *canvas, unsigned int band)
+{
+    room_blit blit;
+    const uint8_t *table;
+    unsigned int i;
+
+    if (room == NULL || dst == NULL || canvas == NULL) {
+        return;
+    }
+    table = room_world_record(room, YT2_WORLD_PERSP_OFFSET,
+                              YT2_WORLD_PERSP_SIZE);
+    if (table == NULL) {
+        return;
+    }
+    blit.table = table;
+    blit.src = canvas;
+    blit.src_size = (size_t)210u * 105u;
+    blit.src_width = 210u;
+    blit.dst = dst;
+    blit.shade = 0;
+    blit.transparent = 1;
+    for (i = 0u; i < 16u; i++) {
+        blit.shade_map[i] = 0u;
+    }
+    blit.have_shade_map = 0;
+    room_blit_faces(&blit, ROOM_PERSP_M7, band);
+}
+
 static uint16_t room_def16(const uint8_t *def, unsigned int at)
 {
     return room_read16(def + at);
@@ -1702,7 +1792,7 @@ static yt2_room_object *room_object_load(yt2_room *room, unsigned int id,
         return NULL;
     }
     index = room_world_record(room, YT2_WORLD_OBJIDX_OFFSET +
-                              (size_t)(id - 1u) * 2u, 2u);
+                              (size_t)id * 2u, 2u);
     if (index == NULL) {
         return NULL;
     }
@@ -1726,9 +1816,21 @@ static yt2_room_object *room_object_load(yt2_room *room, unsigned int id,
                            yt2_create_rand(&room->rng_seed, room->time_word,
                                            5u));
     obj->group = room_def16(def, 0x60u);
-    obj->mode = (obj->group & 1u) != 0u ? 0x0Du : 0x0Au;
-    obj->counter = room_def16(def, 0x1Eu);
-    obj->def50 = obj->counter;
+    /* fn_12D72: group bit set -> mode 0x0A, else 0x0D. */
+    obj->mode = (obj->group & 1u) != 0u ? 0x0Au : 0x0Du;
+    /* The 106-byte definition lands at record +0x32 verbatim, so every
+       definition-sourced field sits 0x32 past its def offset. */
+    obj->hp_max = room_def16(def, 0x1Eu);
+    obj->hp = obj->hp_max;
+    obj->power = room_def16(def, 0x20u);
+    obj->attack_base = room_def16(def, 0x22u);
+    obj->attack_mult = room_def16(def, 0x28u);
+    obj->fx_base = room_def16(def, 0x3Au);
+    obj->fx_special = room_def16(def, 0x3Cu);
+    obj->initiative = room_def16(def, 0x24u);
+    obj->defense = room_def16(def, 0x26u);
+    obj->sfx_hit = room_def16(def, 0x2Au);
+    obj->sfx_miss = room_def16(def, 0x2Cu);
     obj->range60 = room_def16(def, 0x2Eu);
     obj->over_dx = room_def16(def, 0x36u);
     obj->over_dy = room_def16(def, 0x38u);
@@ -1736,10 +1838,28 @@ static yt2_room_object *room_object_load(yt2_room *room, unsigned int id,
         obj->shade[i] = def[0x40u + i];
     }
     for (i = 0u; i < 16u; i++) {
-        obj->dice[i] = def[0x4Cu + i];
+        obj->loot[i] = def[0x4Cu + i];
     }
     obj->cull = room_def16(def, 0x62u);
+    obj->vuln_status = room_def16(def, 0x64u);
+    obj->vuln_resist = room_def16(def, 0x66u);
+    obj->fx_off = room_def16(def, 0x5Cu);
+    obj->fx_cap = room_def16(def, 0x5Eu);
+    for (i = 0u; i < 14u; i++) {
+        obj->name[i] = (char)def[i];
+    }
+    obj->name[14] = 0;
     room_object_engage(room, obj, col);
+    room_object_set_bit(room, id);
+    {
+        yt2_room_cell *cell =
+            room_window_cell(room, (int)obj->x, (int)obj->y);
+
+        if (cell != NULL) {
+            cell->flags |= YT2_ROOM_CELL_OBJECT;
+            cell->misc = obj->id;
+        }
+    }
     return obj;
 }
 
@@ -1803,6 +1923,8 @@ static void room_draw_sprite(yt2_room *room, yt2_surface *dst,
     room->blit_transparent = 1u;
     room->blit_column = (uint16_t)col;
     if ((obj->flags & 2u) != 0u) {
+        /* One-shot hit pose (sub_11078 consumes bit 1). */
+        obj->flags &= (uint16_t)~2u;
         room->blit_pic = (uint16_t)(obj->anim_base + 9u);
     } else if ((obj->flags & 4u) != 0u &&
                obj->pic < obj->anim_base + 6u) {
@@ -1837,11 +1959,13 @@ static void room_draw_sprite(yt2_room *room, yt2_surface *dst,
         }
         x = over_x[mode] + (int)obj->over_dx;
         y = (mode == 3 ? 8 : 34) + (int)obj->over_dy;
-        room->blit_pic = 0x20u;
+        /* Injury overlay (v_5184/86/88): minor 0x12, medium 0x13,
+           major 0x20. */
+        room->blit_pic = 0x12u;
         if ((obj->flags2 & 0x2000u) != 0u) {
-            room->blit_pic = 0x13u;
+            room->blit_pic = 0x20u;
         } else if ((obj->flags2 & 0x4000u) != 0u) {
-            room->blit_pic = 0x12u;
+            room->blit_pic = 0x13u;
         }
         room->blit_class = ROOM_CLASS_OVERLAY;
         room->blit_transparent = 2u;
@@ -1987,6 +2111,8 @@ static void room_wall_far(yt2_room *room, yt2_surface *dst,
     if ((room->f5064 & 0x1000u) != 0u) {
         for (i = 0u; i < 3u; i++) {
             if (room->near_objects[i].id != 0u) {
+                /* sub_1150F shares sub_11078: engaged sprites
+                   animate (ping-pong) like ranged ones. */
                 room_draw_sprite(room, dst, &room->near_objects[i], col);
             }
         }
@@ -2079,6 +2205,16 @@ static void room_render_3d(yt2_room *room, yt2_surface *dst)
 {
     room_gather_view(room);
     room_occlude_view(room);
+    room_select_shades(room);
+    room_render_ground(room, dst);
+    room_render_ceiling(room, dst);
+    room_render_walls(room, dst);
+    room->f505e &= (uint16_t)~0x0400u;
+}
+
+/* fn_10E6A: repaint from the retained view line (no gather/occlude). */
+static void room_render_3d_stale(yt2_room *room, yt2_surface *dst)
+{
     room_select_shades(room);
     room_render_ground(room, dst);
     room_render_ceiling(room, dst);
@@ -2285,6 +2421,16 @@ void yt2_room_paint_portraits(const yt2_party *party,
     }
 }
 
+int yt2_room_portrait_origin(unsigned int slot, int *x, int *y)
+{
+    if (slot >= 4u || x == NULL || y == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    *x = (int)room_portraits[slot][0];
+    *y = (int)room_portraits[slot][2];
+    return YT2_STATUS_OK;
+}
+
 /* fn_11754: compass label. */
 static void room_draw_compass(yt2_room *room, yt2_surface *dst)
 {
@@ -2304,21 +2450,27 @@ static void room_draw_compass(yt2_room *room, yt2_surface *dst)
     yt2_text_draw(dst, 0xF1, 0x57, label, 0x0Fu);
 }
 
-int yt2_room_render(yt2_room *room, yt2_surface *surface)
+static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather)
 {
     unsigned int i;
 
     if (room == NULL || surface == NULL) {
         return YT2_STATUS_ERROR;
     }
-    memset(surface->pixels, 0,
-           (size_t)surface->height * surface->stride);
-    room->blit_pic = 1u;
-    room->blit_class = 0u;
-    room->blit_transparent = 0u;
-    room_draw_picture(room, surface, 1, 1);
-    room_render_3d(room, surface);
-    if ((room->party->explore_flags & 0x1000u) != 0u) {
+    if (gather) {
+        memset(surface->pixels, 0,
+               (size_t)surface->height * surface->stride);
+        room->blit_pic = 1u;
+        room->blit_class = 0u;
+        room->blit_transparent = 0u;
+        room_draw_picture(room, surface, 1, 1);
+        room_render_3d(room, surface);
+    } else {
+        /* fn_10E6A paints over the retained frame (WorkSeg):
+           transparent object pixels show the previous render. */
+        room_render_3d_stale(room, surface);
+    }
+    if ((room->f5064 & 0x1000u) != 0u) {
         /* Combat panel (fn_1755C): the combat slice draws it. */
     } else if ((room->party->explore_flags & 0x2000u) != 0u) {
         room->blit_pic = 0x15u;
@@ -2329,11 +2481,23 @@ int yt2_room_render(yt2_room *room, yt2_surface *surface)
     for (i = 0u; i < 4u; i++) {
         room_draw_portrait_at(room->party, room->pictures, surface, i);
     }
-    room_draw_compass(room, surface);
+    if (!room->no_compass) {
+        room_draw_compass(room, surface);
+    }
     if ((room->party->explore_flags & 0x4000u) != 0u) {
         /* Minimap (fn_11836/fn_117AC): a later slice draws it. */
     }
     return YT2_STATUS_OK;
+}
+
+int yt2_room_render(yt2_room *room, yt2_surface *surface)
+{
+    return room_render_impl(room, surface, 1);
+}
+
+int yt2_room_render_stale(yt2_room *room, yt2_surface *surface)
+{
+    return room_render_impl(room, surface, 0);
 }
 
 /* fn_00E6C: destination terrain check (0 move, 1 bump, 2 silent bump). */
@@ -2469,13 +2633,13 @@ static unsigned int room_attack_check(yt2_room_object *obj)
     if ((obj->flags & 0xFC10u) == 0u) {
         return 0u;
     }
-    obj->counter = (uint16_t)(obj->counter - obj->step);
-    if ((int16_t)obj->counter > 0) {
+    obj->hp = (uint16_t)(obj->hp - obj->step);
+    if ((int16_t)obj->hp > 0) {
         if ((obj->flags & 0x3010u) == 0u) {
             return 0u;
         }
-        obj->counter = (uint16_t)(obj->counter - obj->step);
-        if ((int16_t)obj->counter > 0) {
+        obj->hp = (uint16_t)(obj->hp - obj->step);
+        if ((int16_t)obj->hp > 0) {
             return 2u;
         }
     }
@@ -2491,7 +2655,7 @@ static unsigned int room_attack_check(yt2_room_object *obj)
         obj->pic = obj->anim_base;
         return 0u;
     }
-    obj->counter = 0u;
+    obj->hp = 0u;
     return 1u;
 }
 
@@ -2499,10 +2663,13 @@ static unsigned int room_attack_check(yt2_room_object *obj)
 static void room_monster_step(yt2_room *room, yt2_room_object *obj);
 static void room_monster_engage(yt2_room *room, yt2_room_object *obj);
 
-static void room_monster_turn(yt2_room *room)
+void yt2_room_monster_turn(yt2_room *room)
 {
     unsigned int i;
 
+    if (room == NULL) {
+        return;
+    }
     room->f5062 &= (uint16_t)~0x30u;
     for (i = 0u; i < YT2_ROOM_OBJECT_SLOTS; i++) {
         yt2_room_object *obj = &room->objects[i];
@@ -2513,7 +2680,9 @@ static void room_monster_turn(yt2_room *room)
         }
         check = room_attack_check(obj);
         if (check == 1u) {
-            /* fn_12EA0/fn_13420: the combat slice resolves attacks. */
+            if (room->death_cb != NULL) {
+                room->death_cb(room->death_ctx, obj);
+            }
             continue;
         }
         if (check != 0u) {
@@ -2686,14 +2855,14 @@ static void room_monster_engage(yt2_room *room, yt2_room_object *obj)
         return;
     }
     room->f5064 |= 0x1000u;
-    room->near_objects[1] = *obj;
-    memset(obj, 0, sizeof(*obj));
-    room->f5064 |= (uint16_t)(room->near_objects[1].group & 0xE000u);
-    cell = room_window_cell(room, (int)room->party->x, (int)room->party->y);
-    if (cell != NULL) {
+    cell = room_window_cell(room, (int)obj->x, (int)obj->y);
+    if (cell != NULL && cell->misc == obj->id) {
         cell->flags &= (uint16_t)~YT2_ROOM_CELL_OBJECT;
         cell->misc = 0u;
     }
+    room->near_objects[1] = *obj;
+    memset(obj, 0, sizeof(*obj));
+    room->f5064 |= (uint16_t)(room->near_objects[1].group & 0xE000u);
 }
 
 /* sub_013DB: flash one arrow cell, then present. */
@@ -2893,7 +3062,7 @@ static void room_post_move(yt2_room *room, yt2_surface *dst,
         present(context);
     }
     if ((room->f5064 & 0x1000u) == 0u && (room->f505e & 0x1800u) != 0u) {
-        room_monster_turn(room);
+        yt2_room_monster_turn(room);
         yt2_room_render(room, dst);
         if (present != NULL) {
             present(context);
@@ -3028,6 +3197,40 @@ int yt2_room_key(yt2_room *room, yt2_surface *surface, unsigned int scancode,
         } else {
             facing = YT2_ROOM_FACING_NORTH;
         }
+    } else if (scancode == YT2_ROOM_SCAN_STRAFE_LEFT) {
+        arrow = 3u;
+        flash = 0x18u;
+        restore = 0x17u;
+        if (facing == YT2_ROOM_FACING_NORTH) {
+            dx = -1;
+            dcell = -8;
+        } else if (facing == YT2_ROOM_FACING_SOUTH) {
+            dx = 1;
+            dcell = 8;
+        } else if (facing == YT2_ROOM_FACING_EAST) {
+            dy = -1;
+            dcell = -0x270;
+        } else {
+            dy = 1;
+            dcell = 0x270;
+        }
+    } else if (scancode == YT2_ROOM_SCAN_STRAFE_RIGHT) {
+        arrow = 5u;
+        flash = 0x1Cu;
+        restore = 0x1Bu;
+        if (facing == YT2_ROOM_FACING_NORTH) {
+            dx = 1;
+            dcell = 8;
+        } else if (facing == YT2_ROOM_FACING_SOUTH) {
+            dx = -1;
+            dcell = -8;
+        } else if (facing == YT2_ROOM_FACING_EAST) {
+            dy = 1;
+            dcell = 0x270;
+        } else {
+            dy = -1;
+            dcell = -0x270;
+        }
     } else {
         return YT2_STATUS_OK;
     }
@@ -3049,6 +3252,12 @@ int yt2_room_key(yt2_room *room, yt2_surface *surface, unsigned int scancode,
                              context);
             return YT2_STATUS_OK;
         }
+    }
+    /* B1 holds the flash across its move+render (emu-observed
+       ~12 ticks); the principled beat is 2. Blocked paths
+       restore instantly like B1 (no hold). */
+    if (room->delay != NULL) {
+        room->delay(2u, room->delay_context);
     }
     room->party->facing = (uint16_t)facing;
     if (turn) {
@@ -3252,6 +3461,8 @@ int yt2_room_init(yt2_room *room, const yt2_world *world,
         room->terrain60[i] = 0u;
     }
     /* v_946F comes from the party (boot 0x2000); vanilla never resets it. */
+    /* v_5060 bit 10 is always set once the engine runs (B1 0x0400). */
+    room->f5060 = 0x0400u;
     return YT2_STATUS_OK;
 }
 
@@ -3260,43 +3471,15 @@ int yt2_room_init(yt2_room *room, const yt2_world *world,
    party block come from boot, and the world chunks are already fresh. The
    zeroing below is a no-op on fresh files (the only vanilla-reachable
    case) and keeps fixture-driven tools on the same bytes. */
-static void room_embark_fresh(yt2_room *room)
-{
-    uint8_t *bytes = room->save->bytes;
-    size_t size = room->save->size;
-
-    if (bytes == NULL) {
-        return;
-    }
-    if (YT2_SAVE_OBJECTS_OFFSET + YT2_SAVE_OBJECTS_SIZE <= size) {
-        memset(bytes + YT2_SAVE_OBJECTS_OFFSET, 0, YT2_SAVE_OBJECTS_SIZE);
-    }
-    if (YT2_SAVE_LEVELS_OFFSET + YT2_SAVE_LEVELS_SIZE <= size) {
-        memset(bytes + YT2_SAVE_LEVELS_OFFSET, 0, YT2_SAVE_LEVELS_SIZE);
-    }
-    if (YT2_SAVE_WORLD_TABLE_OFFSET + YT2_SAVE_WORLD_TABLE_SIZE <= size) {
-        memset(bytes + YT2_SAVE_WORLD_TABLE_OFFSET, 0,
-               YT2_SAVE_WORLD_TABLE_SIZE);
-    }
-    if (YT2_SAVE_WORLD_INDEX_OFFSET + YT2_SAVE_WORLD_INDEX_SIZE <= size) {
-        memset(bytes + YT2_SAVE_WORLD_INDEX_OFFSET, 0,
-               YT2_SAVE_WORLD_INDEX_SIZE);
-    }
-    if (YT2_SAVE_WORLD_MAP_OFFSET + YT2_SAVE_WORLD_MAP_SIZE <= size) {
-        memset(bytes + YT2_SAVE_WORLD_MAP_OFFSET, 0, YT2_SAVE_WORLD_MAP_SIZE);
-    }
-    if (YT2_SAVE_CACHE_OFFSET + YT2_SAVE_CACHE_SIZE <= size) {
-        memset(bytes + YT2_SAVE_CACHE_OFFSET, 0, YT2_SAVE_CACHE_SIZE);
-    }
-}
-
 int yt2_room_embark(yt2_room *room, yt2_surface *surface,
                     yt2_room_present_fn present, void *context)
 {
     if (room == NULL || surface == NULL) {
         return YT2_STATUS_ERROR;
     }
-    room_embark_fresh(room);
+    /* No chunk zeroing: vanilla's continue-into-explore (fn_0F2C0) never
+       clears; fresh boots arrive with truncated bytes, loads with the
+       slot's bytes, and both flow through untouched. */
     room->f5064 &= 0x0FFFu;
     if (room_load_window(room) != YT2_STATUS_OK) {
         return YT2_STATUS_ERROR;
@@ -3316,6 +3499,7 @@ int yt2_room_embark(yt2_room *room, yt2_surface *surface,
     room->cd_rotation = YT2_ROOM_ROTATION_RELOAD;
     room->speed_left = room->party->game_speed;
     room->r9469 = 0u;
+    room->shade_scene = room->party->scene;
     yt2_room_update_skill_flags(room->party);
     yt2_room_render(room, surface);
     if (present != NULL) {
@@ -3333,5 +3517,9 @@ int yt2_room_relocate(yt2_room *room)
         return YT2_STATUS_ERROR;
     }
     room_stamp_window(room);
+    /* fn_10BF6 always pairs with a gather (fn_10E42): a rebuilt
+       window invalidates the retained view line. */
+    room_gather_view(room);
+    room_occlude_view(room);
     return YT2_STATUS_OK;
 }

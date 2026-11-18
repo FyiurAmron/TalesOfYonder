@@ -31,7 +31,6 @@
 #define CHARACTER_PORTRAIT_INDEX 0x14u
 #define CHARACTER_LEVEL 0x16u
 #define CHARACTER_EXPERIENCE 0x18u
-#define CHARACTER_WEIGHT 0x1Bu
 #define CHARACTER_STATUS 0x1Cu
 #define CHARACTER_READY 0x1Eu
 #define CHARACTER_BUFFS 0x20u
@@ -40,11 +39,22 @@
 #define CHARACTER_SPELLBOOK 0xCAu
 #define CHARACTER_CURRENT 0x3Cu
 #define CHARACTER_MAXIMUM 0x7Cu
+#define CHARACTER_BASE_OFFS_0 0x32u
+#define CHARACTER_BASE_OFFS_1 0x36u
+#define CHARACTER_BASE_OFFS_2 0x34u
+#define CHARACTER_BASE_OFFS_3 0x38u
+#define CHARACTER_BASE_OFFS_4 0x3Au
+#define CHARACTER_MAX_BASE_OFFS_0 0x72u
+#define CHARACTER_MAX_BASE_OFFS_1 0x76u
+#define CHARACTER_MAX_BASE_OFFS_2 0x74u
+#define CHARACTER_MAX_BASE_OFFS_3 0x78u
+#define CHARACTER_MAX_BASE_OFFS_4 0x7Au
 #define CHARACTER_CARRIED_WEIGHT 0x118u
 #define CHARACTER_PACK 0x11Au
 #define CHARACTER_EQUIPMENT 0x13Au
 #define CHARACTER_EFFECTS 0x152u
 #define CHARACTER_FLAGS 0x15Cu
+#define CHARACTER_WEAR 0xBEu
 
 /* Stat block offsets. */
 #define STAT_STRENGTH 0x00u
@@ -146,6 +156,16 @@ static void parse_stats(const uint8_t *bytes, yt2_stats *stats)
     stats->skills.chemistry = yt2_read_u16(bytes + STAT_CHEMISTRY);
 }
 
+static void parse_character(const uint8_t *slot, yt2_character *character);
+
+void yt2_party_parse_character(const uint8_t *slot, yt2_character *character)
+{
+    if (slot == NULL || character == NULL) {
+        return;
+    }
+    parse_character(slot, character);
+}
+
 static void parse_character(const uint8_t *slot, yt2_character *character)
 {
     memcpy(character->name, slot, YT2_CHARACTER_NAME_LENGTH);
@@ -156,7 +176,6 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     character->portrait_index = yt2_read_u16(slot + CHARACTER_PORTRAIT_INDEX);
     character->level = yt2_read_u16(slot + CHARACTER_LEVEL);
     character->experience = yt2_read_u32(slot + CHARACTER_EXPERIENCE);
-    character->weight = slot[CHARACTER_WEIGHT];
     character->status = yt2_read_u16(slot + CHARACTER_STATUS);
     character->ready = yt2_read_u16(slot + CHARACTER_READY);
     for (unsigned int buff = 0; buff < YT2_BUFF_SLOTS; buff++) {
@@ -169,6 +188,23 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     }
     parse_stats(slot + CHARACTER_CURRENT, &character->current);
     parse_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
+    {
+        static const unsigned int offs[5] = {
+            CHARACTER_BASE_OFFS_0, CHARACTER_BASE_OFFS_1,
+            CHARACTER_BASE_OFFS_2, CHARACTER_BASE_OFFS_3,
+            CHARACTER_BASE_OFFS_4,
+        };
+        static const unsigned int max_offs[5] = {
+            CHARACTER_MAX_BASE_OFFS_0, CHARACTER_MAX_BASE_OFFS_1,
+            CHARACTER_MAX_BASE_OFFS_2, CHARACTER_MAX_BASE_OFFS_3,
+            CHARACTER_MAX_BASE_OFFS_4,
+        };
+
+        for (unsigned int i = 0u; i < 5u; i++) {
+            character->base[i] = yt2_read_u16(slot + offs[i]);
+            character->max_base[i] = yt2_read_u16(slot + max_offs[i]);
+        }
+    }
     character->icon_sel = yt2_read_u16(slot + CHARACTER_ICON_SEL);
     character->carried_weight = yt2_read_u16(slot + CHARACTER_CARRIED_WEIGHT);
 
@@ -190,6 +226,10 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
     }
     character->flags = yt2_read_u16(slot + CHARACTER_FLAGS);
     character->overlay = yt2_read_u16(slot + CHARACTER_OVERLAY);
+    for (unsigned int wear = 0; wear < 3u; wear++) {
+        character->wear[wear] =
+            yt2_read_u16(slot + CHARACTER_WEAR + wear * 2u);
+    }
 }
 
 int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
@@ -292,7 +332,6 @@ static void write_character(uint8_t *slot, const yt2_character *character)
     yt2_write_u16(slot + CHARACTER_PORTRAIT_INDEX, character->portrait_index);
     yt2_write_u16(slot + CHARACTER_LEVEL, character->level);
     yt2_write_u32(slot + CHARACTER_EXPERIENCE, character->experience);
-    slot[CHARACTER_WEIGHT] = character->weight;
     yt2_write_u16(slot + CHARACTER_STATUS, character->status);
     yt2_write_u16(slot + CHARACTER_READY, character->ready);
     for (unsigned int buff = 0; buff < YT2_BUFF_SLOTS; buff++) {
@@ -305,6 +344,23 @@ static void write_character(uint8_t *slot, const yt2_character *character)
     }
     write_stats(slot + CHARACTER_CURRENT, &character->current);
     write_stats(slot + CHARACTER_MAXIMUM, &character->maximum);
+    {
+        static const unsigned int offs[5] = {
+            CHARACTER_BASE_OFFS_0, CHARACTER_BASE_OFFS_1,
+            CHARACTER_BASE_OFFS_2, CHARACTER_BASE_OFFS_3,
+            CHARACTER_BASE_OFFS_4,
+        };
+        static const unsigned int max_offs[5] = {
+            CHARACTER_MAX_BASE_OFFS_0, CHARACTER_MAX_BASE_OFFS_1,
+            CHARACTER_MAX_BASE_OFFS_2, CHARACTER_MAX_BASE_OFFS_3,
+            CHARACTER_MAX_BASE_OFFS_4,
+        };
+
+        for (unsigned int i = 0u; i < 5u; i++) {
+            yt2_write_u16(slot + offs[i], character->base[i]);
+            yt2_write_u16(slot + max_offs[i], character->max_base[i]);
+        }
+    }
     yt2_write_u16(slot + CHARACTER_ICON_SEL, character->icon_sel);
     yt2_write_u16(slot + CHARACTER_CARRIED_WEIGHT, character->carried_weight);
 
@@ -326,6 +382,10 @@ static void write_character(uint8_t *slot, const yt2_character *character)
     }
     yt2_write_u16(slot + CHARACTER_FLAGS, character->flags);
     yt2_write_u16(slot + CHARACTER_OVERLAY, character->overlay);
+    for (unsigned int wear = 0; wear < 3u; wear++) {
+        yt2_write_u16(slot + CHARACTER_WEAR + wear * 2u,
+                      character->wear[wear]);
+    }
 }
 
 int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)

@@ -266,6 +266,7 @@ static void test_room_gate(void)
 
     /* B1 state at the room checkpoint (frame 1743, tick 4165). */
     save.party.scene = 0x1A6u;
+    room.shade_scene = 0x1A6u;
     room.sky = 0xF0u;
     room.rotation_phase = 3u;
     CHECK(yt2_room_relocate(&room) == YT2_STATUS_OK);

@@ -167,6 +167,29 @@ const uint8_t *yt2_item_record(const yt2_items *items, unsigned int file)
     return record_at(items, file);
 }
 
+const uint8_t *yt2_item_def(const yt2_items *items, unsigned int id)
+{
+    size_t offset;
+
+    if (items == NULL || items->bytes == NULL || id == 0u) {
+        return NULL;
+    }
+    if (id <= YT2_ITEM_STRUCT_COUNT_A) {
+        offset = (size_t)YT2_ITEM_STRUCT_OFFSET +
+                 (size_t)(id - 1u) * YT2_ITEMS_RECORD_SIZE;
+    } else if (id <= YT2_ITEM_STRUCT_COUNT_A + YT2_ITEM_STRUCT_COUNT_B) {
+        offset = (size_t)YT2_ITEM_STRUCT_OFFSET_B +
+                 (size_t)(id - 1u - YT2_ITEM_STRUCT_COUNT_A) *
+                     YT2_ITEMS_RECORD_SIZE;
+    } else {
+        return NULL;
+    }
+    if (offset + YT2_ITEMS_RECORD_SIZE > items->size) {
+        return NULL;
+    }
+    return items->bytes + offset;
+}
+
 const uint8_t *yt2_item_param_row(const yt2_items *items, const uint8_t *record)
 {
     if (record == NULL) {

@@ -252,6 +252,36 @@ int yt2_item_name(const yt2_items *items, unsigned int index, char *buffer,
     return parse_name(record, buffer, size);
 }
 
+int yt2_item_name_field(const yt2_items *items, unsigned int index,
+                        unsigned int field, char *buffer, size_t size)
+{
+    const uint8_t *record;
+    const uint8_t *bytes;
+    size_t length;
+
+    if (items == NULL || items->bytes == NULL || buffer == NULL ||
+        size == 0u || index >= YT2_ITEMS_COUNT ||
+        field >= YT2_ITEMS_NAME_FIELDS) {
+        return YT2_STATUS_ERROR;
+    }
+    record = items->bytes + YT2_ITEMS_OFFSET +
+             (size_t)index * YT2_ITEMS_RECORD_SIZE;
+    bytes = record + field * YT2_ITEMS_NAME_FIELD_SIZE;
+    if (bytes[YT2_ITEMS_NAME_FIELD_SIZE - 1u] != 0u) {
+        return YT2_STATUS_ERROR;
+    }
+    length = strlen((const char *)bytes);
+    while (length > 0u && bytes[length - 1u] == ' ') {
+        length--;
+    }
+    if (length + 1u > size) {
+        return YT2_STATUS_ERROR;
+    }
+    memcpy(buffer, bytes, length);
+    buffer[length] = '\0';
+    return YT2_STATUS_OK;
+}
+
 int yt2_items_detail_name(const yt2_items *items, unsigned int category,
                           unsigned int rank, char *buffer, size_t size)
 {

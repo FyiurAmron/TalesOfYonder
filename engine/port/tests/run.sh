@@ -90,6 +90,7 @@ YT2_SAVE="$SAVE" YT2_SAVE_ROUNDTRIP="$RUN/roundtrip.save" \
     YT2_WORLD_SPELLTEXT="$SPELLTEXT" \
     YT2_WORLD_SPELLTEXT_COMPLETE="$SPELLTEXT_COMPLETE" \
     YT2_ROOM_SAVE="$ROOT/tests/data/m5-room-curgame" \
+    YT2_COMBAT_SAVE="$ROOT/tests/port-combat/spider.sav" \
     "$BUILD/yt2p-tests" >"$RUN/tests.log"
 cat "$RUN/tests.log"
 

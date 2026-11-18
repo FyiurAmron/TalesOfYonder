@@ -1,0 +1,13 @@
+f5060=0400
+seed=CE04
+f5062=0640
+f5064=0001
+f20id=0
+f20hp=0
+f20pos=0,0
+eng1id=0
+eng1hp=0
+slot1xp=00000025
+slot6xp=00000025
+slot7xp=00000025
+slot8xp=00000025

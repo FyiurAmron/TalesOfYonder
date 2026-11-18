@@ -39,6 +39,7 @@
 #include "yt2/catalog.h"
 #include "yt2/classes.h"
 #include "yt2/clock.h"
+#include "yt2/combat.h"
 #include "yt2/cluebook.h"
 #include "yt2/create.h"
 #include "yt2/cursor.h"
@@ -145,10 +146,13 @@ typedef struct play_state {
     yt2_create create;
     yt2_roster roster;
     yt2_room room;
+    yt2_combat combat;
+    int have_combat;
     yt2_ingamemenu ingamemenu;
     yt2_ingamemenu_slot ingamemenu_slots[YT2_INGAMEMENU_SLOTS];
     int ingamemenu_scanned;
     int ingametitlemenu_requested; /* explore D: run the in-game menu nested */
+    int ingamemenu_formal; /* formal D: mask 0x5E + combat wide clear */
     int titlemenu_requested; /* N: unwind to the title menu loop */
     yt2_save save;
     int have_save;
@@ -163,6 +167,7 @@ typedef struct play_state {
     unsigned int create_sfx_seen;
     unsigned int roster_sfx_seen;
     unsigned int ingamemenu_sfx_seen;
+    unsigned int combat_sfx_seen;
 } play_state;
 
 /* IBM set-1 scancodes of the clue-book keys. */
@@ -1225,6 +1230,11 @@ static int session_present(play_state *state, yt2_folder_out *out,
         cursor = yt2_create_cursor(&state->create);
         shown = yt2_create_cursor_shown(&state->create);
     }
+    if (state->session_mode == 3 && state->have_combat &&
+        state->combat.chest_open && state->combat.chest_cursor != 0u) {
+        /* Carried item icon (fn_SetMouseCursor). */
+        cursor = state->combat.chest_cursor;
+    }
     if (!state->have_frame) {
         return YT2_STATUS_ERROR;
     }
@@ -1265,6 +1275,17 @@ static int explore_present(void *context)
     return YT2_STATUS_OK;
 }
 
+/* Live animation pacing: BIOS ticks at 55 ms (B1's DelayTicks),
+   independent of the presenter tick. The presenter holds the
+   last frame across the sleep. */
+static void explore_delay(unsigned int ticks, void *context)
+{
+    if (context == NULL || ticks == 0u) {
+        return;
+    }
+    yt2_sleep_ms(ticks * PLAY_TICK_MS);
+}
+
 static void session_drain_sfx(play_state *state)
 {
     if (state->session_mode == 1) {
@@ -1290,6 +1311,14 @@ static void session_drain_sfx(play_state *state)
             printf("play: audio %u sfx %u\n", state->tick,
                    yt2_ingamemenu_sfx(&state->ingamemenu, state->ingamemenu_sfx_seen));
             state->ingamemenu_sfx_seen++;
+        }
+    } else if (state->session_mode == 3 && state->have_combat) {
+        unsigned int count = yt2_combat_sfx_count(&state->combat);
+
+        while (state->combat_sfx_seen < count) {
+            printf("play: audio %u sfx %u\n", state->tick,
+                   yt2_combat_sfx_at(&state->combat, state->combat_sfx_seen));
+            state->combat_sfx_seen++;
         }
     }
 }
@@ -1345,6 +1374,12 @@ static void session_key(play_state *state, const yt2_input_event *event,
             event->scancode == PLAY_SCAN_DOWN ||
             event->scancode == PLAY_SCAN_LEFT ||
             event->scancode == PLAY_SCAN_RIGHT) {
+            /* Formal re-polls arrows (B1 sub_06493: F-keys select,
+               the rest is not movement). */
+            if (state->have_combat &&
+                (state->room.f5064 & 0x1000u) != 0u) {
+                return;
+            }
             /* Presents happen inside (flash, step); no trailing dup. */
             state->room.last_sfx = 0u;
             if (yt2_room_key(&state->room, &state->surface, event->scancode,
@@ -1353,12 +1388,58 @@ static void session_key(play_state *state, const yt2_input_event *event,
                 printf("play: audio %u sfx %u\n", state->tick,
                        state->room.last_sfx);
             }
+            /* Steps wipe VRAM ink (mirrors the F/B/L/R key path
+               and click steps). */
+            if (state->have_combat) {
+                state->combat.award_pending = 0;
+                state->combat.chest_side_panel_lines = 0u;
+            }
+            if (state->have_combat &&
+                (state->room.f5064 & 0x1000u) != 0u) {
+                /* Fresh contact settles in fn_06382 at once. */
+                yt2_combat_formal_entry(&state->combat, explore_present,
+                                        state);
+                yt2_combat_repaint(&state->combat, explore_present,
+                                   state);
+            }
             explore_flush_save(state);
             return;
         }
         ascii = session_ascii(event);
         if (ascii == 'D') {
+            /* B1's formal D (loc_06885) nests the menu with mask
+               0x5E; explore uses 0xFE. */
             state->ingametitlemenu_requested = 1;
+            state->ingamemenu_formal =
+                (state->have_combat &&
+                 (state->room.f5064 & 0x1000u) != 0u);
+            return;
+        }
+        if ((ascii == 'S' || ascii == 'A') && state->have_combat) {
+            if (yt2_combat_key(&state->combat, ascii, explore_present,
+                               state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+            }
+            session_drain_sfx(state);
+            return;
+        }
+        if (ascii == ' ' && state->have_combat) {
+            /* SPACE search/prompt/close (fn_0795E/fn_073E3). */
+            if (yt2_combat_key(&state->combat, ascii, explore_present,
+                               state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+            }
+            session_drain_sfx(state);
+            return;
+        }
+        if ((ascii == 0x1Bu || ascii == 'N') && state->have_combat &&
+            state->combat.chest_prompt) {
+            /* Prompt cancel (fn_0795E ax 0); silent elsewhere. */
+            if (yt2_combat_key(&state->combat, ascii, explore_present,
+                               state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+            }
+            session_drain_sfx(state);
             return;
         }
         if (ascii == 'R' ||
@@ -1368,6 +1449,19 @@ static void session_key(play_state *state, const yt2_input_event *event,
             ascii == ' ' || (ascii >= '1' && ascii <= '4')) {
             fprintf(stderr, "play: explore key %02X unported\n", ascii);
             return;
+        }
+        if (event->ascii == 0u && event->scancode >= PLAY_SCAN_F1 &&
+            event->scancode <= PLAY_SCAN_F4 && state->have_combat) {
+            /* F1-F4 member pick (B1 fn_0A834); the chest opener
+               prompt answers, everything else stays unported. */
+            if (yt2_combat_fkey(&state->combat,
+                                event->scancode - PLAY_SCAN_F1 + 1u,
+                                explore_present, state) ==
+                YT2_STATUS_OK) {
+                explore_flush_save(state);
+                session_drain_sfx(state);
+                return;
+            }
         }
         if (event->ascii == 0u &&
             ((event->scancode >= PLAY_SCAN_F1 &&
@@ -1401,12 +1495,35 @@ static void session_key(play_state *state, const yt2_input_event *event,
 static void session_click(play_state *state, int x, int y, int right,
                           int *dirty)
 {
-    /* Explore clicks (arrows, portraits, viewport) land in later slices. */
     if (state->session_mode == 3) {
-        (void)x;
-        (void)y;
-        (void)right;
-        (void)dirty;
+        /* Modal/prompt clicks (loot, pack, portraits, opener pick).
+           Explore clicks (arrows, portraits, viewport) land in
+           later slices; the combat layer ignores them. */
+        if (state->have_combat) {
+            /* Presents happen inside (arrows flash/step); the room
+               SFX logs like the key path. */
+            state->room.last_sfx = 0u;
+            if (yt2_combat_click(&state->combat, x, y, right,
+                                 explore_present, state) !=
+                YT2_STATUS_OK) {
+                session_drain_sfx(state);
+                return;
+            }
+            if (state->room.last_sfx != 0u) {
+                printf("play: audio %u sfx %u\n", state->tick,
+                       state->room.last_sfx);
+            }
+            /* Member packs change under portrait drops; sync the
+               block like the key path before the file flush. */
+            yt2_party_write(state->save.bytes + YT2_SAVE_PARTY_OFFSET,
+                            YT2_SAVE_PARTY_SIZE, state->room.party);
+            if (yt2_combat_repaint(&state->combat, explore_present,
+                                   state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+            }
+            *dirty = 1;
+        }
+        session_drain_sfx(state);
         return;
     }
     if (state->session_mode == 4) {
@@ -1502,11 +1619,32 @@ static const char *session_stage_name(const play_state *state)
     }
 }
 
-/* Forward: the explore D key nests the in-game menu mid-session. */
+/* Forward: the explore/formal D key nests the in-game menu mid-session. */
 static int run_ingamemenu(play_state *state, yt2_folder_out *out,
                     yt2_folder_in *in, yt2_presenter *presenter,
                     play_options *options, unsigned int *presented,
-                    int *running, uint16_t mask, int explore);
+                    int *running, uint16_t mask, int combat, int explore);
+
+/* B1's title-entry reset (fn_0D36C/fn_1B9D0) on NEWGAME: reload the
+   WORLD roster template (created characters wiped, SQUIRE/DIANA/YENDOR
+   restored), clear the assignment, and rewrite CURGAME fresh. B1 runs it
+   only when v_5060/v_505E guards are clear (NEWGAME-confirm clears them;
+   create/roster quit-to-title keeps the roster); B2's call sites encode
+   that: menu EXIT_MENU (NEWGAME-confirmed) resets, session ends don't. */
+static int play_title_reset(play_state *state)
+{
+    if (state == NULL || !state->have_save) {
+        return YT2_STATUS_ERROR;
+    }
+    yt2_save_free(&state->save);
+    if (yt2_save_start(&state->world, &state->save) != YT2_STATUS_OK ||
+        yt2_save_write(&state->save, state->save_path) != YT2_STATUS_OK) {
+        state->have_save = 0;
+        return YT2_STATUS_ERROR;
+    }
+    printf("play: new party\n");
+    return YT2_STATUS_OK;
+}
 
 /*
  * One modal session: poll the link, apply every input with its own
@@ -1640,10 +1778,13 @@ static int run_session(play_state *state, yt2_folder_out *out,
         if (state->ingametitlemenu_requested && state->session_mode == 3) {
             int mode = state->session_mode;
             yt2_ingamemenu_exit exit;
+            uint16_t mask = state->ingamemenu_formal ? 0x5Eu : 0xFEu;
+            int formal = state->ingamemenu_formal;
 
             state->ingametitlemenu_requested = 0;
+            state->ingamemenu_formal = 0;
             if (run_ingamemenu(state, out, in, presenter, options, presented,
-                         running, 0xFEu, 1) != YT2_STATUS_OK) {
+                         running, mask, formal, 1) != YT2_STATUS_OK) {
                 return YT2_STATUS_ERROR;
             }
             state->session_mode = mode;
@@ -1652,19 +1793,101 @@ static int run_session(play_state *state, yt2_folder_out *out,
                 *running = 0;
             } else if (exit == YT2_INGAMEMENU_EXIT_MENU) {
                 state->titlemenu_requested = 1;
+            } else if (state->have_combat) {
+                /* CONTINUE: B1 re-renders on menu close (loc_00614
+                   path); without it the menu base keeps group-8 pic
+                   10 over the disk cell and stale ticks never
+                   restore the icon row. */
+                yt2_combat_repaint(&state->combat, explore_present,
+                                   state);
+            }
+        }
+        if (state->have_combat && state->combat.death_pending &&
+            state->session_mode == 3) {
+            /* Wipe (fn_15FBC): the death screen is painted; the
+               menu (0x70: load/newgame/quit) runs, quit ends the
+               game, menu unwinds to title, anything else
+               re-embarks explore from the (possibly loaded) save
+               like fn_0F2C0. */
+            yt2_ingamemenu_exit exit;
+
+            state->combat.death_pending = 0;
+            printf("play: wipe\n");
+            if (run_ingamemenu(state, out, in, presenter, options, presented,
+                         running, 0x70u, 0, 1) != YT2_STATUS_OK) {
+                return YT2_STATUS_ERROR;
+            }
+            state->session_mode = 3;
+            exit = yt2_ingamemenu_result(&state->ingamemenu);
+            if (exit == YT2_INGAMEMENU_EXIT_QUIT) {
+                *running = 0;
+            } else if (exit == YT2_INGAMEMENU_EXIT_MENU) {
+                state->titlemenu_requested = 1;
+            } else {
+                uint16_t seed = (uint16_t)yt2_pit_now();
+
+                if (yt2_room_init(&state->room, &state->world,
+                                  &state->pictures, &state->save,
+                                  &state->save.party,
+                                  seed) != YT2_STATUS_OK ||
+                    yt2_room_embark(&state->room, &state->surface,
+                                    explore_present,
+                                    state) != YT2_STATUS_OK) {
+                    fprintf(stderr, "yt2p-play: cannot re-embark\n");
+                    return YT2_STATUS_ERROR;
+                }
+                explore_flush_save(state);
+                state->room.delay = explore_delay;
+                state->room.delay_context = state;
+                if (yt2_combat_init(&state->combat, &state->room,
+                                    &state->save, &state->pictures,
+                                    &state->world, &state->items,
+                                    &state->surface) == YT2_STATUS_OK) {
+                    state->have_combat = 1;
+                    state->combat_sfx_seen = 0u;
+                }
+                printf("play: explore start\n");
             }
         }
         if (state->session_mode == 3) {
-            /* The room ticks its own clock/sky/rotation countdowns and
-               presents the live palette over the settled framebuffer. */
+            int idle_explore;
+            int idle_formal;
+
+            /* The room ticks its own clock/sky/rotation countdowns.
+               Idle explore re-renders stale (B1's per-poll fn_10E6A:
+               sprites advance under the palette); formal and modal
+               idle present the palette over the settled frame. */
             if (yt2_room_tick(&state->room) != YT2_STATUS_OK) {
                 fprintf(stderr, "yt2p-play: room tick failed\n");
                 return YT2_STATUS_ERROR;
             }
-            if (yt2_room_tick_dirty(&state->room) &&
-                session_present(state, out, presenter, 0) ==
+            idle_explore = (state->room.f5064 & 0x1000u) == 0u &&
+                           (!state->have_combat ||
+                            (!state->combat.chest_open &&
+                             !state->combat.chest_prompt));
+            idle_formal =
+                state->have_combat &&
+                (state->room.f5064 & 0x1000u) != 0u &&
+                !state->combat.chest_open && !state->combat.chest_prompt &&
+                state->room.rotation_phase % 3u == 0u;
+            if (yt2_room_tick_dirty(&state->room)) {
+                /* B1 animates ranged ~5 ticks, engaged ~15 (idle
+                   observation); the /3 divider matches formal. */
+                if (idle_explore || idle_formal) {
+                    int no_compass = state->room.no_compass;
+
+                    /* Formal idle keeps panel and side panel (no plaque
+                       repaint, no compass over the names). */
+                    if (idle_formal) {
+                        state->room.no_compass = 1;
+                    }
+                    yt2_room_render_stale(&state->room, &state->surface);
+                    state->room.no_compass = no_compass;
+                }
+                if (session_present(state, out, presenter, 0) ==
                     YT2_STATUS_OK) {
-                (*presented)++;
+                    (*presented)++;
+                }
             }
             continue;
         }
@@ -1683,18 +1906,18 @@ static int run_session(play_state *state, yt2_folder_out *out,
     return YT2_STATUS_OK;
 }
 
-/* One in-game menu to an exit (boot mask or explore 0xFE). */
+/* One in-game menu to an exit (boot mask, explore 0xFE, formal 0x5E). */
 static int run_ingamemenu(play_state *state, yt2_folder_out *out,
                     yt2_folder_in *in, yt2_presenter *presenter,
                     play_options *options, unsigned int *presented,
-                    int *running, uint16_t mask, int explore)
+                    int *running, uint16_t mask, int combat, int explore)
 {
     int result;
 
     printf("play: ingamemenu start\n");
     if (yt2_ingamemenu_begin(&state->ingamemenu, &state->save.party, &state->save,
                        state->ingamemenu_slots, &state->pictures, &state->surface,
-                       state->game_dir, mask, 0, explore,
+                       state->game_dir, mask, combat, explore,
                        0u) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot open the in-game menu\n");
         return YT2_STATUS_ERROR;
@@ -1930,7 +2153,7 @@ int main(int argc, char **argv)
                     if (run_ingamemenu(&state, &out, &in, &presenter, &options,
                                  &presented, &running,
                                  state.ingamemenu_scanned ? 0x71u : 0x9Du,
-                                 0) != YT2_STATUS_OK) {
+                                 0, 0) != YT2_STATUS_OK) {
                         break;
                     }
                     ingamemenu_exit = yt2_ingamemenu_result(&state.ingamemenu);
@@ -1939,6 +2162,13 @@ int main(int argc, char **argv)
                         break;
                     }
                     if (ingamemenu_exit != YT2_INGAMEMENU_EXIT_CONTINUE) {
+                        /* NEWGAME-confirmed: B1's title-entry reset
+                           (fn_0D36C) before the title shows. */
+                        if (play_title_reset(&state) != YT2_STATUS_OK) {
+                            fprintf(stderr,
+                                    "yt2p-play: cannot reset the party\n");
+                            break;
+                        }
                         /* The stream tick jumps ahead (never backwards),
                            pacing rebases, and the fade-out darkens the
                            in-game menu, not a stale intro frame. */
@@ -1971,6 +2201,15 @@ int main(int argc, char **argv)
                         break;
                     }
                     explore_flush_save(&state);
+                    state.room.delay = explore_delay;
+                    state.room.delay_context = &state;
+                    if (yt2_combat_init(&state.combat, &state.room,
+                                        &state.save, &state.pictures,
+                                        &state.world, &state.items,
+                                        &state.surface) == YT2_STATUS_OK) {
+                        state.have_combat = 1;
+                        state.combat_sfx_seen = 0u;
+                    }
                     state.session_mode = 3;
                     state.titlemenu_requested = 0;
                     if (run_session(&state, &out, &in, &presenter, &options,
@@ -1984,6 +2223,16 @@ int main(int argc, char **argv)
             if (!running ||
                 (options.frames != 0u && presented >= options.frames)) {
                 break;
+            }
+            if (state.titlemenu_requested) {
+                /* Explore/wipe-menu NEWGAME (fn_0D36C): reset the
+                   party before the title shows, then clear. */
+                state.titlemenu_requested = 0;
+                if (play_title_reset(&state) != YT2_STATUS_OK) {
+                    fprintf(stderr,
+                            "yt2p-play: cannot reset the party\n");
+                    break;
+                }
             }
             play_intro_resync(&bridge, &intro, state.tick);
             yt2_intro_adopt_screen(&intro, state.surface.pixels,

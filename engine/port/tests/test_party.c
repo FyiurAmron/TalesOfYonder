@@ -110,6 +110,9 @@ int test_party(void)
     yt2_write_u16(block + TEST_SLOT_BASE + 0x13A, 542u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x152, 362u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x15C, 0x0880u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x32, 0x5A5Bu);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x36, 0x1112u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0x72, 0x2122u);
 
     CHECK(yt2_party_parse(block, YT2_PARTY_BLOCK_SIZE, &party) ==
           YT2_STATUS_OK);
@@ -123,7 +126,7 @@ int test_party(void)
     CHECK(party.roster[0].portrait_pic == 19u);
     CHECK(party.roster[0].portrait_index == 0u);
     CHECK(party.roster[0].level == 1u);
-    CHECK(party.roster[0].weight == 37u);
+    CHECK(party.roster[0].experience == 0x25000000u);
     CHECK(party.roster[0].current.attributes.strength == 50u);
     CHECK(party.roster[0].current.attributes.charisma == 49u);
     CHECK(party.roster[0].current.combat.hit_points == 4u);
@@ -140,6 +143,9 @@ int test_party(void)
     CHECK(party.roster[0].buffs[1] == 3u);
     CHECK(party.roster[0].icon_sel == 0u);
     CHECK(party.roster[0].overlay == 0u);
+    CHECK(party.roster[0].base[0] == 0x5A5Bu);
+    CHECK(party.roster[0].base[1] == 0x1112u);
+    CHECK(party.roster[0].max_base[0] == 0x2122u);
     CHECK(party.roster[1].name[0] == '\0');
 
     CHECK(strcmp(yt2_class_name(YT2_CLASS_MARKSMAN), "marksman") == 0);
@@ -152,7 +158,7 @@ int test_party(void)
         CHECK(written != NULL);
         if (written != NULL) {
             block[0x10] = 0xA5u;
-            block[TEST_SLOT_BASE + 0x32u] = 0x5Au;
+            block[TEST_SLOT_BASE + 0x100u] = 0x5Au;
             block[TEST_SLOT_BASE + 0x17Cu] = 0x3Cu;
 
             memcpy(written, block, YT2_PARTY_BLOCK_SIZE);
@@ -178,7 +184,7 @@ int test_party(void)
             CHECK(yt2_party_write(written, YT2_PARTY_BLOCK_SIZE, &party) ==
                   YT2_STATUS_OK);
             CHECK(written[0x10] == 0xA5u);
-            CHECK(written[TEST_SLOT_BASE + 0x32u] == 0x5Au);
+            CHECK(written[TEST_SLOT_BASE + 0x100u] == 0x5Au);
             CHECK(written[TEST_SLOT_BASE + 0x17Cu] == 0x3Cu);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1E) == 0u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x22) == 7u);

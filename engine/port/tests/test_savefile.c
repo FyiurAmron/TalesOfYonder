@@ -80,5 +80,42 @@ int test_savefile(void)
         CHECK(yt2_save_write(NULL, "/nonexistent/yt2-save") ==
               YT2_STATUS_ERROR);
     }
+
+    {
+        /* B1's title-entry reset (fn_0D36C/fn_1B9D0): a re-run wipes
+           created characters, restores the WORLD template roster
+           (SQUIRE/DIANA/YENDOR in 5/6/7), and clears the assignment. */
+        const char *world_path = getenv("YT2_WORLD");
+        yt2_world world;
+        yt2_save fresh;
+
+        if (world_path != NULL && world_path[0] != '\0') {
+            CHECK(yt2_world_load(world_path, &world) == YT2_STATUS_OK);
+            CHECK(yt2_save_start(&world, &fresh) == YT2_STATUS_OK);
+            CHECK(fresh.party.assigned[0] == 0u);
+            CHECK(fresh.party.assigned[1] == 0u);
+            CHECK(fresh.party.assigned[2] == 0u);
+            CHECK(fresh.party.assigned[3] == 0u);
+            CHECK(fresh.party.roster[0].name[0] == '\0');
+            CHECK(strcmp(fresh.party.roster[5].name, "SQUIRE") == 0);
+            CHECK(strcmp(fresh.party.roster[6].name, "DIANA") == 0);
+            CHECK(strcmp(fresh.party.roster[7].name, "YENDOR") == 0);
+            /* Simulate a played game: CONAN created + assembled. */
+            strcpy(fresh.party.roster[0].name, "CONAN");
+            fresh.party.assigned[0] = 1u;
+            fresh.party.assigned[1] = 6u;
+            /* NEWGAME reset: free + start again (play_title_reset). */
+            yt2_save_free(&fresh);
+            CHECK(yt2_save_start(&world, &fresh) == YT2_STATUS_OK);
+            CHECK(fresh.party.roster[0].name[0] == '\0');
+            CHECK(fresh.party.assigned[0] == 0u);
+            CHECK(fresh.party.assigned[1] == 0u);
+            CHECK(strcmp(fresh.party.roster[5].name, "SQUIRE") == 0);
+            CHECK(strcmp(fresh.party.roster[6].name, "DIANA") == 0);
+            CHECK(strcmp(fresh.party.roster[7].name, "YENDOR") == 0);
+            yt2_save_free(&fresh);
+            yt2_world_free(&world);
+        }
+    }
     return 0;
 }

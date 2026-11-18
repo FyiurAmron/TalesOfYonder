@@ -30,6 +30,10 @@
  */
 
 #define YT2_ITEM_STRUCT_OFFSET 0x71138u
+/* Second def table (boot sub_02064, 60 records): game ids 700..759. */
+#define YT2_ITEM_STRUCT_OFFSET_B 0x7AF96u
+#define YT2_ITEM_STRUCT_COUNT_A 699u
+#define YT2_ITEM_STRUCT_COUNT_B 60u
 #define YT2_ITEM_PARAM_AF0 0x7C81Eu
 #define YT2_ITEM_PARAM_FA4 0x7DCD2u
 #define YT2_ITEM_PARAM_17D4 0x7D502u
@@ -54,6 +58,12 @@ unsigned int yt2_item_plus_count(const yt2_items *items, unsigned int file,
  * range.  Creation passes id - 1: its item ids are 1-based.
  */
 const uint8_t *yt2_item_record(const yt2_items *items, unsigned int file);
+
+/*
+ * Raw 58-byte def for a 1-based game id (fn_02262's EMS window:
+ * table A ids 1..699, table B 700..759), or NULL out of range.
+ */
+const uint8_t *yt2_item_def(const yt2_items *items, unsigned int id);
 
 /*
  * Parameter row for a record (fn_02262's v_0CE2 copy source), or NULL

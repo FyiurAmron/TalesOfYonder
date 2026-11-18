@@ -40,12 +40,14 @@
 #define YT2_ROOM_BOUND_Y0 0x18u
 #define YT2_ROOM_BOUND_Y1 0x77u
 
-/* IBM set-1 scancodes of the movement keys. */
+/* IBM set-1 scancodes of the movement keys, plus the two mouse-only
+   strafe KeyCodes (arrow buttons 4/6, fn_00FBA loc_01124/loc_0116A). */
 #define YT2_ROOM_SCAN_UP 0x48u
 #define YT2_ROOM_SCAN_DOWN 0x50u
 #define YT2_ROOM_SCAN_LEFT 0x4Bu
 #define YT2_ROOM_SCAN_RIGHT 0x4Du
-#define YT2_ROOM_SCAN_STRAFE 0x73u
+#define YT2_ROOM_SCAN_STRAFE_LEFT 0x73u
+#define YT2_ROOM_SCAN_STRAFE_RIGHT 0x74u
 
 /* Walkable-with-animation terrain range (v_5146/v_5144). */
 #define YT2_ROOM_ANIM_TERRAIN_LO 6u
@@ -93,23 +95,54 @@ typedef struct yt2_room_object {
     uint16_t mode;              /* +0x0A: blitter mode (0xA/0xD) */
     uint16_t flags;             /* +0x0C: bit 0 engaged */
     uint16_t flags2;            /* +0x0E: direction bits */
-    uint16_t counter;           /* +0x10: attack counter */
+    uint16_t hp;                /* +0x10: hit points (spawn: +0x50) */
+    uint16_t target;            /* +0x12: combat target roster slot */
     uint16_t data14;            /* +0x14: E54B payload */
     uint16_t data16;            /* +0x16: E54B payload */
     uint16_t clip;              /* +0x18: blitter clip */
     uint16_t pic2;              /* +0x1A: second layer picture */
     uint16_t step;              /* +0x1C: attack step */
     uint16_t cooldown;          /* +0x1E: attack cooldown */
+    char name[15]; /* +0x32: 14 definition bytes + NUL (byte 13 may
+                    follow the NUL, like the shipped SPIDER) */
     uint16_t anim_base;         /* +0x4C: animation picture base */
-    uint16_t def50;             /* +0x50: definition word */
+    uint16_t hp_max;            /* +0x50: hit points at spawn */
+    uint16_t power;             /* +0x52: save difficulty (v_50DA) */
+    uint16_t attack_base;       /* +0x54: fn_15D89 base */
+    uint16_t attack_mult;       /* +0x5A: fn_15D89 multiplier */
+    uint16_t sfx_hit;           /* +0x5C: melee hit SFX */
+    uint16_t sfx_miss;          /* +0x5E: melee miss SFX */
+    uint16_t fx_base;           /* +0x6C: base effect id */
+    uint16_t fx_special;        /* +0x6E: special effect id (25%) */
+    uint16_t initiative;        /* +0x56: combat queue order */
+    uint16_t defense;           /* +0x58: fn_15D89 ax */
     uint16_t range60;           /* +0x60: engage range (0: always) */
     uint16_t over_dx;           /* +0x68: overlay x adjust */
     uint16_t over_dy;           /* +0x6A: overlay y adjust */
+    uint16_t fx_off;            /* +0x8E: member offset (0x200 arm) */
+    uint16_t fx_cap;            /* +0x90: member cap offset */
     uint8_t shade[6];           /* +0x72: sprite shade bytes */
-    uint8_t dice[16];           /* +0x7E: attack dice parameters */
+    uint8_t loot[16];           /* +0x7E: gold/nuore/ore/xp BCD dwords
+                                   (fn_12EA0: +0 +4 +8 +12 feed v_51B6,
+                                   v_5392, v_5396, v_51B2) */
     uint16_t group;             /* +0x92 bit 0: group 3 else group 2 */
     uint16_t cull;              /* +0x94: visibility range flags */
+    uint16_t vuln_status;       /* +0x96: status immunity bits */
+    uint16_t vuln_resist;       /* +0x98: damage resistance bits */
 } yt2_room_object;
+
+/* Present callback: the engine calls it after every presented frame. */
+typedef int (*yt2_room_present_fn)(void *context);
+
+/*
+ * Animation pacing (fn_DelayTicks): hold the current present for
+ * `ticks` BIOS ticks (~55 ms each). Live sessions sleep; batch
+ * tools and tests leave it NULL (presents fire back-to-back).
+ * Explicit B1 delays port verbatim; implicit holds (flashes,
+ * poses: B1's render-bound pauses) use principled beats, see
+ * the call sites.
+ */
+typedef void (*yt2_room_delay_fn)(unsigned int ticks, void *context);
 
 typedef struct yt2_room {
     const yt2_world *world;
@@ -138,6 +171,7 @@ typedef struct yt2_room {
     /* Sprite shade bytes (v_0C28/v_0C2A) for the v_5060 shade table. */
     uint8_t shade_src[6];
     /* Render-mode and engine flags (v_946F lives in the party). */
+    uint16_t shade_scene; /* v_94F1: time-of-day shade selector */
     uint16_t r9469;
     uint16_t f505e;
     uint16_t f5060;
@@ -172,10 +206,22 @@ typedef struct yt2_room {
     int tick_dirty;
     /* Set when save bytes changed (visited bits); vanilla flushes per cell. */
     int save_dirty;
+    /* fn_13056 death reporting (stamped by combat init, NULL-safe). */
+    void *death_ctx;
+    void (*death_cb)(void *death_ctx, struct yt2_room_object *obj);
+    /* Skip the compass label on render (combat tails never paint it;
+       vanilla only paints it on the sheet/menu/R-key paths). */
+    int no_compass;
+    /* Animation pacing (stamped by the live session, NULL-safe). */
+    yt2_room_delay_fn delay;
+    void *delay_context;
 } yt2_room;
 
-/* Present callback: the engine calls it after every presented frame. */
-typedef int (*yt2_room_present_fn)(void *context);
+/*
+ * Death callback: fn_13056 reports damage-over-time kills through it
+ * (fn_12EA0/fn_13420 live in combat.c with the rest of the death
+ * path; room.c must not include combat.h). Combat stamps it at init.
+ */
 
 /* Returns and clears the save-dirty flag for the caller to flush. */
 int yt2_room_take_save_dirty(yt2_room *room);
@@ -184,6 +230,9 @@ int yt2_room_take_save_dirty(yt2_room *room);
    with the in-game menu, which shows them under its chrome at boot. */
 void yt2_room_paint_portraits(const yt2_party *party,
                               const yt2_pictures *pictures, yt2_surface *dst);
+
+/* Portrait picture origin for assigned slot 0..3 (fn_171AE highlight). */
+int yt2_room_portrait_origin(unsigned int slot, int *x, int *y);
 
 /* fn_0ABEC: recompute the skill means and flags from the party. Runs on
    menu E (like vanilla) and at explore entry. */
@@ -194,10 +243,12 @@ int yt2_room_init(yt2_room *room, const yt2_world *world,
                   yt2_party *party, uint16_t time_word);
 
 /*
- * Fresh embark (menu E + ESC): zero the volatile save chunks, place the
- * party, load the window, stamp doors/objects, render one frame and enable
- * the clock gates.  Presents through `present` (fade out, frames, fade
- * in); `surface` is the 320x200 composition target.
+ * Enter explore (menu E + ESC, or after a camp load): place the party,
+ * load the window, stamp doors/objects, render one frame and enable
+ * the clock gates. Chunks flow through untouched (fresh boots arrive
+ * truncated, loads arrive with the slot's bytes). Presents through
+ * `present` (fade out, frames, fade in); `surface` is the 320x200
+ * composition target.
  */
 int yt2_room_embark(yt2_room *room, yt2_surface *surface,
                     yt2_room_present_fn present, void *context);
@@ -217,6 +268,38 @@ int yt2_room_key(yt2_room *room, yt2_surface *surface, unsigned int scancode,
 
 /* Compose the current explore frame into `surface` (cursor-free). */
 int yt2_room_render(yt2_room *room, yt2_surface *surface);
+
+/*
+ * fn_10E6A: same composition but the 3D pass reuses the retained
+ * view line instead of gathering it (chest open/close repaints).
+ */
+int yt2_room_render_stale(yt2_room *room, yt2_surface *surface);
+
+/*
+ * fn_00F42: what a missile meets at view column `col` (0-50).
+ * 4: monster (returned in `hit`), 3: wall, 2: blocked, 1: soft,
+ * 0: clear. The wall bit has no shipped-view evidence (the combat
+ * matrix crosses an open field), so solid-or-door reads as a wall;
+ * re-pin on a walled map before trusting it.
+ */
+unsigned int yt2_room_column_hit(yt2_room *room, unsigned int col,
+                                 yt2_room_object **hit);
+
+/*
+ * fn_1C0DA's draw half: faces-blit a staged 210x105 missile
+ * canvas at a flight band (view column) with the M7 missile
+ * perspective. Transparent (0xFF skips); unshaded.
+ */
+void yt2_room_draw_missiles(yt2_room *room, yt2_surface *dst,
+                            const uint8_t *canvas, unsigned int band);
+
+/*
+ * fn_13056: the monster turn (damage-over-time ticks, same-axis
+ * approach probes, steps, contact). Damage-over-time kills report
+ * through the stamped death callback; the caller owns the award
+ * tail (fn_1345B side panel) and the re-render.
+ */
+void yt2_room_monster_turn(yt2_room *room);
 
 /*
  * Live palette: palette 0 with the D0h..DFh rotation at the room's phase

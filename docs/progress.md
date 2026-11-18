@@ -2916,3 +2916,396 @@ items now live in `docs/roadmap.md`).
   - **not changed**: no assembly edit (`swreg.asm` untouched; the
     C build re-assembles it clean as part of emission);
     `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-17 - M8/B2 combat rounds (S missiles, formal melee, victory):
+  - **decode**: `S` sets `v_5062` bit `0x100` and runs `fn_0D620`'s main
+    path (per-member missile build from equipment[0], five column bands,
+    `fn_15D89` margin/damage with resistance halving, portrait erase per
+    shot); `A` in explore is a pure skip, in formal combat (`v_5064`
+    bit `0x1000`) the main loop runs `fn_06382` whose member turns take
+    `A` as a raw-HP melee strike; contact moves the record to the
+    engaged row and raises `0x1000`; the death scan zeroes kills,
+    accumulates the loot BCDs, and victory clears `0x1000`, credits XP
+    per survivor and prints the award side panel. Kills credit XP only; the
+    shown gold/ore/nuore never reach the party (vanilla quirk, kept).
+  - **port**: `engine/port/src/combat.c` owns the S round, the formal
+    driver (queue build/sort/target pick, member melee, death scan,
+    victory), the award side panel, the engaged label, the attacker
+    highlight and the compass-bar blank; `room.c` gains the combat
+    object fields (defense/vuln/name/loot/initiative from the
+    def+`0x32` mapping), the column-hit check, the exported monster
+    turn with death callback, `v_94F1` shade selection, engaged
+    no-anim, window flag hygiene and spawn taken-bits; `party.c`
+    gains the weapon-wear counters and drops the bogus `weight` byte
+    (`+0x1B` is XP's top BCD byte, it clobbered XP writes).
+  - **gates**: `tests/port-combat/run.sh` pins five quiescent B1
+    actions (bytes, cumulative SFX, palette hash, masked video hash);
+    `yt2p-combat` replays S/A to quiescence with setup/render-state
+    transplants; live S/S/S/A/A verified structurally
+    (`live-combat: OK`); `port: OK`, `port-input: OK`, `live-explore:
+    OK` stay green.
+  - **known gaps**: monster turns, monster missiles, second engager,
+    the transient S panel and missile sprite, hit flashes, the
+    formal grid/icons/arrows panel (menu slice), wall-column `0x800`
+    semantics, the `0xE54B` table, gold crediting (ask before
+    "fixing"), record persistence across save/load.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-18 - M8/B2 chest search/loot + prompt cancel + live wiring:
+  - **mechanism (emu watchpoints, all temporary and reverted)**:
+    open-chest sprite is `[v_5560]+2` (`sub_07B1D`) aliasing
+    gathered-view column 46/49's object word (4→5, close flips back);
+    the side-panel/compass split across `fn_06EA4` (WorkSeg+EMS iff bit
+    `0x100`, consumes), `fn_06F86` (VGA direct, no flags) and
+    `fn_076AC` (paints iff `v_5060 & 0x80`, sets `0x100`):
+    currency takes present+VGA-clear+receipt (`fn_070EA`), item
+    takes keep the stale compass (`fn_11F83`, gated clear no-ops),
+    quick access drops clear and stay silent (`fn_176EC`, `0x100` consumed),
+    `0x2000` drops refuse with the screen untouched, prompt cancel
+    (`ax` 0) wipes and explore repaints `SOUTH`;
+  - **port**: `engine/port/src/combat.c` gains the chest modal
+    (search/prompt/open/loot/quick access/portraits/close/trap/RNG/BCD), the
+    per-action side-panel-compass flag, the explore-return fresh bit and
+    the cursor save/draw/write/restore dump order (`fn_1A6B5`);
+    `tool_play.c` wires live SPACE (search/prompt/close), N/ESC
+    prompt cancel, modal clicks and the carried-item cursor;
+  - **gates**: `tests/port-combat` pins 16 quiescent B1 actions
+    (bytes, SFX, palette, masked video; the 7 chest stops also match
+    unmasked bit-for-bit); new `tests/port-cancel` forks step 9 and
+    pins the N cancel against B1-CANCEL-esc (exact SFX match proves
+    the silence); live smoke (create/roster/embark/steps/SPACE-miss)
+    reaches explore with no unported warnings;
+  - **known gaps**: monster turns/missiles, melee depth, F-key
+    opener, Y/CR keyboard confirm, explore clicks
+    (arrows/portraits/viewport), modal right-click, floor pickup,
+    pack pickup/swap side panel text (B1 stages it WorkSeg-side, shows at
+    the next present), record persistence across save/load;
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - chest opener prompt ignores F1-F4 (mouse only):
+  - **found**: B1's member picker (fn_0A834, loc_0A9D3) answers
+    F1-F4 (scancodes 3Bh-3Eh) wherever a person is picked; the
+    port routed explore F-keys to "unported" (seen twice in the
+    user's own input log).
+  - **fix**: yt2_combat_fkey (prompt-only today, same pick gates
+    as clicks: unassigned silent, unfit buzzes) wired into the
+    mode-3 dispatch. live_chest now opens with F1; click mapping
+    stays pinned by unit tests.
+  - **gates**: `yt2p-tests: OK`, `live-chest: OK`.
+- 2026-11-18 - M8/B2 explore mouse (arrows, strafes, right search):
+  - **trigger**: `play-port` died at explore start for mouse
+    players: the arrow buttons and viewport clicks were unported,
+    so the chest slice was unreachable outside test tools;
+  - **mechanism**: arrow buttons (`0x6420`) drive `fn_00FBA`
+    through KeyCodes `0x48/0x4B/0x4D/0x73/0x50/0x74`
+    (forward/turns plus the mouse-only strafe pair, lateral
+    vectors verified on all four facings, flash pics
+    `0x14/0x13` through `0x1C/0x1B`); viewport right-click shares
+    `loc_003F3` with SPACE (identical dispatch, proven identical
+    screens); the explore quick access pane repaints the six-line
+    currency trio (rows 96/102/114/120/132/138, SFX 2, stale
+    frame, no gather); `v_505E` bit 8 is persistent sticky
+    (takes/pickups/swaps/drop-backs/currency set, gated clears
+    consume) across close/cancel;
+  - **port**: `room.c` gains the strafe arms;
+    `engine/port/src/combat.c` gains the explore click dispatch
+    (arrows via `room_key`, right-click via the shared search
+    body, formal quick access via the shared handler), the six-line
+    explicit-row side panel, the sticky bit, the no-gather repaint
+    flag, and the S modal guard; `tool_play.c` logs room SFX and
+    syncs the party block on clicks;
+  - **harness notes**: B1 clicks land +(1,8) (cursor min-bound
+    clamp after the park move); the emu eats clicks whose latch
+    lands between `fn_PollInput` tests and its epilogue clear
+    (transfer-per-label interleave) — shifting the click tick
+    fixes it; the matrix seed (11312) differs from B1's pin
+    (`0x1234`), so combat/trap RNG outcomes pin B2-side while
+    the formulas stay identical;
+  - **gates**: `port-combat` (16), `port-cancel` (10), units,
+    `live_explore`, `live_combat`, `port-live` stay green;
+    `live_chest.py` now walks by arrow buttons, round-trips the
+    turns, and searches by right-click (all chained through the
+    taken byte);
+  - **known gaps**: icon row (camp/map/rest UIs), portraits/equip
+    (`fn_16044`), message link, member/item inspect, formal quick access
+    pane pixels, modal right-click, floor pickup, save/load
+    persistence (party block flush timing);
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-19 - M8/B2 live combat parity (panel, purse, flash, blood, clicks, pose):
+  - **trigger**: live play diverged from the reference (explore
+    chrome in formal combat, no button states, silent monster
+    turns, walking in formal). B1's M5 run (3406 frames) plus a
+    parked formal run are the reference; every fix ports the
+    B1/asm routine as written.
+  - **formal panel**: `yt2_combat_repaint` paints `fn_1755C` (quick access
+    grid via the shared chest painter), `fn_1261F` (swords icon,
+    group-8 pic 3) and the `fn_06EA4` formal side panel clear (x
+    240-312, y 86-194, wipes the arrows) ahead of the engaged
+    names. Pixel-exact vs B1's parked formal frame (0 diffs);
+    `tests/port-combat` pins the panel bytes against new
+    `golden/formal-panel.bin` (B1-derived).
+  - **purse**: victory credits the DGROUP purse (`fn_1345B`: gold
+    += [0], ore += [2], nuore += [1]) - the "never credited"
+    quirk note was wrong (the purse never reaches the SAVE, but
+    the grid and currency pane read it live). `setup.txt` purse
+    is 0 now; 35/1/1 derives from play. Currency icons gate on
+    BCD nonzero (`fn_1755C`/`fn_09B42`) in chest and formal
+    alike. Fixed the ore/nuore swap in the `loot`/`award`
+    comments (`fn_12EA0`: +4 goes to nuore, +8 to ore; the
+    spider's 1/1 hid it).
+  - **A verb**: `combat_melee` flashes pressed swords (pic 4),
+    stages `fn_18C1C` injury bits, presents the blood frame,
+    plays the weapon SFX, subtracts HP, and restores pic 3 onto
+    the retained frame (B1's blood lingers past the restore).
+    Fixed the injury overlay mapping (minor 0x12/medium
+    0x13/major 0x20 from `v_5184/86/88`; was rotated) and the
+    missing flags-bit-1 consume in the renderer.
+  - **S round**: flashes pressed campfire (pic 2) when anyone
+    fires; S hits carry no blood in B1 either (verified: no
+    `fn_18C1C` on that path). Missile flight sprites plus
+    per-band presents deferred.
+  - **formal clicks** (`0x669E`): viewport silent (empty cursor),
+    quick access grid handler, icon verbs (swords runs A; sun/disk
+    deferred with the cast/menu slices), side panel target select plus
+    status tags (`0x6606`, `loc_06706` verbatim), bottom strip
+    deferred. Right clicks re-poll. `yt2_combat_click` takes
+    present/context for verb presents. Formal D nests the menu
+    with mask 0x5E plus the combat wide clear (B2's menu already
+    had the combat arm).
+  - **monster turn** (`sub_0690D` minus damage): DoT tick
+    (`fn_12FF7` verbatim), `0xF010` ack, attack pose plus three
+    presents, pic restore; melee damage/SFX/death stay in the
+    effects slice (effect records `0x90AB`, `fn_08172`). TPK
+    loop guards added (unreachable until damage lands). Pose
+    verified via a temporary force-pose probe (reverted):
+    attack sprite renders, 7k-pixel diff vs idle.
+  - **gates**: `port-combat` (16 plus panel bytes),
+    `port-cancel` (10), units, `port-input`, `port-live`,
+    `live_explore`, `live_combat`, `live_chest` green. Live
+    streams show the pressed campfire/swords frames.
+  - **known gaps**: monster melee damage/effects/SFX/member
+    death, S plus monster missile flight, C cast UI, P sheet UI,
+    1-4/portrait inspect, game over, inter-round
+    `fn_13056`/`fn_12A96` in formal;
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-19 - M8/B2 enemy acts plus missile flight (damage, wipe, stones):
+  - **trigger**: live play still diverged (enemy never acted,
+    no missile animation). Both systems ported whole from B1,
+    no deferred holes inside them.
+  - **monster melee**: `sub_0690D` complete (single arm via
+    `sub_06DD9` resolve, `0x1000` multi arm over live members,
+    miss leg, spell-slot wear tail). Damage pipeline verbatim:
+    `sub_06E36` effect roll (25% special, `0x200` flag),
+    `sub_06C82` all three arms (plain margin, `0x200` save vs
+    survival, `0xE00` item-fumble with `fn_0AEE9` die),
+    `fn_08172` applier (SFX-once guard, `0x600`/`0x180`/plain
+    dispatch, portrait blits, double present), `sub_082E2`
+    HP (signed wrap, `0x40` death, highlight clear),
+    `sub_08300` SP, `sub_082BD` purse drain, `sub_0830F`
+    router, `sub_083FA` status save, `sub_0849C` randomizer,
+    `sub_08386` stat arm, `sub_08253`/`fn_0AACC` equipment
+    arm (bonus legs read NULL: the def+2 EMS table has no
+    WORLD mapping yet; B1-identical for legless items).
+    Effect table frozen (DGROUP `0x90AB`, 50 x 12 bytes,
+    boot-identical). Member death flows to portraits, skill
+    flags, and `fn_15FBC` wipe check: death screen (`fn_1B382`:
+    SFX 19, chrome) plus `death_pending`, caller runs menu
+    `0x70` (load/newgame/quit) and re-embarks (B2's menu
+    already bitmasks; load reuses the explore entry).
+  - **weapon fixes** (latent, B1-verified while here):
+    `fn_0AD9D` returns v_50CC codes (S fires on exactly 1,
+    melee swings on nonzero incl. silent fists on 4),
+    breakage stages the `sub_0AF12` fumble effect (was
+    skipped), spell cap `0x14` (was `0x20`), spell slot 3
+    (was 4), signed breakage compare. Also fixed the formal
+    loop serving two members per key (B1 polls between).
+  - **missiles**: S-round flight verbatim (`fn_1C10F` staging
+    onto the 210x105 canvas from group-1 pics 80/81 by the
+    542-547 window, `fn_1C0DA` per-band faces-blit at M7
+    perspective over columns `0x31/0x2E/0x2B/0x28/0x24/0x19`,
+    `fn_1C250` viewport erase, hit-band extra present; B1's
+    band delays are pacing). New `yt2_room_draw_missiles`;
+    B2 snapshots canvas/bg in malloc (EMS-equivalent). Stone
+    bboxes bbox-exact vs B1's flight frames both bands (y
+    exact, x exact, counts within 1%). One deliberate
+    deviation: the pre-flight gather is an icon overpaint
+    (no 3D render), because a B2 gather would advance sprite
+    animation a second time and break quiescence; B1's icon
+    states (pressed one frame, normal through flight) match.
+  - **gates**: units (new: exact-pin monster-damage test
+    incl. multi-round wipe with SFX 19, plus `YT2_COMBAT_SAVE`
+    fixture), `port-combat`, `port-cancel`, `port-input`,
+    `port-live`, `live_combat`, `live_chest` green.
+  - **dialogue map** (next slice, fully scouted): talk cells
+    (`0x1000`, 105 in world, garden cluster incl. governor
+    w2=1 at (165,36)); SPACE opens the portrait+text+keyword
+    modal (B1 frames captured); text is 34-byte lines with
+    `%` block separators/quotes and `~` apostrophes; NPC
+    records live in WORLD file 15 (40-byte header at block
+    w2: counts + block indices; 58-byte keyword records:
+    13-char name + links; 34-byte text lines; traced: 15
+    keywords + 90 lines for NPC 1); dispatch is `fn_07C4A`
+    (type arms `fn_0C05A/0C1E9/0C64F/0BF67/0BCB3/0BC0E`,
+    object arms `fn_0CB2A/0A6BC/0B383/0B30B/0B7A4`:
+    talk/shop/train/special). T key is NPC info (`fn_18709`,
+    side panel text), not the modal. Formal S is the cast
+    pipeline, correctly ignored as a direct key.
+  - **known gaps**: dialogue/NPC engine (modal, pager,
+    keywords, shops/train, effects), monster missile flight
+    (same machinery, bit-8 branch staged), C cast UI, P
+    sheet UI, 1-4/portrait inspect, inter-round
+    `fn_13056`/`fn_12A96` in formal, item bonus legs (def+2
+    EMS table unmapped), transfer/stairs SPACE arms;
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 verb-row restore after nested menu (disk stuck fix):
+  - **found**: menu base paints group-8 pic 10 over the disk cell
+    (B1-faithful, v_0CCC=0x80/v_0CCA=0x0A at (296,67)); after nested
+    menu close B2 ran only stale ticks, which never repaint the verb
+    row, so pic 10 persisted (209/256 indices vs pre-menu, proven in
+    live RETURN-close frames). B1 restores (pre==post modulo cursor).
+  - **fix**: full `yt2_combat_repaint` after nested-menu CONTINUE
+    (matches B1 loc_00614 re-render); post-close disk now 0/256 vs
+    pre-menu. Wipe/main paths already re-render (re-embark/title).
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 S-flinch (enemy wounded pose on shoot, reporter
+  was right; earlier "no S-flinch" note reversed):
+  - **found**: B1 sets bit 1 per S-hit (sub_0DB4D `or 3`) and the
+    first hit gathers + flushes the +9 pose before clearing it
+    (loc_0D814 fn_10E42 + fn_1A6B5); spider hit art differs from
+    idle by 2604 px (group-3 pic 39 vs 30, prior "0px" was wrong).
+    B1's sampler gap drops the ~1 ms no-sound flush, so present-dir
+    never shows it; vanilla holds it ~1 s via SFX busy-delays
+    (sub_0DBAA: back-to-back SFX idle 6 ticks and drop), caught in
+    vanilla frames sn_r1_04-06. B2 skipped the gather entirely.
+  - **fix**: first S-hit repaints (pose) before the bit-1 clear; a
+    per-round busy flag idles 6 ticks and drops back-to-back member
+    SFX (sound-aligned hold); kills re-gather the cleared scene
+    (loc_0D852) so post-kill delays hold it, not the pose.
+  - **goldens**: port-combat/cancel `-sfx.txt` regenerated (busy
+    drops: S#1 `[29,13]`, S#2 `+[29,30]`); state/palette/video
+    unchanged.
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 S-kill blink (regression from the flinch fix):
+  - **found**: the kill repaint shows the cleared scene, but later
+    bands erased from the stale pre-round stash, flashing the dead
+    enemy back for a frame. B1 re-stashes the cleared viewport
+    after the kill gather (fn_1C1D1); B2 stashed once per round.
+  - **fix**: re-stash the viewport after the kill repaint (B1
+    fn_1C1D1 mirror); verified by frame inspection (alive, stones,
+    erased, pose, cleared, stones, loot; monotonic, no
+    resurrection). No committed pixel test: mid-round transients
+    are render-count-timing, suite-masked by design.
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`
+    (quiescent bytes unchanged).
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+WATCHDOG-ENTRY-STAGED-SEPARATELY
+- 2026-11-21 - formal starts a keypress late; arrows walk in formal:
+  - **found**: B1 enters the formal loop on the engaging S/step
+    (border + leading monster turns at once, no extra key) and
+    re-polls arrows in formal (F-keys select, rest is not
+    movement). The port showed no border until the next A and
+    let arrows step/turn in formal.
+  - **fix**: yt2_combat_formal_entry (queue build, leading monster
+    turns, first member waiting) at S-round end and after every
+    step (keys, letters, clicks); session arrows silently
+    ignored in formal. Walk-in now borders on the engaging step
+    (was: never until A); pre/post live contrast confirms both.
+  - **gates**: `yt2p-tests: OK` (entry/prefix/guard pins),
+    `port-combat: OK`, `live-chest: OK` (setup kill now melees
+    to victory: the entry prefix consumes RNG like B1's, so
+    fixed S/A counts went seed-fragile).
+  - **noted, not ported**: ranged-informal flush (marks set, never
+    fired - ranged types only), monster stat derivation, formal
+    C/F-key verb select, modal + second-engager pack flows.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-19 - M8/B2 animation timing plus side panel exclusion (holds, idle, caps):
+  - **trigger**: live play felt broken (invisible button
+    presses, frozen monsters, instant rounds, loot plus enemy
+    name together). Root causes: B2 fired every animation
+    present back-to-back (B1 holds flashes and paces bands
+    over ticks; B1's S takes 1.6 s, B2's took 150 ms), never
+    re-rendered idle sprites, and stacked side panel writers.
+  - **pacing**: new `yt2_room_delay_fn` (B1's `fn_DelayTicks`
+    in BIOS ticks; live sleeps 55 ms/tick, batch NULL-skips
+    so gates stay instant). Explicit delays verbatim:
+    missile 2/band, melee post 3, monster ack 10, silent
+    apply 12. Implicit holds (B1 render-bound) use
+    principled 2-tick beats: campfire/swords flash, blood,
+    pose frames, explore step (blocked paths restore
+    instantly like B1). S rounds now span ~800 ms, melee
+    ~400 ms live. Proven by mock-delay tick counts in the
+    unit tests (S 14, A 13 over the fixtures).
+  - **idle animation**: live explore re-renders stale on
+    tick-dirty in explore (B1's per-poll `fn_10E6A`), so
+    ranged monsters advance phases under the palette;
+    formal and modal idle keep the settled frame
+    (B1-identical: engaged never advance, modals don't
+    tick). Unit test pins the ping-pong advance plus pixel
+    change.
+  - **side panel exclusion** (B1's `0x100` consume; no key-wait
+    exists in the victory tail - the perceived block is
+    post-victory activity plus timing): formal repaints,
+    searches, the currency pane and the award itself now
+    clear the competing pending side panel, so loot, names, search
+    text and currency never paint together. Unit test pins
+    all three exclusions.
+  - **gates**: units (pacing counts, idle phases, exclusion),
+    `port-combat`, `port-cancel`, `port-live`,
+    `live_combat`, `live_chest` green.
+  - **known gaps**: dialogue/NPC engine, monster missile
+    flight, C cast UI, P sheet UI, 1-4/portrait inspect,
+    inter-round formal missiles, bonus legs, transfer/stairs
+    arms, member-turn `0x20` tick abort;
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 melee animation plus sprite scale (fangs, mode):
+  - **trigger**: live formal showed a frozen, distant spider.
+    B1 proof (parked formal with frame dumps): the engaged
+    spider ping-pongs (pic 34 -> 33 over 15 idle ticks,
+    fangs/mandibles region) through the shared `sub_11078`
+    path, and spawns with mode `0x0A` (large close-up).
+  - **animation**: removed the engaged pic save/restore (it
+    froze B1's `fn_1596C` ping-pong); live formal idle now
+    re-renders stale every 3rd rotation-dirty (B1-observed
+    ~15 ticks vs ranged ~5). Live formal runs show 6 phases
+    across pure idle (no verbs). Fixed the idle path
+    painting the explore plaque plus compass over the formal
+    panel (plaque arm now tests `f5064`, compass suppressed
+    in formal idle).
+  - **scale**: `fn_12D72` sets mode `0x0A` when group bit 0
+    is set (B2 had it inverted: live spiders spawned
+    `0x0D`/small while the matrix transplant masked it with
+    `0x0A`). Live formal now shows B1's large close-up.
+  - **gates**: engaged anim phase is render-count timing, so
+    actions 2-3 mask the B1-observed motion union (x 37-202,
+    y 29-121; HP/pos/flags still pin via state, panel via
+    `formal-panel.bin`); `02/03-video.sha` recomputed under
+    the wider mask in both combat gates (sound: B2==B1
+    outside it, proven by the passing regions). Units,
+    `port-combat`, `port-cancel`, `port-input`, `port-live`,
+    `live_combat`, `live_chest` green (`live_combat` flaked
+    once on RNG knife's-edge, re-run passes).
+  - **known gaps**: dialogue/NPC engine, monster missile
+    flight, C cast UI, P sheet UI, 1-4/portrait inspect,
+    inter-round formal missiles, bonus legs, transfer/stairs
+    arms, member-turn `0x20` tick abort;
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 new-game reset + map shortcut + loot compass (vanilla-observed):
+  - **new-game (B1 fn_0D36C/fn_1B9D0)**: title entry reloads the WORLD
+    roster template (created chars wiped, SQUIRE/DIANA/YENDOR restored),
+    clears the assignment, and rewrites CURGAME fresh; B2's boot already
+    did this but menu EXIT_MENU (NEWGAME) never re-ran it, so created
+    parties persisted (B1 probed: post-NEWGAME DGROUP has assigned 0,
+    slot 0 zeroed, slots 5-7 defaults). B2 now re-runs `yt2_save_start`
+    on both EXIT_MENU paths (main menu + explore/wipe unwind); unit pins
+    re-run (CONAN wiped, SQUIRE back, assigned 0), live probe verifies
+    the trigger plus fresh CURGAME bytes.

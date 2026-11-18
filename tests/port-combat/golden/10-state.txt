@@ -1,0 +1,92 @@
+cursor=24,170 shape=0000
+seed=C397
+f5060=0600
+f5062=0644
+f5064=0001
+f20id=0
+f20hp=0
+f20pos=0,0
+eng1id=0
+eng1hp=0
+slot1xp=00000025
+slot6xp=00000025
+slot7xp=00000025
+slot8xp=00000025
+pos=161,34 facing=4000
+purse=00000035 00000001 00000001
+chest open=1 prompt=0 idx=27 taken=00 opener=1 cursor=0000 carry=0,0,0 messages=5 saveidx=3 inst=2
+loot0 id=1 count=200
+loot1 id=6 count=0
+loot2 id=424 count=0
+loot3 id=312 count=0
+loot4 id=542 count=0
+loot5 id=8 count=15
+loot6 id=0 count=0
+loot7 id=0 count=0
+stash0 id=0 count=0
+stash1 id=0 count=0
+stash2 id=0 count=0
+stash3 id=0 count=0
+stash4 id=0 count=0
+stash5 id=0 count=0
+gear0 hp=4/13 mp=0 status=0000 carried=19
+pack0_0 id=0 count=0
+pack0_1 id=0 count=0
+pack0_2 id=0 count=0
+pack0_3 id=0 count=0
+pack0_4 id=0 count=0
+pack0_5 id=0 count=0
+pack0_6 id=0 count=0
+pack0_7 id=0 count=0
+equip0_0 id=542 count=0
+equip0_1 id=0 count=0
+equip0_2 id=412 count=0
+equip0_3 id=0 count=0
+equip0_4 id=0 count=0
+equip0_5 id=0 count=0
+gear1 hp=15/15 mp=0 status=0000 carried=71
+pack1_0 id=0 count=0
+pack1_1 id=0 count=0
+pack1_2 id=0 count=0
+pack1_3 id=0 count=0
+pack1_4 id=0 count=0
+pack1_5 id=0 count=0
+pack1_6 id=0 count=0
+pack1_7 id=0 count=0
+equip1_0 id=542 count=0
+equip1_1 id=0 count=0
+equip1_2 id=418 count=0
+equip1_3 id=0 count=0
+equip1_4 id=0 count=0
+equip1_5 id=0 count=0
+gear2 hp=12/12 mp=12 status=0020 carried=71
+pack2_0 id=0 count=0
+pack2_1 id=0 count=0
+pack2_2 id=0 count=0
+pack2_3 id=0 count=0
+pack2_4 id=0 count=0
+pack2_5 id=0 count=0
+pack2_6 id=0 count=0
+pack2_7 id=0 count=0
+equip2_0 id=542 count=0
+equip2_1 id=0 count=0
+equip2_2 id=418 count=0
+equip2_3 id=0 count=0
+equip2_4 id=0 count=0
+equip2_5 id=0 count=0
+gear3 hp=12/12 mp=14 status=0004 carried=69
+pack3_0 id=0 count=0
+pack3_1 id=0 count=0
+pack3_2 id=0 count=0
+pack3_3 id=0 count=0
+pack3_4 id=0 count=0
+pack3_5 id=0 count=0
+pack3_6 id=0 count=0
+pack3_7 id=0 count=0
+equip3_0 id=542 count=0
+equip3_1 id=6 count=1
+equip3_2 id=424 count=0
+equip3_3 id=0 count=0
+equip3_4 id=0 count=0
+equip3_5 id=0 count=0
+chestfile taken=00 unlock=10

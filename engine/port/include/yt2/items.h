@@ -70,6 +70,11 @@ int yt2_items_category_name(unsigned int category, char *buffer, size_t size);
 int yt2_item_name(const yt2_items *items, unsigned int index, char *buffer,
                   size_t size);
 
+/* One raw name field (B1's fn_11F83 paints fields, never the join),
+   right-trimmed; empty fields come back as "". */
+int yt2_item_name_field(const yt2_items *items, unsigned int index,
+                        unsigned int field, char *buffer, size_t size);
+
 /* Ranked item name within a category, or YT2_STATUS_ERROR out of range. */
 int yt2_items_detail_name(const yt2_items *items, unsigned int category,
                           unsigned int rank, char *buffer, size_t size);

@@ -105,7 +105,8 @@ int main(int argc, char **argv)
                index, character->name, (unsigned)character->class_id,
                (unsigned)character->sex, (unsigned)character->portrait_pic,
                (unsigned)character->portrait_index,
-               (unsigned)character->level, (unsigned)character->weight,
+               (unsigned)character->level,
+               (unsigned)((character->experience >> 24) & 0xFFu),
                (unsigned)character->status);
         print_stats("current", &character->current);
         print_stats("maximum", &character->maximum);

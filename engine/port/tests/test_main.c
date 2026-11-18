@@ -3,6 +3,7 @@
 int test_failures;
 
 int test_boot(void);
+int test_combat(void);
 int test_ingamemenu(void);
 int test_catalog(void);
 int test_classes(void);
@@ -31,6 +32,7 @@ int test_room(void);
 int main(void)
 {
     test_boot();
+    test_combat();
     test_ingamemenu();
     test_catalog();
     test_classes();

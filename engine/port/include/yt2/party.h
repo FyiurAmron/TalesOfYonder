@@ -105,9 +105,15 @@ typedef struct yt2_character {
     uint16_t portrait_pic;   /* +0x12: group-7 picture id (19 + index) */
     uint16_t portrait_index; /* +0x14: 0..17, even male, odd female */
     uint16_t level;          /* +0x16: 1 for a newly created character */
-    uint32_t experience;     /* +0x18: shown hex as EMP (fn_09C46) */
-    uint8_t weight;
+    uint32_t experience;     /* +0x18: 4-byte BCD (fn_09ADC); byte +0x1B
+                                is its top byte, not a weight */
     uint16_t status;
+    /* Base combat stats (+0x32/+0x36/+0x34/+0x38/+0x3A, in current
+       field order); fn_0B3D2 resets current from these plus equipment.
+       [3]/[4] derive from strength/dexterity (fn_0AB61). */
+    uint16_t base[5];
+    /* Maximum bases (+0x72/+0x76/+0x74/+0x78/+0x7A, same order). */
+    uint16_t max_base[5];
     uint16_t ready;                 /* +0x1E: ready cell glyph when set */
     uint16_t buffs[YT2_BUFF_SLOTS]; /* +0x20: buff counters, icon 0xE if any */
     uint16_t spellbook[YT2_SPELLBOOK_WORDS]; /* +0xCA bit legs */
@@ -120,6 +126,11 @@ typedef struct yt2_character {
     uint16_t effects[YT2_EFFECT_SLOTS];
     uint16_t flags;
     uint16_t overlay; /* +0x15E: 0x8000 paints the skull overlay */
+    /* Weapon wear counters (fn_0AD9D): +0xBE missile (cap 0x78),
+       +0xC0 melee (cap 0x50), +0xC2 spell (cap 0x14).  Past the cap the
+       weapon rolls breakage (rand 1000 under the param-row threshold
+       breaks it: counter reset, the attack fumbles). */
+    uint16_t wear[3];
 } yt2_character;
 
 typedef struct yt2_party {
@@ -152,6 +163,13 @@ typedef struct yt2_party {
     uint16_t assigned[YT2_PARTY_ASSIGNED_MAX];
     unsigned int roster_count; /* non-empty roster slots */
     yt2_character roster[YT2_ROSTER_SLOTS];
+    /* Party purse (DGROUP 0x9503/0x9507/0x950B): 4-byte BCD each,
+       credited by chest takes (fn_09B02). Vanilla keeps it in
+       DGROUP only; no CURGAME chunk holds it, so parse zeroes it
+       and write leaves it alone. Embark/setup sets the purse. */
+    uint8_t gold[4];
+    uint8_t ore[4];
+    uint8_t nuore[4];
 } yt2_party;
 
 const char *yt2_class_name(yt2_class class_id);
@@ -159,6 +177,9 @@ const char *yt2_sex_name(yt2_sex sex);
 
 /* Parse the first 5000-byte block of CURGAME / SAVEGAMEn. */
 int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party);
+
+/* Reparse one 0x1F4 roster slot (bonus application writes raw). */
+void yt2_party_parse_character(const uint8_t *slot, yt2_character *character);
 
 /*
  * Write the live party state back over an existing party block.

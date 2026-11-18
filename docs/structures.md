@@ -93,9 +93,9 @@ a second structure.
 | `012` | `portrait_pic` | group-7 picture id (`0x13` + index) |
 | `014` | `portrait_index` | 0..17, even male, odd female |
 | `016` | `level` | 1 for a newly created character |
-| `018` | `experience` | u32, shown hex as EMP (`fn_09C46`) |
-| `01A` | `field_1a` | byte |
-| `01B` | `weight` | 37 in most shipped slots, 0 for one recruit |
+| `018` | `experience` | 4-byte BCD (`fn_09ADC` adds kills into it) |
+| `01A` | `field_1a` | byte (XP byte 2) |
+| `01B` | XP top byte | was misread as `weight` (37 in most shipped slots); it is BCD byte 3, writing a weight here clobbers XP |
 | `01C` | `status` | condition/roster/spell-school flags |
 | `01E..031` | reserved | |
 | `032..03B` | hidden bases | current-side combat bases (`+32h` ranged ACC, `+34h` melee ACC, `+36h` ranged DAM, `+38h` melee DAM, `+3Ah` ABS; `fn_0B3D2` copies them over, zero in creation) |
@@ -496,6 +496,40 @@ from live state, then copies `CURGAME` over the slot file. Loading
 copies every chunk back except objects (explored bits stay) and applies
 the sound-state fixups. The boot scan (`sub_01D84`) fills the slot list
 from the files' first 25 bytes. B2 matches all of it byte for byte.
+
+### Chest search and loot (`fn_0795E`, `fn_073E3`)
+
+`SPACE` search picks `v_5560` (`0x6ED6` faced cell, `0x6EEE` party
+cell) and shows prompt 5/6 (`fn_0A834`, VGA-direct over the `fn_06F86`
+wipe); `N`/`ESC` cancel (`ax` 0, wipe, explore repaints `SOUTH`), a
+portrait click picks the opener. Open (`sub_07B1D`) plays SFX 6 and
+`++[v_5560]+2`, aliasing gathered-view column 46/49's object word, so
+the chest picture flips 4→5 while the modal is up (close `--` flips
+it back). The modal dispatches regions `0x5ABC` (loot `0x63CE`,
+quick access `0x6372`, portraits `0x61C8`). Currency takes (`fn_070EA`)
+present, VGA-clear and paint the 2-line receipt; item takes repaint
+the loot and run `fn_11F83` (gated clear no-ops, name paints, stale
+compass stays). Quick access drops (`fn_176EC`) refuse `0x2000` items (buzz,
+screen untouched) else clear (consuming bit `0x100`) and stay silent;
+portrait drops (`fn_08D3F`) and loot drop-backs (`loc_072E7`, weight
+and count checked) match, the drop-back repainting the name. Side panel
+writes split across `fn_06EA4` (WorkSeg+EMS iff bit `0x100`,
+consumes), `fn_06F86` (VGA direct, no flags) and `fn_076AC` (paints
+iff `v_5060 & 0x80`, sets `0x100`); the compass repaints only in
+explore (`fn_11754`, iff `v_946F & 0x400`). Taken masks and unlock
+bits persist per chest index in the save.
+
+Explore mouse shares the `0x5ABC` regions: the arrow buttons
+(`0x6420`) drive `fn_00FBA` through KeyCodes `0x48/0x4B/0x4D`
+(forward/turns) plus the mouse-only strafes `0x73/0x74`
+(lateral step, flash pics `0x18/0x17` and `0x1C/0x1B`), with
+the anim-terrain double step in the shared tail; viewport
+right-click runs the same `loc_003F3` search as SPACE
+(party cell, else faced cell); the quick access pane repaints the
+currency trio (`fn_1765A`: labels plus purse BCDs at rows
+96/102/114/120/132/138, SFX 2, no gather). Viewport left
+with an empty cursor does nothing; icon row, portraits and
+the message link open their own UIs.
 
 ## Clue-book maps (F1)
 

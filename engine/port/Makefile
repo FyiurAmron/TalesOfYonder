@@ -12,7 +12,7 @@ CFLAGS ?= -std=c11 -O2 -g -Wall -Wextra -Wpedantic -Werror
 CPPFLAGS += -Iinclude
 
 LIB_SOURCES := src/boot.c src/ingamemenu.c src/catalog.c src/classes.c \
-               src/clock.c \
+               src/clock.c src/combat.c \
                src/cluebook.c src/create.c src/cursor.c src/file.c src/intro.c \
                src/items.c \
                src/lists.c src/mapview.c src/titlemenu.c src/monster_detail.c \
@@ -25,7 +25,7 @@ LIB_SOURCES := src/boot.c src/ingamemenu.c src/catalog.c src/classes.c \
                src/transport_folder.c src/walkthrough.c src/world.c
 LIB_OBJECTS := $(patsubst src/%.c,$(BUILD)/obj/src/%.o,$(LIB_SOURCES))
 TEST_SOURCES := tests/test_boot.c tests/test_ingamemenu.c tests/test_catalog.c \
-                tests/test_classes.c \
+                tests/test_classes.c tests/test_combat.c \
                 tests/test_cluebook.c tests/test_create.c tests/test_cursor.c \
                 tests/test_intro.c tests/test_items.c \
                 tests/test_main.c tests/test_mapview.c \
@@ -40,7 +40,7 @@ TEST_OBJECTS := $(patsubst tests/%.c,$(BUILD)/obj/tests/%.o,$(TEST_SOURCES))
 .PHONY: all test clean
 
 all: $(BUILD)/yt2p-boot $(BUILD)/yt2p-ingamemenu $(BUILD)/yt2p-catalog \
-     $(BUILD)/yt2p-classes \
+     $(BUILD)/yt2p-classes $(BUILD)/yt2p-combat \
      $(BUILD)/yt2p-cluebook $(BUILD)/yt2p-info $(BUILD)/yt2p-intro \
      $(BUILD)/yt2p-items \
      $(BUILD)/yt2p-mapview $(BUILD)/yt2p-monsters $(BUILD)/yt2p-pictures \
@@ -76,6 +76,10 @@ $(BUILD)/yt2p-boot: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_boot.o
 	$(CC) $(CFLAGS) $^ -o $@
 
 $(BUILD)/yt2p-ingamemenu: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_ingamemenu.o
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $^ -o $@
+
+$(BUILD)/yt2p-combat: $(LIB_OBJECTS) $(BUILD)/obj/src/tool_combat.o
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $^ -o $@
 
