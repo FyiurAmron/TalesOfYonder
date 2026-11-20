@@ -275,6 +275,16 @@ int yt2_room_render(yt2_room *room, yt2_surface *surface);
  */
 int yt2_room_render_stale(yt2_room *room, yt2_surface *surface);
 
+/* Modal-close restore (menu, map): B1's gather leaves portraits (and
+   the current-member border) retained, so skip their repaint. */
+int yt2_room_render_keep_portraits(yt2_room *room, yt2_surface *surface);
+
+/* Idle-formal tick (fn_10E6A combat branch via fn_1755C): the 3D pass
+   reuses the retained view line and portraits stay retained too, so
+   the current-member border survives between turns. */
+int yt2_room_render_stale_keep_portraits(yt2_room *room,
+                                         yt2_surface *surface);
+
 /*
  * fn_00F42: what a missile meets at view column `col` (0-50).
  * 4: monster (returned in `hit`), 3: wall, 2: blocked, 1: soft,

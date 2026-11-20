@@ -1386,7 +1386,8 @@ static void play_map_open(play_state *state, unsigned int map)
         state->legend_line = saved_line;
         state->legend_map = saved_map;
         if (state->have_combat) {
-            yt2_combat_repaint(&state->combat, explore_present, state);
+            yt2_combat_repaint_keep_portraits(&state->combat,
+                                              explore_present, state);
         }
         return;
     }
@@ -1400,7 +1401,8 @@ static void play_map_close(play_state *state)
     state->map_open = 0;
     state->legend_line = -1;
     if (state->have_combat) {
-        yt2_combat_repaint(&state->combat, explore_present, state);
+        yt2_combat_repaint_keep_portraits(&state->combat,
+                                          explore_present, state);
     }
     printf("play: map done\n");
 }
@@ -1608,6 +1610,15 @@ static void session_click(play_state *state, int x, int y, int right,
             if (state->room.last_sfx != 0u) {
                 printf("play: audio %u sfx %u\n", state->tick,
                        state->room.last_sfx);
+            }
+            if (state->combat.menu_requested) {
+                /* Disk verb: nest the menu like D (no repaint). */
+                state->combat.menu_requested = 0;
+                state->ingametitlemenu_requested = 1;
+                state->ingamemenu_formal = state->combat.menu_formal;
+                state->combat.menu_formal = 0;
+                session_drain_sfx(state);
+                return;
             }
             /* Member packs change under portrait drops; sync the
                block like the key path before the file flush. */
@@ -1893,9 +1904,11 @@ static int run_session(play_state *state, yt2_folder_out *out,
                 /* CONTINUE: B1 re-renders on menu close (loc_00614
                    path); without it the menu base keeps group-8 pic
                    10 over the disk cell and stale ticks never
-                   restore the icon row. */
-                yt2_combat_repaint(&state->combat, explore_present,
-                                   state);
+                   restore the icon row. Portraits stay retained
+                   (B1's gather never repaints them). */
+                yt2_combat_repaint_keep_portraits(&state->combat,
+                                                  explore_present,
+                                                  state);
             }
         }
         if (state->have_combat && state->combat.death_pending &&
@@ -1979,11 +1992,17 @@ static int run_session(play_state *state, yt2_folder_out *out,
                     int no_compass = state->room.no_compass;
 
                     /* Formal idle keeps panel and side panel (no plaque
-                       repaint, no compass over the names). */
+                       repaint, no compass over the names); portraits
+                       stay retained too (B1's fn_10E6A never paints
+                       them), so the member border survives ticks. */
                     if (idle_formal) {
                         state->room.no_compass = 1;
+                        yt2_room_render_stale_keep_portraits(
+                            &state->room, &state->surface);
+                    } else {
+                        yt2_room_render_stale(&state->room,
+                                              &state->surface);
                     }
-                    yt2_room_render_stale(&state->room, &state->surface);
                     state->room.no_compass = no_compass;
                 }
                 if (session_present(state, out, presenter, 0) ==
@@ -2023,6 +2042,13 @@ static int run_ingamemenu(play_state *state, yt2_folder_out *out,
                        0u) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot open the in-game menu\n");
         return YT2_STATUS_ERROR;
+    }
+    if (explore && state->have_combat) {
+        /* fn_0EBD6 opens with fn_06EA4: the side panels wipe, so a pending
+           award or message never paints under the menu. Title menus
+           (fn_0D36C) do not wipe. */
+        yt2_combat_menu_open(&state->combat);
+        yt2_ingamemenu_wipe_side_panels(&state->ingamemenu);
     }
     state->session_mode = 4;
     state->ingamemenu_sfx_seen = 0u;

@@ -209,6 +209,11 @@ typedef struct yt2_combat {
        screen is painted, and the caller runs menu 0x70 + load.
        Cleared when the caller takes it. */
     int death_pending;
+    /* Menu requested by a verb click (sun/disk, explore/formal):
+       the caller nests the in-game menu (mask 0xFE explore,
+       0x5E formal per menu_formal). Cleared when taken. */
+    int menu_requested;
+    int menu_formal;
     /* Save power (v_555C): monster +0x52, spell id, or event
        param feeding fn_17D2C as the difficulty. */
     uint16_t save_power;
@@ -259,6 +264,12 @@ void yt2_combat_formal_entry(yt2_combat *combat,
 int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
                        void *context);
 
+/* Modal-close restore: same, but portraits (and the border) stay
+   retained like B1's gather. */
+int yt2_combat_repaint_keep_portraits(yt2_combat *combat,
+                                      yt2_room_present_fn present,
+                                      void *context);
+
 /* Explore/formal click (arrows, verbs, targets, viewport, chest UI).
    Formal verbs present through the callback like keys do. */
 int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
@@ -267,5 +278,9 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
 /* SFX log drain for the gate. */
 unsigned int yt2_combat_sfx_count(const yt2_combat *combat);
 unsigned int yt2_combat_sfx_at(const yt2_combat *combat, unsigned int index);
+
+/* fn_0EBD6 opens the nested menu with fn_06EA4: consume the side panels so a
+   pending award or message never paints under the menu. */
+void yt2_combat_menu_open(yt2_combat *combat);
 
 #endif /* YT2_COMBAT_H */

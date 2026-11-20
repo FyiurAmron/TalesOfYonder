@@ -102,6 +102,138 @@ static void test_formal_free(test_formal *fix)
     yt2_save_free(&fix->save);
 }
 
+#define NAME_CAP 64u
+
+typedef struct test_name_capture {
+    test_formal *fix;
+    unsigned int ink[NAME_CAP];
+    unsigned int count;
+} test_name_capture;
+
+/* Present hook: non-background pixels on engaged row 2 (y 123-128). */
+static int test_present_name(void *context)
+{
+    test_name_capture *cap = (test_name_capture *)context;
+    unsigned int ink = 0u;
+    unsigned int x;
+    unsigned int y;
+
+    if (cap == NULL || cap->fix == NULL || cap->count >= NAME_CAP) {
+        return YT2_STATUS_OK;
+    }
+    for (x = 241u; x < 313u; x++) {
+        for (y = 123u; y < 129u; y++) {
+            uint8_t p = cap->fix->surface.pixels[(size_t)y *
+                        cap->fix->surface.stride + x];
+
+            if (p != 0u && p != 4u) {
+                ink++;
+            }
+        }
+    }
+    cap->ink[cap->count++] = ink;
+    return YT2_STATUS_OK;
+}
+
+#define HIGHLIGHT_CAP 64u
+
+typedef struct highlight_capture {
+    test_formal *fix;
+    unsigned int borders[HIGHLIGHT_CAP];
+    unsigned int currents[HIGHLIGHT_CAP];
+    unsigned int allborders[HIGHLIGHT_CAP][4];
+    unsigned int count;
+    /* Skip probe: victim attacker index + violation latch. */
+    unsigned int victim;
+    int handed_while_dead;
+} highlight_capture;
+
+/* Present hook: color-219 pixels on the current member's 32x32 border. */
+static int test_present_highlight(void *context)
+{
+    highlight_capture *cap = (highlight_capture *)context;
+    int x = 0;
+    int y = 0;
+    unsigned int b = 0u;
+    unsigned int i;
+
+    if (cap == NULL || cap->fix == NULL || cap->count >= HIGHLIGHT_CAP) {
+        return YT2_STATUS_OK;
+    }
+    if (yt2_room_portrait_origin(cap->fix->combat.current, &x, &y) ==
+        YT2_STATUS_OK) {
+        for (i = 0u; i < 32u; i++) {
+            if ((unsigned int)(x + i) >= cap->fix->surface.width ||
+                (unsigned int)(y + i) >= cap->fix->surface.height) {
+                continue;
+            }
+            if (cap->fix->surface.pixels[(size_t)y *
+                        cap->fix->surface.stride + (x + i)] == 219u) {
+                b++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(y + 31) *
+                        cap->fix->surface.stride + (x + i)] == 219u) {
+                b++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(y + i) *
+                        cap->fix->surface.stride + x] == 219u) {
+                b++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(y + i) *
+                        cap->fix->surface.stride + (x + 31)] == 219u) {
+                b++;
+            }
+        }
+    }
+    cap->borders[cap->count] = b;
+    cap->currents[cap->count] = cap->fix->combat.current;
+    for (unsigned int s = 0u; s < 4u; s++) {
+        int sx = 0;
+        int sy = 0;
+        unsigned int sb = 0u;
+        unsigned int j;
+
+        if (yt2_room_portrait_origin(s, &sx, &sy) != YT2_STATUS_OK) {
+            cap->allborders[cap->count][s] = 0u;
+            continue;
+        }
+        for (j = 0u; j < 32u; j++) {
+            if ((unsigned int)(sx + j) >= cap->fix->surface.width ||
+                (unsigned int)(sy + j) >= cap->fix->surface.height) {
+                continue;
+            }
+            if (cap->fix->surface.pixels[(size_t)sy *
+                        cap->fix->surface.stride + (sx + j)] == 219u) {
+                sb++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(sy + 31) *
+                        cap->fix->surface.stride + (sx + j)] == 219u) {
+                sb++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(sy + j) *
+                        cap->fix->surface.stride + sx] == 219u) {
+                sb++;
+            }
+            if (cap->fix->surface.pixels[(size_t)(sy + j) *
+                        cap->fix->surface.stride + (sx + 31)] == 219u) {
+                sb++;
+            }
+        }
+        cap->allborders[cap->count][s] = sb;
+    }
+    cap->count++;
+    if (cap->fix->combat.current == cap->victim) {
+        yt2_party *party = cap->fix->room.party;
+        unsigned int slot = party->assigned[cap->victim];
+
+        if (slot != 0u && slot <= YT2_ROSTER_SLOTS &&
+            (party->roster[slot - 1u].status & 0x1C40u) != 0u) {
+            cap->handed_while_dead = 1;
+        }
+    }
+    return YT2_STATUS_OK;
+}
+
 int test_combat(void)
 {
     /* Init rejects missing state; behavior lands with the rounds. */
@@ -240,8 +372,45 @@ int test_combat(void)
         /* Seed 11312, first key: member 1 hits (dagger 38, spider
            2000 -> 1998), the spider poses and single-hits its
            queued target member 4 (32 + effect 13, HP 12 -> 9).
-           Ten presents: melee 3, pose 4, apply 2, final 1. */
-        CHECK(fix.frames == 10u);
+           Twelve presents: next 1, melee 3, pose 4, apply 2,
+           next 1, final 1. */
+        CHECK(fix.frames == 12u);
+        /* The next-hero call repaints the current-member border: the
+           last two presents (next, final) both carry the full 128px
+           border. Without the restore the damage applier's fresh
+           portraits wipe it and only the final has it. */
+        {
+            test_formal probe;
+            highlight_capture cap;
+
+            if (!test_formal_init(&probe)) {
+                return 0;
+            }
+            memset(&cap, 0, sizeof(cap));
+            cap.fix = &probe;
+            CHECK(yt2_combat_key(&probe.combat, 'A',
+                                 test_present_highlight,
+                                 &cap) == YT2_STATUS_OK);
+            CHECK(cap.count >= 2u);
+            CHECK(cap.borders[cap.count - 1u] == 128u);
+            CHECK(cap.borders[cap.count - 2u] == 128u);
+            /* Round end (formal, queue exhausted): B1 waits on the
+               last next-hero frame, so the border survives; a bare
+               tail repaint would wipe it. */
+            for (unsigned int round = 0u; round < 8u; round++) {
+                if ((probe.room.f5064 & 0x1000u) != 0u &&
+                    probe.combat.queue_count == 0u) {
+                    break;
+                }
+                CHECK(yt2_combat_key(&probe.combat, 'A',
+                                     test_present_highlight,
+                                     &cap) == YT2_STATUS_OK);
+            }
+            CHECK((probe.room.f5064 & 0x1000u) != 0u);
+            CHECK(probe.combat.queue_count == 0u);
+            CHECK(cap.borders[cap.count - 1u] == 128u);
+            test_formal_free(&probe);
+        }
         CHECK(yt2_combat_sfx_count(&fix.combat) == 3u);
         CHECK(yt2_combat_sfx_at(&fix.combat, 0u) == 38u);
         CHECK(yt2_combat_sfx_at(&fix.combat, 1u) == 32u);
@@ -259,6 +428,42 @@ int test_combat(void)
                 CHECK(hp == want[i]);
             }
         }
+        test_formal_free(&fix);
+    }
+    /* Dead members never take turns (sub_06493 skips them): the
+       spider (initiative first) kills attacker 3, and the present
+       hook latches if attacker 3 is ever current while dead. */
+    {
+        test_formal fix;
+        highlight_capture cap;
+        yt2_character *victim;
+        unsigned int slot;
+        unsigned int i;
+        uint16_t spider_hp;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.near_objects[1].initiative = 200u;
+        slot = fix.room.party->assigned[3];
+        CHECK(slot != 0u && slot <= YT2_ROSTER_SLOTS);
+        victim = &fix.room.party->roster[slot - 1u];
+        victim->current.combat.hit_points = 1u;
+        spider_hp = fix.room.near_objects[1].hp;
+        memset(&cap, 0, sizeof(cap));
+        cap.fix = &fix;
+        cap.victim = 3u;
+        for (i = 0u; i < 6u; i++) {
+            CHECK(yt2_combat_key(&fix.combat, 'A',
+                                 test_present_highlight,
+                                 &cap) == YT2_STATUS_OK);
+            if (cap.count >= HIGHLIGHT_CAP) {
+                break;
+            }
+        }
+        CHECK((victim->status & 0x1C40u) != 0u);
+        CHECK(fix.room.near_objects[1].hp < spider_hp);
+        CHECK(cap.handed_while_dead == 0);
         test_formal_free(&fix);
     }
     /* Wipe: with every member at 1 HP the spider kills its
@@ -414,6 +619,222 @@ int test_combat(void)
         CHECK(yt2_combat_key(&fix.combat, 'A', test_present_count,
                              &fix.frames) == YT2_STATUS_OK);
         CHECK(slept == (2u + 2u + 3u) + 3u * 2u);
+        test_formal_free(&fix);
+    }
+    /* Explore campfire click (246,75): the S round fires (29 first). */
+    {
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        CHECK(yt2_combat_click(&fix.combat, 246, 75, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(yt2_combat_sfx_count(&fix.combat) >= 1u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 0u) == 29u);
+        test_formal_free(&fix);
+    }
+    /* Explore left-arrow click (253,169): turns (facing moves). */
+    {
+        test_formal fix;
+        uint16_t f0;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        f0 = fix.save.party.facing;
+        CHECK(yt2_combat_click(&fix.combat, 253, 169, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(fix.save.party.facing != f0);
+        test_formal_free(&fix);
+    }
+    /* Explore disk click: menu requested (formal 0). Spell cast is
+       deferred (silent). */
+    {
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        CHECK(yt2_combat_click(&fix.combat, 303, 75, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(fix.combat.menu_requested == 1);
+        CHECK(fix.combat.menu_formal == 0);
+        fix.combat.menu_requested = 0;
+        CHECK(yt2_combat_click(&fix.combat, 265, 75, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(fix.combat.menu_requested == 0);
+        test_formal_free(&fix);
+    }
+    /* Formal disk click: menu requested (formal 1). Swords act. */
+    {
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        CHECK(yt2_combat_click(&fix.combat, 303, 75, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(fix.combat.menu_requested == 1);
+        CHECK(fix.combat.menu_formal == 1);
+        fix.combat.menu_requested = 0;
+        fix.combat.menu_formal = 0;
+        CHECK(yt2_combat_click(&fix.combat, 246, 75, 0, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK(yt2_combat_sfx_count(&fix.combat) >= 1u);
+        test_formal_free(&fix);
+    }
+    /* Nested menu open consumes the side panels (fn_06EA4): a pending
+       award or message never paints under the menu. */
+    {
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        yt2_combat_menu_open(NULL);
+        fix.combat.award_pending = 1;
+        fix.combat.chest_side_panel_lines = 3u;
+        yt2_combat_menu_open(&fix.combat);
+        CHECK(fix.combat.award_pending == 0);
+        CHECK(fix.combat.chest_side_panel_lines == 0u);
+        test_formal_free(&fix);
+    }
+    /* Formal consumes a stuck side panel (B1 fn_135B2/fn_06EA4): a
+       search side panel left over from explore is gone after the first
+       formal key, and the engaged name shows on every present of
+       the turn (next and melee repaints) instead of being
+       buried under it. */
+    {
+        test_formal fix;
+        yt2_room_object *spider;
+        test_name_capture cap;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        spider = &fix.room.near_objects[1];
+        memcpy(spider->name, "SPIDER", 7u);
+        fix.room.f5064 |= 0x1000u;
+        memset(fix.combat.chest_side_panel, 0, sizeof(fix.combat.chest_side_panel));
+        memcpy(fix.combat.chest_side_panel[0], "NOTHING HERE", 13u);
+        fix.combat.chest_side_panel_color[0] = 0x0Fu;
+        fix.combat.chest_side_panel_row[0] = 96;
+        fix.combat.chest_side_panel_lines = 1u;
+        fix.combat.chest_side_panel_compass = 1u;
+        memset(&cap, 0, sizeof(cap));
+        cap.fix = &fix;
+        yt2_combat_key(&fix.combat, 'A', test_present_name, &cap);
+        CHECK(fix.combat.chest_side_panel_lines == 0u);
+        CHECK(cap.count > 0u);
+        for (unsigned int i = 0u; i < cap.count; i++) {
+            CHECK(cap.ink[i] > 20u);
+        }
+        test_formal_free(&fix);
+    }
+    /* Fresh formal contact settles at once (B1 fn_06382 entry):
+       the queue builds and the first member waits without another
+       key. Member-first: no presents yet (the caller repaints the
+       border); the spider leading acts first instead. */
+    {
+        test_formal fix;
+        highlight_capture cap;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 |= 0x1000u;
+        CHECK(fix.combat.queue_count == 0u);
+        yt2_combat_formal_entry(&fix.combat, test_present_count,
+                                &frames);
+        CHECK(fix.combat.queue_count > 0u);
+        CHECK(frames == 0u);
+        CHECK(fix.combat.current == 3u);
+        memset(&cap, 0, sizeof(cap));
+        cap.fix = &fix;
+        cap.victim = 99u;
+        CHECK(yt2_combat_repaint(&fix.combat, test_present_highlight,
+                                 &cap) == YT2_STATUS_OK);
+        CHECK(cap.count == 1u);
+        CHECK(cap.allborders[0][3] == 128u);
+        test_formal_free(&fix);
+    }
+    /* Spider-first entry: the monster prefix acts (presents) before
+       the next-hero state. Explore and modal states stay out. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 |= 0x1000u;
+        fix.room.near_objects[1].initiative = 99u;
+        yt2_combat_formal_entry(&fix.combat, test_present_count,
+                                &frames);
+        CHECK(fix.combat.queue_count > 0u);
+        CHECK(frames > 0u);
+        CHECK(fix.combat.current == 3u);
+        test_formal_free(&fix);
+    }
+    /* Entry guards: explore and modal states never build. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        yt2_combat_formal_entry(&fix.combat, test_present_count,
+                                &frames);
+        CHECK(fix.combat.queue_count == 0u);
+        CHECK(frames == 0u);
+        fix.room.f5064 |= 0x1000u;
+        fix.combat.chest_prompt = 1;
+        yt2_combat_formal_entry(&fix.combat, test_present_count,
+                                &frames);
+        CHECK(fix.combat.queue_count == 0u);
+        CHECK(frames == 0u);
+        test_formal_free(&fix);
+    }
+    /* Take receipts paint per name field (B1 fn_11F83), never joined:
+       the two-field +10 splits across rows 96/102, the one-field +1
+       takes row 96 with blank rows after. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.combat.chest_open = 1;
+        fix.combat.chest_staging[0].id = 361u;
+        fix.combat.chest_staging[0].count = 0u;
+        CHECK(yt2_combat_click(&fix.combat, 249, 168, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_side_panel_lines == 3u);
+        CHECK(strcmp(fix.combat.chest_side_panel[0], "FIELD PLATE") == 0);
+        CHECK(fix.combat.chest_side_panel_row[0] == 96);
+        CHECK(strcmp(fix.combat.chest_side_panel[1], "LEGGINGS +10") == 0);
+        CHECK(fix.combat.chest_side_panel_row[1] == 102);
+        CHECK(fix.combat.chest_side_panel[2][0] == '\0');
+        CHECK(fix.combat.chest_side_panel_row[2] == 108);
+        fix.combat.chest_cursor = 0u;
+        fix.combat.chest_carried = 0u;
+        fix.combat.chest_staging[0].id = 413u;
+        fix.combat.chest_staging[0].count = 0u;
+        CHECK(yt2_combat_click(&fix.combat, 249, 168, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(strcmp(fix.combat.chest_side_panel[0], "DAGGER +1") == 0);
+        CHECK(fix.combat.chest_side_panel_row[0] == 96);
+        CHECK(fix.combat.chest_side_panel[1][0] == '\0');
         test_formal_free(&fix);
     }
     return test_failures == 0;

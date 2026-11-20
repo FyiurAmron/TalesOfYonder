@@ -289,10 +289,86 @@ static void test_room_gate(void)
     yt2_world_free(&world);
 }
 
+/* Idle-formal tick (fn_10E6A): stale keeps portraits retained (so the
+   current-member border survives), plain stale repaints them. */
+static void test_stale_keep_portraits(void)
+{
+    const char *pictures_path = getenv("YT2_PICTURES");
+    const char *world_path = getenv("YT2_WORLD");
+    const char *save_path = getenv("YT2_ROOM_SAVE");
+    yt2_pictures pictures;
+    yt2_world world;
+    yt2_save save;
+    yt2_surface surface;
+    yt2_room room;
+    uint8_t want[4][32][32];
+    unsigned int slot;
+
+    if (pictures_path == NULL || pictures_path[0] == '\0' ||
+        world_path == NULL || world_path[0] == '\0' ||
+        save_path == NULL || save_path[0] == '\0') {
+        return;
+    }
+    memset(&pictures, 0, sizeof(pictures));
+    memset(&world, 0, sizeof(world));
+    memset(&save, 0, sizeof(save));
+    CHECK(yt2_pictures_load(pictures_path, &pictures) == YT2_STATUS_OK);
+    CHECK(yt2_world_load(world_path, &world) == YT2_STATUS_OK);
+    CHECK(yt2_save_load(save_path, &save) == YT2_STATUS_OK);
+    CHECK(yt2_surface_init(&surface, 320u, 200u) == YT2_STATUS_OK);
+    save.party.assigned[0] = 1u;
+    save.party.assigned[1] = 6u;
+    save.party.assigned[2] = 7u;
+    save.party.assigned[3] = 8u;
+    CHECK(yt2_room_init(&room, &world, &pictures, &save, &save.party,
+                        0u) == YT2_STATUS_OK);
+    room.no_compass = 1;
+    CHECK(yt2_room_render(&room, &surface) == YT2_STATUS_OK);
+    for (slot = 0u; slot < 4u; slot++) {
+        int x = 0;
+        int y = 0;
+        unsigned int row;
+
+        CHECK(yt2_room_portrait_origin(slot, &x, &y) == YT2_STATUS_OK);
+        for (row = 0u; row < 32u; row++) {
+            memcpy(want[slot][row],
+                   &surface.pixels[(size_t)(y + row) * surface.stride +
+                                   x],
+                   32u);
+        }
+    }
+    /* A corruption stand-in for the member border. */
+    surface.pixels[(size_t)148u * surface.stride + 8u] = 219u;
+    surface.pixels[(size_t)179u * surface.stride + 213u] = 219u;
+    CHECK(yt2_room_render_stale_keep_portraits(&room, &surface) ==
+          YT2_STATUS_OK);
+    CHECK(surface.pixels[(size_t)148u * surface.stride + 8u] == 219u);
+    CHECK(surface.pixels[(size_t)179u * surface.stride + 213u] == 219u);
+    CHECK(yt2_room_render_stale(&room, &surface) == YT2_STATUS_OK);
+    for (slot = 0u; slot < 4u; slot++) {
+        int x = 0;
+        int y = 0;
+        unsigned int row;
+
+        CHECK(yt2_room_portrait_origin(slot, &x, &y) == YT2_STATUS_OK);
+        for (row = 0u; row < 32u; row++) {
+            CHECK(memcmp(&surface.pixels[(size_t)(y + row) *
+                         surface.stride + x],
+                         want[slot][row], 32u) == 0);
+        }
+    }
+
+    yt2_surface_free(&surface);
+    yt2_save_free(&save);
+    yt2_pictures_free(&pictures);
+    yt2_world_free(&world);
+}
+
 int test_room(void)
 {
     test_movement();
     test_time();
     test_room_gate();
+    test_stale_keep_portraits();
     return 0;
 }

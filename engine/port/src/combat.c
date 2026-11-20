@@ -110,6 +110,7 @@ static void combat_dot_death(void *context, yt2_room_object *obj);
 static void combat_monster_turn(yt2_combat *combat, unsigned int engaged,
                                 yt2_room_present_fn present, void *context);
 static void combat_build_queue(yt2_combat *combat);
+static void combat_paint_highlight(yt2_combat *combat);
 static void combat_delay(yt2_combat *combat, unsigned int ticks);
 static void combat_rederive(yt2_character *member);
 static void combat_apply_damage(yt2_combat *combat,
@@ -181,6 +182,8 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
         combat->last_award[award][3] = 0u;
     }
     combat->award_pending = 0;
+    combat->menu_requested = 0;
+    combat->menu_formal = 0;
     combat->chest_open = 0;
     combat->chest_prompt = 0;
     combat->chest_index = 0u;
@@ -854,7 +857,7 @@ static void combat_shoot_round(yt2_combat *combat, yt2_room_present_fn present,
         return;
     }
     room->f5062 |= 0x20u;
-    /* Pressed campfire (pic 2) + present, then the icon restore
+    /* Pressed bow (pic 2) + present, then the icon restore
        (pic 1) + present. B1 gathers here (fn_10E42), but a B2
        gather would advance sprite animation a second time and
        break quiescence; the icon overpaint reproduces B1's
@@ -935,8 +938,12 @@ static void combat_shoot_round(yt2_combat *combat, yt2_room_present_fn present,
                 if ((room->f5062 & 0x400u) == 0u) {
                     room->f5062 |= 0x400u;
                     /* loc_0D814: gather + present with bit 1 set
-                       (the hit pose) before the clear below. */
-                    yt2_combat_repaint(combat, present, context);
+                       (the hit pose) before the clear below. The
+                       gather never paints portraits, so a full
+                       repaint here would wipe the formal border
+                       with no follow-up to restore it. */
+                    yt2_combat_repaint_keep_portraits(combat, present,
+                                                      context);
                 }
                 hit->flags &= (uint16_t)~2u;
                 combat_sfx_busy(combat, COMBAT_SFX_HIT, &sfx_played);
@@ -951,8 +958,10 @@ static void combat_shoot_round(yt2_combat *combat, yt2_room_present_fn present,
                 combat_clear_cell(combat, hit);
                 room->f5062 &= (uint16_t)~0x400u;
                 /* loc_0D852: gather + present the cleared scene;
-                   later member delays hold it, not the pose. */
-                yt2_combat_repaint(combat, present, context);
+                   later member delays hold it, not the pose.
+                   Portraits stay retained (no follow-up). */
+                yt2_combat_repaint_keep_portraits(combat, present,
+                                                  context);
                 /* fn_1C1D1: re-stash the cleared viewport so
                    later bands erase to it (else the kill
                    blinks the stale pre-round spider back). */
@@ -1164,6 +1173,47 @@ static void combat_paint_engaged(yt2_combat *combat)
                                      (size_t)x] = 4u;
         }
     }
+}
+
+/* Attacker fitness (sub_06493 gate): assigned and live. */
+static int combat_attacker_fit(yt2_combat *combat, unsigned int index)
+{
+    yt2_party *party = combat->room->party;
+    unsigned int slot;
+
+    if (index >= YT2_COMBAT_ATTACKERS_MAX) {
+        return 0;
+    }
+    slot = party->assigned[index];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return 0;
+    }
+    return (party->roster[slot - 1u].status & 0x1C40u) == 0u;
+}
+
+/* sub_06493 next hero: set context, repaint portraits fresh with
+   the border on the new current hero, clear the side panel and paint the
+   engaged names (B1's fn_135B2 each time), present. Unfit
+   heroes are skipped silently (returns 0); callers step past
+   them. */
+static int combat_next_hero(yt2_combat *combat, unsigned int index,
+                                 yt2_room_present_fn present, void *context)
+{
+    if (!combat_attacker_fit(combat, index)) {
+        return 0;
+    }
+    combat->current = index;
+    yt2_room_paint_portraits(combat->room->party, combat->pictures,
+                             combat->surface);
+    combat_paint_highlight(combat);
+    chest_fill(combat, 240, 86, 73, 109);
+    combat->room->f5062 &= (uint16_t)~0x1000u;
+    combat_paint_engaged(combat);
+    combat->chest_side_panel_lines = 0u;
+    if (present != NULL) {
+        present(context);
+    }
+    return 1;
 }
 
 /* fn_171AE current-member bit: 1px color-219 border on the 32x32 pic. */
@@ -2461,13 +2511,20 @@ static void combat_formal_key(yt2_combat *combat, unsigned int ascii,
             }
             if (combat->queue_pos < combat->queue_count &&
                 !combat->queue[combat->queue_pos].monster) {
-                combat->current =
-                    combat->queue[combat->queue_pos].index;
-                return;
+                if (combat_next_hero(combat,
+                        combat->queue[combat->queue_pos].index,
+                        present, context)) {
+                    return;
+                }
+                combat->queue_pos++;
             }
             continue;
         }
-        combat->current = entry->index;
+        if (!combat_next_hero(combat, entry->index, present,
+                                   context)) {
+            combat->queue_pos++;
+            continue;
+        }
         combat_melee(combat, present, context);
         combat->queue_pos++;
         code = combat_scan(combat);
@@ -2496,14 +2553,29 @@ static void combat_formal_key(yt2_combat *combat, unsigned int ascii,
         }
         if (combat->queue_pos < combat->queue_count &&
             !combat->queue[combat->queue_pos].monster) {
-            combat->current = combat->queue[combat->queue_pos].index;
-            return;
+            if (combat_next_hero(combat,
+                    combat->queue[combat->queue_pos].index,
+                    present, context)) {
+                return;
+            }
+            combat->queue_pos++;
+            continue;
         }
     }
 }
 
-int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
-                       void *context)
+void yt2_combat_menu_open(yt2_combat *combat)
+{
+    if (combat == NULL) {
+        return;
+    }
+    combat->award_pending = 0;
+    combat->chest_side_panel_lines = 0u;
+}
+
+static int combat_repaint_impl(yt2_combat *combat,
+                               yt2_room_present_fn present, void *context,
+                               int portraits)
 {
     yt2_room *room;
 
@@ -2515,6 +2587,7 @@ int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
        incrementally); explore returns repaint it fresh. */
     room->no_compass = (room->f5064 & 0x1000u) != 0u ||
                        combat->chest_prompt ||
+                       combat->award_pending ||
                        (!combat->chest_open &&
                         !combat->chest_compass_fresh);
     if (combat->chest_open || combat->chest_prompt ||
@@ -2522,8 +2595,10 @@ int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
         /* fn_10E6A: modal repaints reuse the retained view line
            (the open-modal ++ above survives until close). */
         yt2_room_render_stale(room, combat->surface);
-    } else {
+    } else if (portraits) {
         yt2_room_render(room, combat->surface);
+    } else {
+        yt2_room_render_keep_portraits(room, combat->surface);
     }
     room->no_compass = 0;
     if ((room->f5064 & 0x1000u) != 0u) {
@@ -2540,7 +2615,7 @@ int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
         chest_fill(combat, 240, 86, 73, 109);
         room->f5062 &= (uint16_t)~0x1000u;
         combat_paint_engaged(combat);
-        if (combat->queue_count > 0u) {
+        if (portraits && combat->queue_count > 0u) {
             combat_paint_highlight(combat);
         }
     }
@@ -2558,6 +2633,14 @@ int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
     if (combat->chest_side_panel_lines > 0u) {
         chest_side_panel_paint(combat);
     }
+    if (!combat->chest_open && !combat->chest_prompt &&
+        !combat->chest_paint_stale) {
+        /* B1 keeps no side panel text across gathers (fn_135B2's
+           fn_06EA4 wipes it for the names): a gather consumes
+           the pending lines instead of resurrecting them over
+           the next repaint. Stale/modal repaints retain them. */
+        combat->chest_side_panel_lines = 0u;
+    }
     combat->chest_side_panel_compass = 0u;
     combat->chest_compass_fresh = 0u;
     combat->chest_paint_stale = 0u;
@@ -2565,6 +2648,19 @@ int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
         present(context);
     }
     return YT2_STATUS_OK;
+}
+
+int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
+                       void *context)
+{
+    return combat_repaint_impl(combat, present, context, 1);
+}
+
+int yt2_combat_repaint_keep_portraits(yt2_combat *combat,
+                                      yt2_room_present_fn present,
+                                      void *context)
+{
+    return combat_repaint_impl(combat, present, context, 0);
 }
 
 /*
@@ -2628,7 +2724,9 @@ static const combat_box formal_regions[] = {
     {0, 232, 144, 199, 6},
 };
 
-/* Verb buttons (0x5B2E): swords A, sun C, ZZZ (re-poll), disk D. */
+/* Verb buttons (0x5B2E boxes, shared row): explore bow S, spell
+   cast + ZZZ rest deferred, disk menu; formal swords A, spell/ZZZ
+   silent, disk menu. */
 static const combat_box formal_verbs[] = {
     {239, 254, 67, 82, 1},
     {258, 273, 67, 82, 2},
@@ -3029,7 +3127,7 @@ static void combat_paint_icon(yt2_combat *combat, unsigned int id)
 }
 
 /* fn_1261F in formal combat: the crossed-swords icon (pic 3)
-   over the first icon cell. Explore keeps the campfire from the
+   over the first icon cell. Explore keeps the bow from the
    chrome (pic 1, same blit). While a verb resolves, the pressed
    pic shows instead (4 swords). */
 static void combat_paint_swords(yt2_combat *combat)
@@ -4219,7 +4317,16 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
     room = combat->room;
     if ((room->f5064 & 0x1000u) != 0u) {
         combat_formal_key(combat, ascii, present, context);
-        status = yt2_combat_repaint(combat, present, context);
+        if (combat->queue_count == 0u &&
+            (room->f5064 & 0x1000u) != 0u) {
+            /* Round end: wait on the last next-hero frame (B1 does
+               not repaint here); a bare-portrait repaint would
+               wipe the current-member border. Victory disengaged
+               above and still repaints below. */
+            status = YT2_STATUS_OK;
+        } else {
+            status = yt2_combat_repaint(combat, present, context);
+        }
     } else if (ascii == 'S') {
         /* The modal owns input (B1's fn_073E3 loop); rounds wait. */
         if (combat->chest_open || combat->chest_prompt) {
@@ -4378,8 +4485,8 @@ static void combat_side_panel_click(yt2_combat *combat, int x, int y)
 /* Formal clicks (sub_06493 regions, 0x669E). Viewport clicks are
    silent with the cursor empty (fn_0A444 returns at once); the
    quick access grid runs the quick access handler; the icon row verbs A (swords)
-   while C (sun) and D (disk) are deferred slices (cast UI,
-   nested menu) and ZZZ re-polls; the side panel selects targets; the
+   and D (disk, nested menu 0x5E) while C (spell) is a deferred
+   slice (cast UI) and ZZZ re-polls; the side panel selects targets; the
    bottom strip (portraits/equip) is a deferred slice. Right
    clicks re-poll (their P-verb/inspect arms belong to the
    deferred sheet slice). Verbs present through the caller. */
@@ -4409,6 +4516,11 @@ static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
 
         if (verb == 1u) {
             combat_formal_key(combat, 'A', present, context);
+        } else if (verb == 4u) {
+            /* Disk: the in-game menu (mask 0x5E formal). Spell/ZZZ
+               match B1's formal verbs (unread, kept silent). */
+            combat->menu_requested = 1;
+            combat->menu_formal = 1;
         }
         return YT2_STATUS_OK;
     }
@@ -4420,12 +4532,14 @@ static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
 }
 
 /* Explore clicks (main-loop regions, loc_0016B/loc_00368). Arrows
-   move, viewport right-click searches, the quick access pane repaints the
-   currency; the rest are vanilla silence (viewport left, empty
-   cursor) or deferred slices (icon row, message link,
-   portraits/equip, member/item inspect). Formal combat routes
-   through the 0x669E table above (no arrows there). */
-static int chest_explore_click(yt2_combat *combat, int x, int y, int right)
+   move (same KeyCode injection as keys, flash included), viewport
+   right-click searches, the quick access pane repaints the currency, bow
+   fires S and disk nests the menu; the rest are vanilla silence
+   (viewport left, empty cursor) or deferred slices (spell cast, ZZZ
+   rest, message link, portraits/equip, member/item inspect). Formal
+   combat routes through the 0x669E table above. */
+static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
+                               yt2_room_present_fn present, void *context)
 {
     yt2_room *room = combat->room;
     unsigned int hit = chest_hit(chest_regions, 6u, x, y);
@@ -4453,13 +4567,48 @@ static int chest_explore_click(yt2_combat *combat, int x, int y, int right)
         if (cell == 0u) {
             return YT2_STATUS_ERROR;
         }
-        if (yt2_room_key(room, combat->surface, scans[cell - 1u], NULL,
-                         NULL) != YT2_STATUS_OK) {
+        /* B1 injects the arrow KeyCode (shared flash+step path). */
+        if (yt2_room_key(room, combat->surface, scans[cell - 1u],
+                         present, context) != YT2_STATUS_OK) {
             return YT2_STATUS_ERROR;
         }
         /* Steps wipe VRAM ink (mirrors the key path). */
         combat->award_pending = 0;
         combat->chest_side_panel_lines = 0u;
+        if ((room->f5064 & 0x1000u) != 0u) {
+            /* Fresh contact settles in fn_06382 at once. */
+            yt2_combat_formal_entry(combat, present, context);
+            return yt2_combat_repaint(combat, present, context);
+        }
+        return YT2_STATUS_OK;
+    }
+    if (hit == 3u) {
+        unsigned int verb = chest_hit(formal_verbs, 4u, x, y);
+        unsigned int a;
+
+        if (verb == 1u) {
+            /* Bow (loc_0073C): the S round, shared flash. */
+            for (a = 0u; a < 4u; a++) {
+                combat->award[a][0] = 0u;
+                combat->award[a][1] = 0u;
+                combat->award[a][2] = 0u;
+                combat->award[a][3] = 0u;
+            }
+            room->f5062 |= 0x100u;
+            combat_shoot_round(combat, present, context);
+            room->f5062 &= (uint16_t)~0x100u;
+            combat_finish_award(combat);
+            return YT2_STATUS_OK;
+        }
+        if (verb == 4u) {
+            /* Disk: the in-game menu (loc_005E4, mask 0xFE). */
+            combat->menu_requested = 1;
+            combat->menu_formal = 0;
+            return YT2_STATUS_OK;
+        }
+        /* Sun cast (fn_0DE48) and ZZZ rest (fn_0E7B2) are deferred
+           slices (B1 explore D is cast too; B2's D-menu is kept as
+           a shipped convenience until cast ships). */
         return YT2_STATUS_OK;
     }
     if (hit == 2u) {
@@ -4503,7 +4652,8 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
         return YT2_STATUS_OK;
     }
     if (!combat->chest_open) {
-        return chest_explore_click(combat, x, y, right);
+        return chest_explore_click(combat, x, y, right, present,
+                                   context);
     }
     /* Modal right-clicks have B1 handlers (loc_07586/loc_07682);
        ungrounded, ignored for now. */

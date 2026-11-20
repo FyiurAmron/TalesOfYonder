@@ -208,6 +208,9 @@ static const int16_t room_shade_adjust[7][4] = {
  * Portrait slot layout (DGROUP:0x61C8, 40 words): rect, three status icon
  * cells, three buff cells, name/bar cell.  Words hold x0, x1, y0, y1, id.
  */
+/* Portrait-band snapshot across gathers that retain portraits. */
+static uint8_t room_portrait_band[50][320];
+
 static const uint16_t room_portraits[4][40] = {
     {8, 39, 148, 179, 1, 40, 47, 150, 157, 2, 40, 47, 160, 167, 3, 40, 47,
      170, 177, 4, 50, 57, 150, 157, 5, 50, 57, 160, 167, 6, 50, 57, 170, 177,
@@ -1938,11 +1941,9 @@ static void room_draw_sprite(yt2_room *room, yt2_surface *dst,
         room_draw_column(room, dst);
     }
     if ((obj->flags & 8u) == 0u) {
-        if ((obj->flags & 0x3010u) != 0u) {
-            obj->pic = (uint16_t)(obj->anim_base + 9u);
-            obj->flags |= 2u;
-            return;
-        }
+        /* B1 poses only on bits 1/2 above (hit/attack); DoT
+           (0x3000, damage only per fn_12FF7) and pic2 (0x10,
+           second layer) never pose. */
         room_sprite_animate(obj);
         return;
     }
@@ -2450,12 +2451,25 @@ static void room_draw_compass(yt2_room *room, yt2_surface *dst)
     yt2_text_draw(dst, 0xF1, 0x57, label, 0x0Fu);
 }
 
-static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather)
+static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather,
+                            int portraits)
 {
     unsigned int i;
 
     if (room == NULL || surface == NULL) {
         return YT2_STATUS_ERROR;
+    }
+    if (gather && !portraits) {
+        /* B1's gather never touches the portraits: snapshot
+           the band (rows 147-196 hold pics, bars and the member
+           border) across the clear and restore it below. */
+        for (unsigned int row = 147u;
+             row < 197u && row < surface->height; row++) {
+            memcpy(room_portrait_band[row - 147u],
+                   surface->pixels + (size_t)row * surface->stride,
+                   surface->width < sizeof(room_portrait_band[0]) ?
+                       surface->width : sizeof(room_portrait_band[0]));
+        }
     }
     if (gather) {
         memset(surface->pixels, 0,
@@ -2478,8 +2492,17 @@ static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather)
         room->blit_transparent = 1u;
         room_draw_picture(room, surface, 0xF8, 9);
     }
-    for (i = 0u; i < 4u; i++) {
-        room_draw_portrait_at(room->party, room->pictures, surface, i);
+    if (portraits) {
+        for (i = 0u; i < 4u; i++) {
+            room_draw_portrait_at(room->party, room->pictures, surface, i);
+        }
+    } else if (gather) {
+        for (i = 147u; i < 197u && i < surface->height; i++) {
+            memcpy(surface->pixels + (size_t)i * surface->stride,
+                   room_portrait_band[i - 147u],
+                   surface->width < sizeof(room_portrait_band[0]) ?
+                       surface->width : sizeof(room_portrait_band[0]));
+        }
     }
     if (!room->no_compass) {
         room_draw_compass(room, surface);
@@ -2492,12 +2515,23 @@ static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather)
 
 int yt2_room_render(yt2_room *room, yt2_surface *surface)
 {
-    return room_render_impl(room, surface, 1);
+    return room_render_impl(room, surface, 1, 1);
 }
 
 int yt2_room_render_stale(yt2_room *room, yt2_surface *surface)
 {
-    return room_render_impl(room, surface, 0);
+    return room_render_impl(room, surface, 0, 1);
+}
+
+int yt2_room_render_keep_portraits(yt2_room *room, yt2_surface *surface)
+{
+    return room_render_impl(room, surface, 1, 0);
+}
+
+int yt2_room_render_stale_keep_portraits(yt2_room *room,
+                                         yt2_surface *surface)
+{
+    return room_render_impl(room, surface, 0, 0);
 }
 
 /* fn_00E6C: destination terrain check (0 move, 1 bump, 2 silent bump). */

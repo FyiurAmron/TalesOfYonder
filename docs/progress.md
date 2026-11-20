@@ -3308,10 +3308,190 @@ WATCHDOG-ENTRY-STAGED-SEPARATELY
     slot 0 zeroed, slots 5-7 defaults). B2 now re-runs `yt2_save_start`
     on both EXIT_MENU paths (main menu + explore/wipe unwind); unit pins
     re-run (CONAN wiped, SQUIRE back, assigned 0), live probe verifies
-    the trigger plus fresh CURGAME bytes.  - **map shortcut (B1 M/L/U)**: explore ate M/L/U ("unported"); B1's M/L/U
+    the trigger plus fresh CURGAME bytes.
+  - **map shortcut (B1 M/L/U)**: explore ate M/L/U ("unported"); B1's M/L/U
     open fixed maps 31/47/7 (U=7 is filler, never shows). B2 gains a modal
     map (render + legend clicks stay open, any key closes to explore,
     base palette, frozen idle like fn_123E9 WaitKey). B1 gates on 0x9569
     map-UI state (empty fresh, so B1's M no-ops early); B2 shows ungated
     so the shortcut works (noted in code). Unit pins 31/47 render,
     live probe verifies open/legend-miss/close plus opaque frames.
+  - **loot compass**: B2 painted SOUTH over the award while B1's loot has
+    no compass (frames compared); `award_pending` now suppresses the
+    compass. Neither game blocks on awards (both return; loot persists
+    until next action). Verified faithful, no gate churn.
+  - **also verified faithful (no change)**: S-flight stones, A-melee blood,
+    death/loot, spider approach (all match B1 live); near-spider scale/pose
+    within 1.5% px; menu/title/roster buttons act without press-flash like
+    B1; combat campfire icon flashes 1 frame live.
+  - **intro ESC (needs direction)**: B1 polls ESC only at sparse sub_050DF
+    checkpoints (taps at 100/800 ignored, 300/1400 skip); B2 polls per-tick
+    (taps always skip). Parity means hold-to-skip floppiness; keeping B2
+    crisp is better UX. User chose crisp (no change).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
+    OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 explore clicks (campfire S, arrow flash, sun/disk menu):
+  - **found**: explore icon row was deferred (campfire/sun/ZZZ/disk clicks
+    dead) and arrow clicks stepped with `present=NULL` (no flash). B1's
+    0x5B2E verbs (dumped: campfire 239-254, sun 258-273, ZZZ 277-292,
+    disk 296-311) fire S (loc_0073C), D-menu (loc_00758), rest (fn_0E7B2),
+    menu (loc_005E4); arrow clicks inject KeyCodes (shared flash+step).
+  - **fix**: `chest_explore_click` takes present/context (arrows flash),
+    campfire runs the S round (shared icon flash/stones/SFX/damage),
+    sun/disk set `menu_requested` (caller nests menu 0xFE like D);
+    formal disk likewise (0x5E). ZZZ rest stays deferred (unported slice).
+    Verb-box comment corrected (explore campfire/S, formal swords/A).
+  - **verify**: unit pins campfire SFX 29, arrow turn, sun/disk/formal-disk
+    menu flags; live click probe (fixed mouse wire format: family 3,
+    BUTTON=2/QUIT+coords=ABS) verifies campfire stones+SFX, arrow
+    flash+step, disk menu frames. Shot wounds now show (stones touch at
+    hit band like B1 2301, SFX, HP damage, blood/kill/loot); B1 has no
+    S-flinch/blood overlay (code clears bit 1, frames confirm), so no
+    further reaction to port.
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
+    OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - M8/B2 verb fixes (sun deferred, bow terms, DoT pose cut):
+  - **sun (user catch)**: explore verb 2 is the spell button (fn_0DE48
+    cast UI, unported), not menu; reverted sun→menu to silent deferred
+    (cast slice, same as C/Z). B1 explore D is cast too; B2's D-menu is
+    kept as shipped convenience until cast ships (noted in code). Disk
+    (verb 4 → loc_005E4 menu) and bow S (verb 1 → loc_0073C) confirmed
+    against the dumped 0x5B2E table + dispatch.
+  - **terms (user catch)**: verb 1 is the bow-and-arrow icon (not
+    campfire); verb 2 is spell (not sun). Comments fixed; ammo is
+    unlimited (wear/breakage only, no depletion).
+  - **disk "stuck"**: reproduced as post-menu S silence with
+    f5064=0xD019 (formal engaged); S is unbound in formal in B1 too
+    (no 0x53 in fn_06382, no fn_1C0DA callers there), so nothing to
+    fix — melee (A/swords) is the formal verb (verified blood/loot).
+    Nested menu itself opens/closes cleanly (live probe).
+  - **S-flinch (disputed, evidence)**: B1 explore S-hit (loc_0D814)
+    clears pose bit 1 and calls only SFX/HP/counter/gather/award —
+    no pose/blood/flash/overlay on wound or kill (fn_12EA0 is
+    BCD/drops only); renderer poses on bit-1-set one-shot, which S
+    clears. Spider +9 art equals idle (group-3 pics 32/39 identical,
+    0px), S1/S2 frames px-identical pre/post (no pose (3px), no blood
+    (scan), no flash (palette normal)). B2 matches on all counts, so
+    no S-flinch to port; asking for the reporter's B1 frame
+    (tick/enemy/mode/screenshot) to compare against.
+  - **pose trigger**: B2 posed on 0x3010 (DoT/pic2, spurious — B1
+    poses only on bits 1/2, DoT is damage-only per fn_12FF7, pic2 is
+    a second layer); cut to bit1/bit2 only (already correct above).
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - exit-to-DOS hang (watchdog + stale link):
+  - **found**: the server exits cleanly on quit (title, embark,
+    nested explore via keys and clicks all verified headless), but
+    the client follows the dead link forever. The first watchdog
+    spun on the unreaped zombie (kill -0 succeeds) and a subshell
+    wait cannot reap a sibling under set -e, so it never fired.
+    Also: stale INPUT.BIN replays the previous session's keys on
+    restart (a leftover quit exits the boot).
+  - **fix**: play.sh polls /proc states (zombie-aware, POSIX sh)
+    and stops the surviving side either way; the link files are
+    removed per run. Verified end-to-end with the real client:
+    quit-to-DOS exits play.sh 0 with nothing left, and killing the
+    client takes the server and play.sh down.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - exit-to-DOS hang via play-port.sh (user runs this script):
+  - **found**: the server always exited cleanly (title, embark, nested
+    explore via keys and clicks, loot-then-quit, real-client e2e all
+    verified); the client froze on the dead link because play-port.sh
+    still ran it in the foreground with no watchdog.
+  - **fix**: same /proc-state watchdog as play.sh (either side may
+    exit first). Verified: play-port.sh exits 0 with nothing left.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - loot vs quit-dialog message conflict:
+  - **found**: opening the nested menu with loot pending painted
+    the award under the menu/dialog. B1's nested menu opens with
+    fn_06EA4 (side panels wipe); the port never consumed.
+  - **fix**: nested/wipe menu open consumes the side panels (flags via
+    yt2_combat_menu_open plus a pixel wipe); title menus do not
+    wipe, per B1. Live-verified: loot up at menu-open frame,
+    panel clean from the next frame.
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - current-member highlight lost mid-combat:
+  - **found**: the damage applier repaints portraits bare and B1
+    restores the color-219 border at every member turn handoff
+    (sub_06493); the port never did, so the highlight vanished
+    after the first damage and stayed gone.
+  - **fix**: repaint the border + present on both handoffs,
+    gated on member fitness like B1. Present count 10 -> 11;
+    committed pixel probe asserts the border on the last two
+    presents (fails without the fix).
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-20 - current-member border lost at round end (highlight fix part 2):
+  - **found**: the handoff restore covered mid-round, but the formal
+    tail repaint redrew bare portraits once the queue emptied, so the
+    border vanished at every round end and stayed gone while waiting.
+    B1 waits on the last handoff frame (no repaint there).
+  - **fix**: skip the tail repaint when still formal with an empty
+    queue; victory (disengaged) still repaints. The committed probe
+    now drives to round end and asserts the full border on the last
+    present (fails without the fix).
+  - **gates**: `yt2p-tests: OK`, `port: OK`,
+    `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - dead members act their turns (formal handoff skips no one):
+  - **found**: B1 hands member turns through sub_06493, which skips
+    attackers with status 0x1C40 (dead/out) silently; the port
+    handed every queued member, so the dead kept attacking. Formal
+    S confirmed a no-op both sides (gate pins no state/sfx delta).
+  - **fix**: one handoff helper (fitness gate + fresh portraits +
+    border + present, fn_171AE mirror) at all three handoff points;
+    unfit members advance the queue without acting. Committed probe
+    latches any handoff-while-dead across 6 rounds (fails with the
+    gate neutered).
+  - **gates**: `yt2p-tests: OK`, `port: OK`,
+    `port-combat/cancel/input/live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - active-combatant border disappears live (7 bordered
+  frames/run, 16-frame gap mid-formal):
+  - **found**: B1's idle poll (fn_10E6A via fn_1755C) never paints
+    portraits, so the handoff border survives ticks; the port's
+    idle-formal tick called render_stale (portraits=1), wiping the
+    border ~55 ms after every turn. Same class: S pose/kill and
+    menu/map-close repaints used full gathers (B1's gather never
+    touches portraits).
+  - **fix**: portraits-retained repaint variants
+    (yt2_room_render_keep_portraits /
+    yt2_room_render_stale_keep_portraits /
+    yt2_combat_repaint_keep_portraits) at the S repaints, menu/map
+    close, and the idle-formal tick. Live drive now shows one
+    unbroken bordered run (22 frames, 0 gap) vs 7 + 16-frame gap.
+  - **gates**: `yt2p-tests: OK` (new stale-keep pin, fails wired to
+    plain stale), `port: OK`, `port-combat: OK`, `replay: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - enemy name missing in melee (formal without names):
+  - **found**: the user's recording shows formal frames (border,
+    rotating handoffs) with "NOTHING HERE" over the panel and no
+    ant name. A search side panel stuck before the fight (their arrows
+    never clear it - only F/B/L/R letters and click steps do) is
+    resurrected by every formal repaint, burying the names B1
+    paints. B1 keeps no side panel retention (fn_135B2's fn_06EA4 wipes
+    for the names; gathers clear VRAM) and paints names at every
+    handoff (6x fn_135B2 in sub_06493).
+  - **fix**: gathers consume the side panel (stale/modal repaints still
+    retain), arrow steps wipe it like the other step paths, and
+    handoffs clear+paint names. Same-drive contrast: pre-fix
+    formal shows NOTHING HERE with no name; post-fix shows
+    SPIDER with a clean side panel. Unit test pins per-present name
+    ink (11 failures with the fix neutered).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`
+    (B1-compared video still matches), `live-chest: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

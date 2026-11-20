@@ -124,6 +124,10 @@ int yt2_ingamemenu_click(yt2_ingamemenu *ingamemenu, int x, int y, int right);
    everywhere else including the editor itself. */
 int yt2_ingamemenu_fkey(yt2_ingamemenu *ingamemenu, unsigned int scancode);
 
+/* fn_06EA4 half of menu open: wipe the side panel rects (loot/message ink)
+   so stale side panels never show under the menu. B1 wipes first thing. */
+void yt2_ingamemenu_wipe_side_panels(yt2_ingamemenu *ingamemenu);
+
 /* True once the session reached an exit (continue/quit/menu). */
 int yt2_ingamemenu_done(const yt2_ingamemenu *ingamemenu);
 yt2_ingamemenu_exit yt2_ingamemenu_result(const yt2_ingamemenu *ingamemenu);

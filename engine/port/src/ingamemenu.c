@@ -234,6 +234,14 @@ static void paint_clear(yt2_ingamemenu *ingamemenu)
     }
 }
 
+void yt2_ingamemenu_wipe_side_panels(yt2_ingamemenu *ingamemenu)
+{
+    if (ingamemenu == NULL) {
+        return;
+    }
+    paint_clear(ingamemenu);
+}
+
 /* Option rows (sub_0F63B/0F684/0F69F/0F6BA/0F6D5/0F6F0/0F70B/0F72C/0F747):
    the background picture carries the enabled labels; these repaint the
    disabled variants in color 6. */
