@@ -94,6 +94,7 @@ typedef struct yt2_ingamemenu {
     yt2_ingamemenu_exit exit;
     unsigned int sfx_count;
     unsigned int sfx[YT2_INGAMEMENU_SFX_LOG];
+    int did_load; /* a slot load landed during this visit */
 } yt2_ingamemenu;
 
 /* Scan SAVGAME1..6 like sub_01D84: fill six slot records (names from the
@@ -131,6 +132,9 @@ void yt2_ingamemenu_wipe_side_panels(yt2_ingamemenu *ingamemenu);
 /* True once the session reached an exit (continue/quit/menu). */
 int yt2_ingamemenu_done(const yt2_ingamemenu *ingamemenu);
 yt2_ingamemenu_exit yt2_ingamemenu_result(const yt2_ingamemenu *ingamemenu);
+
+/* True when a slot load landed during this visit (caller re-embarks). */
+int yt2_ingamemenu_did_load(const yt2_ingamemenu *ingamemenu);
 
 /* SFX log for the caller/gate. */
 unsigned int yt2_ingamemenu_sfx_count(const yt2_ingamemenu *ingamemenu);

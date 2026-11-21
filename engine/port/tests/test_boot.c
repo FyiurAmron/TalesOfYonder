@@ -1,5 +1,6 @@
 #include "test.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "yt2/boot.h"
@@ -45,6 +46,79 @@ static uint64_t checksum(const uint8_t *bytes, size_t size)
     return value;
 }
 
+static void boot_fixture_set(const char *tmp, const char *name, int keep)
+{
+    char path[2048];
+    FILE *out;
+
+    snprintf(path, sizeof(path), "%s/%s", tmp, name);
+    if (!keep) {
+        remove(path);
+        return;
+    }
+    out = fopen(path, "wb");
+    if (out != NULL) {
+        fputc('x', out);
+        fclose(out);
+    }
+}
+
+/* Enhanced boot routing, driven through sequential fixture states in
+   the shared scratch dir (the plan only probes existence). */
+static void test_boot_plan(void)
+{
+    const char *tmp = getenv("YT2_PORT_TMP");
+    yt2_boot_plan plan;
+
+    CHECK(yt2_boot_enhanced_value("enhanced") != 0);
+    CHECK(yt2_boot_enhanced_value("vanilla") == 0);
+    CHECK(yt2_boot_enhanced_value("") == 0);
+    CHECK(yt2_boot_enhanced_value(NULL) == 0);
+    CHECK(yt2_boot_enhanced_value("ENHANCED") == 0);
+    CHECK(yt2_boot_decide(NULL, &plan) == YT2_STATUS_ERROR);
+    CHECK(yt2_boot_decide(".", NULL) == YT2_STATUS_ERROR);
+
+    if (tmp == NULL || tmp[0] == '\0') {
+        return;
+    }
+    boot_fixture_set(tmp, "CURGAME", 0);
+    boot_fixture_set(tmp, "SAVGAME1", 0);
+    boot_fixture_set(tmp, "SAVGAME2", 0);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_FULL);
+    CHECK(plan.curgame == 0u);
+    CHECK(plan.slots == 0u);
+
+    boot_fixture_set(tmp, "CURGAME", 1);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_TITLE);
+    CHECK(plan.curgame == 1u);
+    CHECK(plan.slots == 0u);
+
+    boot_fixture_set(tmp, "SAVGAME2", 1);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_LOAD);
+    CHECK(plan.curgame == 1u);
+    CHECK(plan.slots == 0x02u);
+
+    boot_fixture_set(tmp, "CURGAME", 0);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_LOAD);
+    CHECK(plan.curgame == 0u);
+    CHECK(plan.slots == 0x02u);
+
+    boot_fixture_set(tmp, "SAVGAME1", 1);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_LOAD);
+    CHECK(plan.slots == 0x03u);
+
+    boot_fixture_set(tmp, "CURGAME", 0);
+    boot_fixture_set(tmp, "SAVGAME1", 0);
+    boot_fixture_set(tmp, "SAVGAME2", 0);
+    CHECK(yt2_boot_decide(tmp, &plan) == YT2_STATUS_OK);
+    CHECK(plan.kind == YT2_BOOT_PLAN_FULL);
+}
+
 int test_boot(void)
 {
     const char *pictures_path = getenv("YT2_PICTURES");
@@ -52,6 +126,8 @@ int test_boot(void)
     yt2_pictures pictures;
     yt2_world world;
     yt2_surface surface;
+
+    test_boot_plan();
 
     for (int scene = 0; scene < (int)YT2_BOOT_SCENE_COUNT; scene++) {
         CHECK(boot_expected[scene].scene == (yt2_boot_scene)scene);

@@ -14,6 +14,11 @@
  * (tools/yt2_spelltext.py) shows its descriptions.  --no-intro skips the
  * start-up sequence and opens the scene demo directly.
  *
+ * YT2_MODE=enhanced resumes past the intro when DIR holds prior state
+ * (any save slot: session plus the in-game menu; lone CURGAME: the
+ * title); unset (or anything else) boots vanilla.  The daily driver
+ * (tools/play-port.sh) and port bundles export enhanced.
+ *
  * DIR holds WORLD.DAT and PICTURES.VGA; OUTPUT.BIN is created there and
  * INPUT.BIN is followed there.  During the intro, ESC skips the cutscene
  * and attract to the menu; in the menu the letter keys (C/A/E/R/I) and
@@ -1753,6 +1758,30 @@ static int play_title_reset(play_state *state)
     return YT2_STATUS_OK;
 }
 
+/* Enhanced LOAD: first loadable source wins (CURGAME, the working
+   state, then slots lowest-first). Save loads are retry-safe. */
+static int play_boot_resume(play_state *state, const yt2_boot_plan *plan)
+{
+    char path[1088];
+    unsigned int i;
+
+    if (plan->curgame &&
+        yt2_save_load(state->save_path, &state->save) == YT2_STATUS_OK) {
+        return 1;
+    }
+    for (i = 0u; i < YT2_INGAMEMENU_SLOTS; i++) {
+        if ((plan->slots & (1u << i)) == 0u) {
+            continue;
+        }
+        snprintf(path, sizeof(path), "%s/SAVGAME%u", state->game_dir,
+                 i + 1u);
+        if (yt2_save_load(path, &state->save) == YT2_STATUS_OK) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /*
  * One modal session: poll the link, apply every input with its own
  * present (the original presents once per input poll), and return when
@@ -1901,6 +1930,34 @@ static int run_session(play_state *state, yt2_folder_out *out,
             } else if (exit == YT2_INGAMEMENU_EXIT_MENU) {
                 state->titlemenu_requested = 1;
             } else if (state->have_combat) {
+                /* A load from explore re-embarks like vanilla
+                   (fn_0F2C0): the room and combat re-init from the
+                   loaded save instead of running on stale state. */
+                if (yt2_ingamemenu_did_load(&state->ingamemenu)) {
+                    uint16_t seed = (uint16_t)yt2_pit_now();
+
+                    printf("play: explore start\n");
+                    if (yt2_room_init(&state->room, &state->world,
+                                      &state->pictures, &state->save,
+                                      &state->save.party,
+                                      seed) != YT2_STATUS_OK ||
+                        yt2_room_embark(&state->room, &state->surface,
+                                        explore_present,
+                                        state) != YT2_STATUS_OK) {
+                        fprintf(stderr, "yt2p-play: cannot embark\n");
+                        return YT2_STATUS_ERROR;
+                    }
+                    explore_flush_save(state);
+                    state->room.delay = explore_delay;
+                    state->room.delay_context = state;
+                    if (yt2_combat_init(&state->combat, &state->room,
+                                        &state->save, &state->pictures,
+                                        &state->world, &state->items,
+                                        &state->surface) ==
+                        YT2_STATUS_OK) {
+                        state->combat_sfx_seen = 0u;
+                    }
+                }
                 /* CONTINUE: B1 re-renders on menu close (loc_00614
                    path); without it the menu base keeps group-8 pic
                    10 over the disk cell and stale ticks never
@@ -2138,6 +2195,9 @@ int main(int argc, char **argv)
         yt2_intro intro;
         yt2_titlemenu titlemenu;
         yt2_intro_transition transition;
+        yt2_boot_plan boot_plan;
+        int do_load = 0;
+        int boot_to_title = 0;
 
         memset(&bridge, 0, sizeof(bridge));
         bridge.state = &state;
@@ -2151,17 +2211,47 @@ int main(int argc, char **argv)
         snprintf(state.save_path, sizeof(state.save_path), "%s/CURGAME",
                  argv[1]);
         snprintf(state.game_dir, sizeof(state.game_dir), "%s", argv[1]);
-        /* Vanilla boot (fn_1B9D0): fresh party from the template, written
-           straight back before anything shows; CURGAME is never read. */
-        if (yt2_save_start(&state.world, &state.save) != YT2_STATUS_OK ||
-            yt2_save_write(&state.save, state.save_path) != YT2_STATUS_OK) {
-            fprintf(stderr, "yt2p-play: cannot start the party\n");
-            goto done;
+        /* Enhanced boot (YT2_MODE=enhanced): resume prior state
+           instead of the vanilla fresh-party + intro. LOAD (any
+           slot) enters the normal loop at EMBARK with the pre-game
+           menu skipped: the session starts from the resumed save
+           and opens the in-game menu. TITLE (lone CURGAME) shows
+           the title with the resumed roster; anything unloadable
+           falls back to FULL vanilla. */
+        if (yt2_boot_enhanced() &&
+            yt2_boot_decide(argv[1], &boot_plan) == YT2_STATUS_OK) {
+            if (boot_plan.kind == YT2_BOOT_PLAN_LOAD) {
+                if (play_boot_resume(&state, &boot_plan)) {
+                    do_load = 1;
+                }
+            } else if (boot_plan.kind == YT2_BOOT_PLAN_TITLE &&
+                       yt2_save_load(state.save_path, &state.save) ==
+                           YT2_STATUS_OK) {
+                boot_to_title = 1;
+            }
         }
-        state.have_save = 1;
-        state.ingamemenu_scanned = yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
-        printf("play: new party\n");
-        printf("play: intro start\n");
+        if (do_load || boot_to_title) {
+            state.have_save = 1;
+            state.ingamemenu_scanned =
+                yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
+            printf("play: resumed party\n");
+            printf("play: intro skipped\n");
+        } else {
+            /* Vanilla boot (fn_1B9D0): fresh party from the template,
+               written straight back before anything shows; CURGAME
+               is never read. */
+            if (yt2_save_start(&state.world, &state.save) !=
+                    YT2_STATUS_OK ||
+                yt2_save_write(&state.save, state.save_path) !=
+                    YT2_STATUS_OK) {
+                fprintf(stderr, "yt2p-play: cannot start the party\n");
+                goto done;
+            }
+            state.have_save = 1;
+            state.ingamemenu_scanned = yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
+            printf("play: new party\n");
+            printf("play: intro start\n");
+        }
         if (yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
             yt2_present_pace(&presenter, &out, options.tick_ms) !=
                 YT2_STATUS_OK ||
@@ -2182,7 +2272,13 @@ int main(int argc, char **argv)
             yt2_intro_free(&intro);
             goto done;
         }
-        transition = yt2_titlemenu_boot(&titlemenu);
+        if (do_load) {
+            transition = YT2_INTRO_TRANSITION_EMBARK;
+        } else if (boot_to_title) {
+            transition = yt2_titlemenu_run(&titlemenu);
+        } else {
+            transition = yt2_titlemenu_boot(&titlemenu);
+        }
         printf("play: intro transition %s frames %u\n",
                play_intro_transition_name(transition), presented);
         state.tick = (unsigned int)intro.tick;
@@ -2278,41 +2374,59 @@ int main(int argc, char **argv)
                     uint16_t seed = (uint16_t)yt2_pit_now();
 
                     yt2_room_update_skill_flags(&state.save.party);
-                    if (run_ingamemenu(&state, &out, &in, &presenter, &options,
-                                 &presented, &running,
-                                 state.ingamemenu_scanned ? 0x71u : 0x9Du,
-                                 0, 0) != YT2_STATUS_OK) {
-                        break;
-                    }
-                    ingamemenu_exit = yt2_ingamemenu_result(&state.ingamemenu);
-                    if (ingamemenu_exit == YT2_INGAMEMENU_EXIT_QUIT) {
-                        running = 0;
-                        break;
-                    }
-                    if (ingamemenu_exit != YT2_INGAMEMENU_EXIT_CONTINUE) {
-                        /* NEWGAME-confirmed: B1's title-entry reset
-                           (fn_0D36C) before the title shows. */
-                        if (play_title_reset(&state) != YT2_STATUS_OK) {
-                            fprintf(stderr,
-                                    "yt2p-play: cannot reset the party\n");
+                    /* Enhanced LOAD skips the pre-game menu (its
+                       masks have no Continue over a resumed save);
+                       the session below opens the in-game menu.
+                       Enhanced embark skips it too (intentional
+                       deviation): a fresh party starts in the 3D
+                       view, and loads move to the D menu (which
+                       re-embarks below). Vanilla keeps the menu. */
+                    if (!do_load && !yt2_boot_enhanced()) {
+                        if (run_ingamemenu(&state, &out, &in, &presenter,
+                                           &options, &presented, &running,
+                                           state.ingamemenu_scanned ? 0x71u
+                                                                    : 0x9Du,
+                                           0, 0) != YT2_STATUS_OK) {
                             break;
                         }
-                        /* The stream tick jumps ahead (never backwards),
-                           pacing rebases, and the fade-out darkens the
-                           in-game menu, not a stale intro frame. */
-                        play_intro_resync(&bridge, &intro, state.tick);
-                        yt2_intro_adopt_screen(&intro, state.surface.pixels,
-                                               state.palette.rgb);
-                        transition = yt2_titlemenu_run(&titlemenu);
-                        printf("play: intro transition %s frames %u\n",
-                               play_intro_transition_name(transition),
-                               presented);
-                        if (bridge.failed) {
-                            fprintf(stderr, "yt2p-play: intro failure\n");
+                        ingamemenu_exit =
+                            yt2_ingamemenu_result(&state.ingamemenu);
+                        if (ingamemenu_exit == YT2_INGAMEMENU_EXIT_QUIT) {
+                            running = 0;
                             break;
                         }
-                        state.tick = (unsigned int)intro.tick;
-                        continue;
+                        if (ingamemenu_exit !=
+                            YT2_INGAMEMENU_EXIT_CONTINUE) {
+                            /* NEWGAME-confirmed: B1's title-entry
+                               reset (fn_0D36C) before the title
+                               shows. */
+                            if (play_title_reset(&state) !=
+                                YT2_STATUS_OK) {
+                                fprintf(stderr,
+                                        "yt2p-play: cannot reset the "
+                                        "party\n");
+                                break;
+                            }
+                            /* The stream tick jumps ahead (never
+                               backwards), pacing rebases, and the
+                               fade-out darkens the in-game menu, not
+                               a stale intro frame. */
+                            play_intro_resync(&bridge, &intro, state.tick);
+                            yt2_intro_adopt_screen(
+                                &intro, state.surface.pixels,
+                                state.palette.rgb);
+                            transition = yt2_titlemenu_run(&titlemenu);
+                            printf("play: intro transition %s frames %u\n",
+                                   play_intro_transition_name(transition),
+                                   presented);
+                            if (bridge.failed) {
+                                fprintf(stderr,
+                                        "yt2p-play: intro failure\n");
+                                break;
+                            }
+                            state.tick = (unsigned int)intro.tick;
+                            continue;
+                        }
                     }
                     printf("play: explore start\n");
                     state.session_out = &out;
@@ -2340,6 +2454,12 @@ int main(int argc, char **argv)
                     }
                     state.session_mode = 3;
                     state.titlemenu_requested = 0;
+                    /* Enhanced LOAD lands on the in-game menu (the
+                       run_session loop opens it on entry). */
+                    if (do_load) {
+                        state.ingametitlemenu_requested = 1;
+                        do_load = 0;
+                    }
                     if (run_session(&state, &out, &in, &presenter, &options,
                                     &presented, &running) != YT2_STATUS_OK) {
                         break;

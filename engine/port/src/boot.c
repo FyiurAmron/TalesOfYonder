@@ -1,7 +1,11 @@
 #include "yt2/boot.h"
 
+#include "yt2/ingamemenu.h"
+#include "yt2/status.h"
 #include "yt2/text.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define BOOT_PICTURE_WIDTH 318
@@ -149,6 +153,56 @@ int yt2_boot_palette(const yt2_world *world, yt2_boot_scene scene,
         memcpy(palette->rgb + 0x90u * YT2_PALETTE_ENTRY_SIZE,
                base->rgb + 0x90u * YT2_PALETTE_ENTRY_SIZE,
                0x10u * YT2_PALETTE_ENTRY_SIZE);
+    }
+    return YT2_STATUS_OK;
+}
+
+int yt2_boot_enhanced_value(const char *mode)
+{
+    return mode != NULL && strcmp(mode, "enhanced") == 0;
+}
+
+int yt2_boot_enhanced(void)
+{
+    return yt2_boot_enhanced_value(getenv("YT2_MODE"));
+}
+
+static int boot_exists(const char *dir, const char *name)
+{
+    char path[1088];
+    FILE *probe;
+
+    snprintf(path, sizeof(path), "%s/%s", dir, name);
+    probe = fopen(path, "rb");
+    if (probe == NULL) {
+        return 0;
+    }
+    fclose(probe);
+    return 1;
+}
+
+int yt2_boot_decide(const char *dir, yt2_boot_plan *plan)
+{
+    char name[16];
+    unsigned int i;
+
+    if (dir == NULL || plan == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    plan->curgame = (unsigned int)boot_exists(dir, "CURGAME");
+    plan->slots = 0u;
+    for (i = 0u; i < YT2_INGAMEMENU_SLOTS; i++) {
+        snprintf(name, sizeof(name), "SAVGAME%u", i + 1u);
+        if (boot_exists(dir, name)) {
+            plan->slots |= 1u << i;
+        }
+    }
+    if (plan->slots != 0u) {
+        plan->kind = YT2_BOOT_PLAN_LOAD;
+    } else if (plan->curgame) {
+        plan->kind = YT2_BOOT_PLAN_TITLE;
+    } else {
+        plan->kind = YT2_BOOT_PLAN_FULL;
     }
     return YT2_STATUS_OK;
 }

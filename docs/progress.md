@@ -3494,3 +3494,31 @@ items now live in `docs/roadmap.md`).
     (B1-compared video still matches), `live-chest: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - enhanced boot flag (YT2_MODE) with intro skip:
+  - **added**: YT2_MODE=enhanced resumes past the intro when the game
+    dir holds prior state (any SAVGAME slot: session plus the
+    in-game menu; lone CURGAME: the title with the resumed roster);
+    unset boots vanilla. The pre-game menu has no Continue over a
+    resumed save (mask 0x71), so LOAD skips it and opens the
+    in-game menu on session entry instead. Unloadable state falls
+    back to a vanilla fresh boot. play-port.sh and port bundles
+    export enhanced; B1/play-c untouched.
+  - **proof**: unit-tested decision (yt2_boot_decide + pure mode
+    match) and a six-way live drive (vanilla/enhanced x
+    empty/curgame/saves/corrupt-slot/garbage) with log + replay
+    frames, including title/menu/explore screenshots.
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`,
+    `replay: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-22 - enhanced embark skips the pre-game menu (deviation):
+  - **asked**: after assembling the party, start in the 3D view
+    instead of the in-game menu (UX + testing).
+  - **change**: `YT2_MODE=enhanced` treats the pre-embark menu as
+    CONTINUE (vanilla keeps it, so existing live scripts run
+    unmodified); loads move to the D menu, which now re-embarks
+    room+combat from the loaded save via a new menu did_load
+    flag (before: the room ran on stale state after a D-menu
+    load). Fresh embark lands in the tavern, D-load lands facing
+    the spider (screenshot-verified).
+  - **gates**: `yt2p-tests: OK`, `live-chest: OK` (unmodified).

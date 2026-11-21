@@ -15,4 +15,7 @@ if [ ! -x game/yt2p-play ]; then
 fi
 
 echo "server-start: starting the B2 player (folder link)"
+# Port bundles run enhanced (resume past the intro when prior state
+# exists); unset for a vanilla boot.
+export YT2_MODE=enhanced
 exec ./game/yt2p-play game "$@"

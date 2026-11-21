@@ -820,6 +820,7 @@ static int camp_read_save(yt2_ingamemenu *ingamemenu)
             return YT2_STATUS_ERROR;
         }
     }
+    ingamemenu->did_load = 1;
     return YT2_STATUS_OK;
 }
 
@@ -1247,6 +1248,11 @@ int yt2_ingamemenu_done(const yt2_ingamemenu *ingamemenu)
 yt2_ingamemenu_exit yt2_ingamemenu_result(const yt2_ingamemenu *ingamemenu)
 {
     return ingamemenu != NULL ? ingamemenu->exit : YT2_INGAMEMENU_EXIT_NONE;
+}
+
+int yt2_ingamemenu_did_load(const yt2_ingamemenu *ingamemenu)
+{
+    return ingamemenu != NULL && ingamemenu->did_load;
 }
 
 unsigned int yt2_ingamemenu_sfx_count(const yt2_ingamemenu *ingamemenu)
