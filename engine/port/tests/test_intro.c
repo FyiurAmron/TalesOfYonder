@@ -209,8 +209,9 @@ static void poll_quit(yt2_intro_input *input, void *user)
 {
     menu_probe *probe = user;
 
+    /* Persistent: fades poll too (early-out checks) and must not
+       consume the only quit. */
     if (probe->armed) {
-        probe->armed = 0;
         input->have_key = 1;
         input->key = 0x11u;
     }
@@ -220,6 +221,88 @@ static int probe_emit(const uint8_t *frame, const uint8_t *palette,
                       unsigned long tick, void *user)
 {
     return capture_emit(frame, palette, tick, &((menu_probe *)user)->seen);
+}
+
+typedef struct reshow_probe {
+    capture seen;
+    yt2_intro *intro;
+    int polls;
+    int want_reshow;
+} reshow_probe;
+
+static void poll_reshow(yt2_intro_input *input, void *user)
+{
+    reshow_probe *probe = user;
+
+    probe->polls++;
+    /* Fades poll too (early-out checks): reshow lands late, in the
+       steady menu, and quit persists (a one-shot would be eaten). */
+    if (probe->want_reshow && probe->polls == 140 &&
+        probe->intro != NULL) {
+        probe->intro->reshow = 1;
+    }
+    if (probe->polls >= 145) {
+        input->have_key = 1;
+        input->key = 0x11u;
+    }
+}
+
+static int reshow_emit(const uint8_t *frame, const uint8_t *palette,
+                       unsigned long tick, void *user)
+{
+    return capture_emit(frame, palette, tick, &((reshow_probe *)user)->seen);
+}
+
+/* Menu reshow runs: identical late-quit runs with and without a
+   mid-menu keyframe request; returns the emission count. */
+static unsigned int run_menu_reshow(yt2_pictures *pictures, yt2_world *world,
+                                    int want_reshow)
+{
+    yt2_intro intro_menu;
+    yt2_titlemenu titlemenu;
+    reshow_probe probe;
+    unsigned int frames = 0u;
+
+    memset(&probe, 0, sizeof(probe));
+    probe.want_reshow = want_reshow;
+    if (yt2_intro_init(&intro_menu, pictures, world, reshow_emit,
+                       poll_reshow, &probe) != YT2_STATUS_OK) {
+        return 0u;
+    }
+    probe.intro = &intro_menu;
+    if (yt2_titlemenu_init(&titlemenu, &intro_menu, 0u) != YT2_STATUS_OK) {
+        yt2_intro_free(&intro_menu);
+        return 0u;
+    }
+    if (yt2_titlemenu_run(&titlemenu) != YT2_INTRO_TRANSITION_QUIT) {
+        yt2_intro_free(&intro_menu);
+        return 0u;
+    }
+    frames = probe.seen.frames;
+    yt2_intro_free(&intro_menu);
+    return frames;
+}
+
+/* Skip probes: ESC (0x1B) reported persistently, or never. */
+typedef struct esc_probe {
+    capture seen;
+    int esc;
+} esc_probe;
+
+static void poll_skip(yt2_intro_input *input, void *user)
+{
+    esc_probe *probe = user;
+
+    if (probe->esc) {
+        input->have_key = 1;
+        input->key = 0x1Bu;
+    }
+}
+
+static int skip_emit(const uint8_t *frame, const uint8_t *palette,
+                     unsigned long tick, void *user)
+{
+    return capture_emit(frame, palette, tick, &((esc_probe *)user)->seen);
 }
 
 int test_intro(void)
@@ -332,6 +415,51 @@ int test_intro(void)
         CHECK(stops == 1u);
         CHECK(probe.seen.frames > 0u);
         yt2_intro_free(&intro_menu);
+    }
+
+    /* An idle menu answers a keyframe request with exactly one
+       extra emission (late joiners would stare at black else). */
+    {
+        unsigned int plain = run_menu_reshow(&pictures, &world, 0);
+        unsigned int reshow = run_menu_reshow(&pictures, &world, 1);
+
+        CHECK(plain > 0u);
+        CHECK(reshow == plain + 1u);
+    }
+
+    /* Long fades and frame waits abort promptly on ESC (a tap
+       anywhere skips within a pass, not at the next phase). */
+    {
+        yt2_intro fade_plain;
+        yt2_intro fade_esc;
+        esc_probe quiet;
+        esc_probe loud;
+        unsigned long tick_plain;
+        unsigned long tick_esc;
+
+        memset(&quiet, 0, sizeof(quiet));
+        memset(&loud, 0, sizeof(loud));
+        loud.esc = 1;
+        CHECK(yt2_intro_init(&fade_plain, &pictures, &world, skip_emit,
+                             poll_skip, &quiet) == YT2_STATUS_OK);
+        CHECK(yt2_intro_init(&fade_esc, &pictures, &world, skip_emit,
+                             poll_skip, &loud) == YT2_STATUS_OK);
+        fade_plain.countdown_a_on = 1;
+        fade_esc.countdown_a_on = 1;
+        memset(fade_plain.palettes.shown.rgb, 63u, YT2_PALETTE_SIZE);
+        memset(fade_esc.palettes.shown.rgb, 63u, YT2_PALETTE_SIZE);
+        yt2_intro_fade(&fade_plain, 0u, 63u, 256u, 0u);
+        yt2_intro_fade(&fade_esc, 0u, 63u, 256u, 0u);
+        CHECK(quiet.seen.frames > 50u);
+        CHECK(loud.seen.frames < 5u);
+        tick_plain = fade_plain.tick;
+        tick_esc = fade_esc.tick;
+        yt2_intro_wait_frames(&fade_plain, 45u);
+        yt2_intro_wait_frames(&fade_esc, 45u);
+        CHECK(fade_plain.tick - tick_plain > 200u);
+        CHECK(fade_esc.tick - tick_esc < 20u);
+        yt2_intro_free(&fade_plain);
+        yt2_intro_free(&fade_esc);
     }
 
     yt2_intro_free(&intro);

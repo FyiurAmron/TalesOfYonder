@@ -3522,3 +3522,60 @@ items now live in `docs/roadmap.md`).
     load). Fresh embark lands in the tavern, D-load lands facing
     the spider (screenshot-verified).
   - **gates**: `yt2p-tests: OK`, `live-chest: OK` (unmodified).
+- 2026-11-21 - chest prompt/modal does not pause the port (walks,
+  menus, rounds and ticks leak through):
+  - **found**: B1's modal loop (fn_073E3) has no movement, monster,
+    menu or round calls (arrows run the anim tick only; F-keys
+    select), and the prompt picker (fn_0A834) repolls with no
+    ticks at all. The port stepped the party on arrows (plus
+    monster turns/engagement), opened the menu on D, ran formal
+    rounds on A, and advanced clock/sky/rotation on the wall
+    clock through both.
+  - **fix**: prompt arrows consumed silently (no present), modal
+    arrows run one anim-tick repaint, D ignored, formal keys
+    return with rounds waiting, wall ticks frozen like the map.
+    B1 behavior leg: saveload surgery with probe keys inside the
+    prompt/modal passes unchanged (exact 4-step walk pin proves
+    no movement). live_chest pins silence + present deltas (fails
+    pre-fix on the first probe); unit test pins the formal guard.
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`,
+    `live-chest: OK`, `live-explore: OK`. `live_combat.py` fails
+    identically pre/post (`S1 burst [29, 13]`) - pre-existing,
+    unwired to any runner, left alone.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - black screen on enhanced TITLE boot (late joiners):
+  - **found**: the skipping paths emit no mode change, so a client
+    joining after the first frame misses the only set_mode; the
+    idle title menu never answered its keyframe requests (reshow
+    was consumed only by the logo hold), leaving it black until
+    the 12 s attract fuse.
+  - **fix**: the menu loop honors reshow (drop dedup, flush; the
+    bridge force makes it a keyframe). Verified with a real
+    client on Xvfb (title visible, no set_mode wait).
+- 2026-11-21 - ESC anywhere skips the intro (intentional deviation):
+  - **found**: B1 polls ESC only at phase checks, so taps during
+    long unpolled fade/wait stretches (measured 23 s) sit until
+    the next check. The port mirrored this (ESC at 45 s never
+    landed on the menu).
+  - **fix**: sticky ESC latch (B1's sticky KeyCode cascades the
+    same way) plus early-out polls in fades and frame waits;
+    one tap reaches the menu from any point (45 s attract skips
+    with visible response under a second; the rest is the vanilla
+    fade cascade). Pinned by fade/wait/menu unit tests.
+  - **gates**: `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-21 - enhanced TITLE boot inherited the old roster (regression):
+  - **found**: the TITLE path loaded CURGAME, so the assemble screen
+    showed the previous session (reproduced with a ZZZZZ-marked
+    save) instead of vanilla's fresh template. B1 clobbers CURGAME
+    at every boot (fn_1B9D0).
+  - **fix**: TITLE is now a vanilla fresh boot that only skips the
+    cutscene (template written back, intro jumped to the menu);
+    only LOAD resumes, and unloadable files fall back to TITLE.
+    Verified: marked CURGAME boots to the template roster and is
+    clobbered; the six-way boot matrix matches the new rules.
+  - **gates**: `yt2p-tests: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.

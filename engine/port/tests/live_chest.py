@@ -69,6 +69,11 @@ K6 = key(0x07, 0x36)
 S = key(0x1F, 0x53)
 SPACE = key(0x39, 0x20)
 F1 = key(0x3B, 0x00)
+UP = key(0x48, 0x00)
+DOWN = key(0x50, 0x00)
+LEFT = key(0x4B, 0x00)
+RIGHT = key(0x4D, 0x00)
+ARROWS = (UP, DOWN, LEFT, RIGHT)
 
 OPENER = [absm(24, 163), click()]
 GOLD = [absm(249, 168), click()]
@@ -86,6 +91,15 @@ def rclick(x, y):
 def logged(marker):
     with open(LOGPATH, errors="replace") as log:
         return marker in log.read()
+
+
+def count(marker):
+    with open(LOGPATH, errors="replace") as log:
+        return log.read().count(marker)
+
+
+def out_size():
+    return os.path.getsize(os.path.join(WORK, "OUTPUT.BIN"))
 
 
 def wait_for(marker, timeout):
@@ -215,6 +229,18 @@ def main():
         # silent).
         if burst(stream, [SPACE]) != []:
             return fail("prompt not silent")
+        # Prompt owns input (B1 fn_0A834 repolls): arrows are silent
+        # (no step) and present nothing; D opens no menu.
+        for key in ARROWS:
+            before = out_size()
+            if burst(stream, [key]) != []:
+                return fail("prompt arrow not silent")
+            if out_size() != before:
+                return fail("prompt arrow presented")
+        menus = count("play: ingamemenu start")
+        burst(stream, [D])
+        if count("play: ingamemenu start") != menus:
+            return fail("prompt D opened the menu")
         if burst(stream, [N]) != []:
             return fail("cancel not silent")
         if burst(stream, OPENER) != []:
@@ -229,6 +255,19 @@ def main():
         # may fire (SFX 13) or not; the open (SFX 6) always lands.
         if got not in ([6], [13, 6]):
             return fail("open burst %s" % (got,))
+        # Modal owns input (B1 fn_073E3): arrows tick silently (no
+        # step, no monsters) with exactly one present each (B1's
+        # fn_10E6A + flush); D opens no menu.
+        for key in ARROWS:
+            before = out_size()
+            if burst(stream, [key]) != []:
+                return fail("modal arrow not silent")
+            if out_size() <= before:
+                return fail("modal arrow presented nothing")
+        menus = count("play: ingamemenu start")
+        burst(stream, [D])
+        if count("play: ingamemenu start") != menus:
+            return fail("modal D opened the menu")
         got = burst(stream, GOLD)
         if got != [7]:
             return fail("gold burst %s" % (got,))

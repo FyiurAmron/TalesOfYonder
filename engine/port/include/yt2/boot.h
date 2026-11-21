@@ -41,8 +41,9 @@ int yt2_boot_palette(const yt2_world *world, yt2_boot_scene scene,
  * Enhanced boot (YT2_MODE=enhanced in the environment). Vanilla always
  * starts a fresh party and plays the intro; enhanced resumes when the
  * game directory holds prior state: any save slot boots straight to
- * the game menu, a lone CURGAME boots to the title menu, and an empty
- * directory boots vanilla (fresh party + intro + title).
+ * the game menu, a lone CURGAME boots a fresh party to the title
+ * menu (intro skipped, CURGAME never read), and an empty directory
+ * boots vanilla (fresh party + intro + title).
  */
 typedef enum yt2_boot_plan_kind {
     YT2_BOOT_PLAN_FULL = 0,

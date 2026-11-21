@@ -15,8 +15,9 @@
  * start-up sequence and opens the scene demo directly.
  *
  * YT2_MODE=enhanced resumes past the intro when DIR holds prior state
- * (any save slot: session plus the in-game menu; lone CURGAME: the
- * title); unset (or anything else) boots vanilla.  The daily driver
+ * (any save slot: session plus the in-game menu; lone CURGAME: a
+ * fresh party at the title, CURGAME never read like vanilla);
+ * unset (or anything else) boots vanilla.  The daily driver
  * (tools/play-port.sh) and port bundles export enhanced.
  *
  * DIR holds WORLD.DAT and PICTURES.VGA; OUTPUT.BIN is created there and
@@ -1450,6 +1451,21 @@ static void session_key(play_state *state, const yt2_input_event *event,
             event->scancode == PLAY_SCAN_DOWN ||
             event->scancode == PLAY_SCAN_LEFT ||
             event->scancode == PLAY_SCAN_RIGHT) {
+            if (state->have_combat && state->combat.chest_prompt &&
+                !state->combat.chest_open) {
+                /* Prompt repolls (B1 fn_0A834 ignores arrows):
+                   consumed, silent. */
+                return;
+            }
+            if (state->have_combat && state->combat.chest_open) {
+                /* Modal anim-tick (B1 fn_10E6A on extended keys):
+                   stale render with the modal UI, portraits
+                   retained; no move, no monsters. */
+                yt2_combat_repaint_keep_portraits(
+                    &state->combat, explore_present, state);
+                session_drain_sfx(state);
+                return;
+            }
             /* Formal re-polls arrows (B1 sub_06493: F-keys select,
                the rest is not movement). */
             if (state->have_combat &&
@@ -1483,6 +1499,13 @@ static void session_key(play_state *state, const yt2_input_event *event,
         }
         ascii = session_ascii(event);
         if (ascii == 'D') {
+            /* The modal owns input (B1's fn_073E3 loop has no menu
+               path); silently consumed. */
+            if (state->have_combat &&
+                (state->combat.chest_open ||
+                 state->combat.chest_prompt)) {
+                return;
+            }
             /* B1's formal D (loc_06885) nests the menu with mask
                0x5E; explore uses 0xFE. */
             state->ingametitlemenu_requested = 1;
@@ -2025,6 +2048,14 @@ static int run_session(play_state *state, yt2_folder_out *out,
             if (state->map_open) {
                 continue;
             }
+            /* Chest prompt/modal (B1's fn_073E3/fn_0795E loops own
+               input): frozen like the map; the modal anim-tick
+               runs on arrow input, never on the wall clock. */
+            if (state->have_combat &&
+                (state->combat.chest_open ||
+                 state->combat.chest_prompt)) {
+                continue;
+            }
             /* The room ticks its own clock/sky/rotation countdowns.
                Idle explore re-renders stale (B1's per-poll fn_10E6A:
                sprites advance under the palette); formal and modal
@@ -2211,26 +2242,26 @@ int main(int argc, char **argv)
         snprintf(state.save_path, sizeof(state.save_path), "%s/CURGAME",
                  argv[1]);
         snprintf(state.game_dir, sizeof(state.game_dir), "%s", argv[1]);
-        /* Enhanced boot (YT2_MODE=enhanced): resume prior state
-           instead of the vanilla fresh-party + intro. LOAD (any
-           slot) enters the normal loop at EMBARK with the pre-game
-           menu skipped: the session starts from the resumed save
-           and opens the in-game menu. TITLE (lone CURGAME) shows
-           the title with the resumed roster; anything unloadable
-           falls back to FULL vanilla. */
+        /* Enhanced boot (YT2_MODE=enhanced): LOAD (any slot)
+           resumes into the session with the in-game menu; TITLE
+           (lone CURGAME) is a vanilla fresh boot that only skips
+           the intro cutscene (CURGAME is never read, so the
+           roster never inherits a previous session). Anything
+           unloadable with prior files around falls back to TITLE;
+           only a clean directory boots FULL vanilla. */
         if (yt2_boot_enhanced() &&
             yt2_boot_decide(argv[1], &boot_plan) == YT2_STATUS_OK) {
             if (boot_plan.kind == YT2_BOOT_PLAN_LOAD) {
                 if (play_boot_resume(&state, &boot_plan)) {
                     do_load = 1;
+                } else {
+                    boot_to_title = 1;
                 }
-            } else if (boot_plan.kind == YT2_BOOT_PLAN_TITLE &&
-                       yt2_save_load(state.save_path, &state.save) ==
-                           YT2_STATUS_OK) {
+            } else if (boot_plan.kind == YT2_BOOT_PLAN_TITLE) {
                 boot_to_title = 1;
             }
         }
-        if (do_load || boot_to_title) {
+        if (do_load) {
             state.have_save = 1;
             state.ingamemenu_scanned =
                 yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
@@ -2250,7 +2281,11 @@ int main(int argc, char **argv)
             state.have_save = 1;
             state.ingamemenu_scanned = yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
             printf("play: new party\n");
-            printf("play: intro start\n");
+            if (boot_to_title) {
+                printf("play: intro skipped\n");
+            } else {
+                printf("play: intro start\n");
+            }
         }
         if (yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
             yt2_present_pace(&presenter, &out, options.tick_ms) !=

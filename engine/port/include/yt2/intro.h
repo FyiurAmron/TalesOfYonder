@@ -164,6 +164,12 @@ typedef struct yt2_intro {
      * headless tool) ignore this.
      */
     int peek_only;
+    /*
+     * Latched ESC skip: one tap skips every remaining phase (B1's
+     * sticky KeyCode cascades the same way). Set by the skip poll,
+     * consumed when the menu is reached.
+     */
+    int esc_hit;
     int have_last;              /* emission dedup (B1 presents only changes) */
     uint8_t last_frame[YT2_INTRO_WIDTH * YT2_INTRO_HEIGHT];
     uint8_t last_palette[YT2_PALETTE_SIZE];

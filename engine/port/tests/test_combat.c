@@ -251,6 +251,7 @@ int test_combat(void)
               YT2_STATUS_ERROR);
         CHECK(yt2_combat_repaint(NULL, NULL, NULL) == YT2_STATUS_ERROR);
         CHECK(yt2_combat_fkey(NULL, 1u, NULL, NULL) == YT2_STATUS_ERROR);
+    }
     /* F1-F4 pick the chest opener like portrait clicks (B1 fn_0A834):
        F2 opens with member 2, an unfit member buzzes (sfx 3) and the
        prompt stays, an unassigned slot is consumed silently, and with
@@ -314,6 +315,30 @@ int test_combat(void)
                               &frames) == YT2_STATUS_ERROR);
         test_formal_free(&fix);
     }
+    /* Formal rounds wait out the prompt/modal (B1's fn_073E3 loop
+       replaces the formal loop): A builds no queue and presents
+       nothing while either is open. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 |= 0x1000u;
+        fix.combat.chest_prompt = 1;
+        CHECK(yt2_combat_key(&fix.combat, 'A', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.queue_count == 0u);
+        CHECK(frames == 0u);
+        fix.combat.chest_prompt = 0;
+        fix.combat.chest_open = 1;
+        CHECK(yt2_combat_key(&fix.combat, 'A', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.queue_count == 0u);
+        CHECK(frames == 0u);
+        test_formal_free(&fix);
+    }
     /* Portrait clicks map to the same opener slots. */
     {
         test_formal fix;
@@ -332,7 +357,7 @@ int test_combat(void)
         CHECK(fix.combat.chest_open == 1);
         CHECK(fix.combat.chest_opener == fix.room.party->assigned[2]);
         test_formal_free(&fix);
-    }
+
     }
     /* The SFX log reads empty and clamps out of range. */
     {

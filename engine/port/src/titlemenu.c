@@ -70,6 +70,7 @@ yt2_intro_transition yt2_titlemenu_run(yt2_titlemenu *menu)
         }
     }
 menu_top:
+    intro->esc_hit = 0;
     yt2_intro_fade_out(intro);
     yt2_intro_load_palette(intro, 0u);
     yt2_intro_blit(intro, YT2_INTRO_DRAW_WORK, 0x00u, 2u, 1, 1, 0u, 0u, 0u,
@@ -89,6 +90,14 @@ menu_top:
         input.mouse_y = -1;
         if (intro->poll != NULL) {
             intro->poll(&input, intro->user);
+        }
+        if (intro->reshow) {
+            /* Late joiner (the menu idles with no emissions): drop
+               the dedup so the flush below re-sends the settled
+               screen; the bridge force turns it into a keyframe. */
+            intro->reshow = 0;
+            intro->have_last = 0;
+            yt2_intro_flush(intro);
         }
         if (input.left_pressed) {
             int hit = menu_hit(input.mouse_x, input.mouse_y);

@@ -267,6 +267,11 @@ void yt2_intro_fade(yt2_intro *intro, unsigned int mode,
         if (intro->stop) {
             goto done;
         }
+        /* Fades are wall time (paced emits): same prompt skip (the
+           menu re-fades from whatever palette this leaves). */
+        if (yt2_intro_poll_esc(intro)) {
+            goto done;
+        }
     }
 done:
     if (mode == 1u) {
@@ -467,6 +472,11 @@ void yt2_intro_wait_frames(yt2_intro *intro, unsigned int count)
             return;
         }
         yt2_intro_compose(intro);
+        /* Long frame waits are wall time (paced emits): poll so a
+           tap skips promptly instead of at the next phase check. */
+        if (yt2_intro_poll_esc(intro)) {
+            return;
+        }
     }
 }
 
@@ -505,6 +515,9 @@ static int intro_wait_ticks_esc(yt2_intro *intro, unsigned int count)
 
 int yt2_intro_poll_esc(yt2_intro *intro)
 {
+    if (intro->esc_hit) {
+        return 1;
+    }
     if (intro->poll != NULL) {
         yt2_intro_input input;
         int esc;
@@ -517,6 +530,7 @@ int yt2_intro_poll_esc(yt2_intro *intro)
         intro->peek_only = 0;
         esc = input.have_key && input.key == 0x1Bu;
         if (esc) {
+            intro->esc_hit = 1;
             return 1;
         }
     }

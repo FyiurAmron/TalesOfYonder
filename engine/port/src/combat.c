@@ -4316,6 +4316,11 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
     }
     room = combat->room;
     if ((room->f5064 & 0x1000u) != 0u) {
+        /* The modal owns input (B1's fn_073E3 loop replaces the
+           formal loop); rounds wait. */
+        if (combat->chest_open || combat->chest_prompt) {
+            return YT2_STATUS_OK;
+        }
         combat_formal_key(combat, ascii, present, context);
         if (combat->queue_count == 0u &&
             (room->f5064 & 0x1000u) != 0u) {
