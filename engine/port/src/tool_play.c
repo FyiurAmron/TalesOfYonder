@@ -129,6 +129,12 @@ typedef struct play_state {
     unsigned int tick;
     unsigned int last_press_tick;
     int have_last_press;
+    /* Hold latch (B1's 6-tick press): a left release 6+ ticks after
+       its press on the same portrait opens the stat sheet. */
+    unsigned int hold_tick;
+    int hold_x;
+    int hold_y;
+    int have_hold;
     /* Stale press the original re-fires on the tick after a double-click. */
     int phantom_pending;
     unsigned int phantom_tick;
@@ -1441,6 +1447,40 @@ static void session_key(play_state *state, const yt2_input_event *event,
         /* Main-loop dispatch (tbl_KeyDispatch/tbl_ScanDispatch): arrows
            move, D opens the in-game menu, R opens the game menu (unported),
            everything else is silent (loc_00817 ignores ESC/Q/junk). */
+        state->have_hold = 0;
+        if (state->have_combat && state->combat.sheet_open != 0u) {
+            /* The sheet owns input (B1 loc_096C0): ESC/C close,
+               F-keys switch; arrows, SPACE, verbs and the menu
+               re-poll. Clicks route through session_click. */
+            if (state->map_open) {
+                play_map_close(state);
+                session_drain_sfx(state);
+                return;
+            }
+            ascii = session_ascii(event);
+            if ((ascii == 0x1Bu || ascii == 'C') && event->down == 1) {
+                if (yt2_combat_key(&state->combat, ascii,
+                                   explore_present,
+                                   state) == YT2_STATUS_OK) {
+                    explore_flush_save(state);
+                }
+                session_drain_sfx(state);
+                return;
+            }
+            if (event->ascii == 0u && event->scancode >= PLAY_SCAN_F1 &&
+                event->scancode <= PLAY_SCAN_F4 && event->down == 1) {
+                if (yt2_combat_fkey(&state->combat,
+                                    event->scancode - PLAY_SCAN_F1 + 1u,
+                                    explore_present,
+                                    state) == YT2_STATUS_OK) {
+                    explore_flush_save(state);
+                }
+                session_drain_sfx(state);
+                return;
+            }
+            session_drain_sfx(state);
+            return;
+        }
         if (state->map_open) {
             /* fn_123E9 WaitKey: any key closes the map (consumed). */
             play_map_close(state);
@@ -1564,8 +1604,9 @@ static void session_key(play_state *state, const yt2_input_event *event,
         }
         if (event->ascii == 0u && event->scancode >= PLAY_SCAN_F1 &&
             event->scancode <= PLAY_SCAN_F4 && state->have_combat) {
-            /* F1-F4 member pick (B1 fn_0A834); the chest opener
-               prompt answers, everything else stays unported. */
+            /* F1-F4 member pick (B1 fn_0A834/fn_09619): the chest
+               opener prompt answers, everywhere else opens the
+               stat sheet. */
             if (yt2_combat_fkey(&state->combat,
                                 event->scancode - PLAY_SCAN_F1 + 1u,
                                 explore_present, state) ==
@@ -1586,9 +1627,7 @@ static void session_key(play_state *state, const yt2_input_event *event,
             return;
         }
         if (event->ascii == 0u &&
-            ((event->scancode >= PLAY_SCAN_F1 &&
-              event->scancode <= PLAY_SCAN_F1 + 3u) ||
-             event->scancode == PLAY_SCAN_F1 + 6u)) {
+            event->scancode == PLAY_SCAN_F1 + 6u) {
             fprintf(stderr, "play: explore key scan %02X unported\n",
                     event->scancode);
         }
@@ -1917,11 +1956,42 @@ static int run_session(play_state *state, yt2_folder_out *out,
                 moved = 1;
                 break;
             case YT2_INPUT_EVENT_MOUSE_BUTTON:
+                if (event.down == 0u && event.button == 0u &&
+                    state->have_hold && state->have_combat &&
+                    state->session_mode == 3 && !state->map_open &&
+                    state->tick - state->hold_tick >= 6u) {
+                    unsigned int down_member = 0u;
+                    unsigned int up_member = 0u;
+
+                    /* Left-hold (B1's 50CC 6): same portrait at
+                       press and release opens the stat sheet. */
+                    state->have_hold = 0;
+                    if (yt2_room_portrait_hit(state->hold_x,
+                                              state->hold_y,
+                                              &down_member) &&
+                        yt2_room_portrait_hit(state->cursor_x,
+                                              state->cursor_y,
+                                              &up_member) &&
+                        down_member == up_member &&
+                        yt2_combat_hold(&state->combat, state->cursor_x,
+                                        state->cursor_y, explore_present,
+                                        state) == YT2_STATUS_OK) {
+                        explore_flush_save(state);
+                        session_drain_sfx(state);
+                    }
+                    break;
+                }
                 if (event.down == 1u &&
                     (event.button == 0u || event.button == 2u)) {
                     const char *before = session_stage_name(state);
                     int dirty = 0;
 
+                    if (event.button == 0u) {
+                        state->have_hold = 1;
+                        state->hold_tick = state->tick;
+                        state->hold_x = state->cursor_x;
+                        state->hold_y = state->cursor_y;
+                    }
                     session_click(state, state->cursor_x, state->cursor_y,
                                   event.button == 2u, &dirty);
                     if (dirty &&
@@ -2118,6 +2188,9 @@ static int run_session(play_state *state, yt2_folder_out *out,
                                               &state->surface);
                     }
                     state->room.no_compass = no_compass;
+                    if (state->have_combat) {
+                        yt2_combat_sheet_retain(&state->combat);
+                    }
                 }
                 if (session_present(state, out, presenter, 0) ==
                     YT2_STATUS_OK) {

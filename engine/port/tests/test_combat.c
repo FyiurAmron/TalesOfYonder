@@ -306,13 +306,16 @@ int test_combat(void)
         CHECK(frames == 0u);
         CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
         fix.combat.chest_prompt = 0;
-        /* Formal F-keys open member stats (B1 sub_09A1D), no prompt
-           needed: the page paints and presents with the SFX 9 blip. */
+        /* Formal F-keys open the stat sheet (B1 fn_09619), no prompt
+           needed: stats plus numbers plus border, one present, the
+           SFX 2 pick plus the SFX 9 page blip. */
         CHECK(yt2_combat_fkey(&fix.combat, 1u, test_present_count,
                               &frames) == YT2_STATUS_OK);
         CHECK(frames == 1u);
-        CHECK(yt2_combat_sfx_count(&fix.combat) == 2u);
-        CHECK(yt2_combat_sfx_at(&fix.combat, 1u) == 9u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 3u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 1u) == 2u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 2u) == 9u);
+        CHECK(fix.combat.sheet_open == 1u);
         fix.combat.chest_prompt = 1;
         CHECK(yt2_combat_fkey(&fix.combat, 0u, test_present_count,
                               &frames) == YT2_STATUS_ERROR);
@@ -1037,6 +1040,92 @@ int test_combat(void)
             }
         }
         CHECK(title_ink);
+        test_formal_free(&fix);
+    }
+    /* Stat sheet (fn_09619): F-key opens stats plus numbers plus the
+       member border, highlight boxes toggle, ESC closes leaving the
+       numbers stale, portrait holds open. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        unsigned int x;
+        int ink;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        CHECK(yt2_combat_fkey(&fix.combat, 1u, test_present_count,
+                              &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.sheet_open == 1u);
+        CHECK(frames == 1u);
+        /* Attribute numbers at x 42, skill numbers at x 116/203. */
+        ink = 0;
+        for (x = 42u; x < 70u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)38u * fix.surface.stride + x];
+
+            if (p == 0x0Fu) {
+                ink = 1;
+            }
+        }
+        CHECK(ink);
+        ink = 0;
+        for (x = 116u; x < 140u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)44u * fix.surface.stride + x];
+
+            if (p == 0x0Fu) {
+                ink = 1;
+            }
+        }
+        CHECK(ink);
+        /* Highlight toggle (box 2): CONAN takes bartering. */
+        CHECK(yt2_combat_click(&fix.combat, 180, 45, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.room.party->active[0] == 1u);
+        ink = 0;
+        for (x = 203u; x < 230u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)44u * fix.surface.stride + x];
+
+            if (p == 0xCBu) {
+                ink = 1;
+            }
+        }
+        CHECK(ink);
+        /* Toggle again clears. */
+        CHECK(yt2_combat_click(&fix.combat, 180, 45, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.room.party->active[0] == 0u);
+        /* F2 switches the sheet member. */
+        CHECK(yt2_combat_fkey(&fix.combat, 2u, test_present_count,
+                              &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.sheet_open == 2u);
+        /* ESC closes; the numbers stay (vanilla residue). */
+        CHECK(yt2_combat_key(&fix.combat, 0x1Bu, test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.sheet_open == 0u);
+        ink = 0;
+        for (x = 42u; x < 70u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)38u * fix.surface.stride + x];
+
+            if (p == 0x0Fu) {
+                ink = 1;
+            }
+        }
+        CHECK(ink);
+        /* Portrait hold reopens. */
+        CHECK(yt2_combat_hold(&fix.combat, 23, 163, test_present_count,
+                              &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.sheet_open == 1u);
+        /* Non-portrait holds re-poll. */
+        CHECK(yt2_combat_hold(&fix.combat, 100, 80, test_present_count,
+                              &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.sheet_open == 1u);
         test_formal_free(&fix);
     }
     return test_failures == 0;

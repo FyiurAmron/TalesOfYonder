@@ -3623,3 +3623,16 @@ items now live in `docs/roadmap.md`).
     13 pages, formal stats, doctored values); B1-vs-B2 side panel
     pixels index-identical (stats1/2, training, protections,
     transports-blank, afflictions, formal body).
+- 2026-11-22 — stat sheet (fn_09619):
+  - **ask**: the side panel pages were not the requested screens; B1's
+    real per-character stats are F1-F4 + portrait-hold: side panel
+    stats plus bare attribute/combat/skill numbers over the
+    scene, with party highlight toggles (no labels in B1).
+  - **port**: sheet modal (open/switch/toggle/close), F1-F4 in
+    explore/formal/modal, portrait hold latch (6+ ticks),
+    highlight boxes + portrait switching, close leaves numbers
+    stale like B1; idle retains numbers over scene repaints.
+  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`,
+    `live-chest: OK`, `live-member: OK` (+ sheet open/switch/
+    toggle/close/hold); B1-vs-B2 sheet ink index-identical
+    (0/539).

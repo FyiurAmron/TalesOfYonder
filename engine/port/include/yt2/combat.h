@@ -224,6 +224,9 @@ typedef struct yt2_combat {
     /* Member page painted (fn_16044): the caller skips its trailing
        repaint (which would wipe the page). Cleared when taken. */
     int member_page;
+    /* Stat sheet open (fn_09619) for assigned member 1..4, 0 when
+       closed. The sheet owns input like the chest modal. */
+    unsigned int sheet_open;
     /* Save power (v_555C): monster +0x52, spell id, or event
        param feeding fn_17D2C as the difficulty. */
     uint16_t save_power;
@@ -255,10 +258,10 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
 int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
                    yt2_room_present_fn present, void *context);
 
-/* F-key member pick (B1 fn_0A834: F1-F4 answer wherever a person is
-   picked). Number is 1-based; today only the chest opener prompt
-   picks, anything else is an error. Consumed-but-silent picks (an
-   unassigned slot, B1's repoll) still return OK. */
+/* F-key member pick (B1 fn_0A834/fn_09619): the chest opener prompt
+   answers F1-F4 with the opener, everywhere else F1-F4 open the
+   stat sheet (or switch it). Number is 1-based. Consumed-but-silent
+   picks (an unassigned slot, B1's repoll) still return OK. */
 int yt2_combat_fkey(yt2_combat *combat, unsigned int number,
                     yt2_room_present_fn present, void *context);
 
@@ -284,6 +287,22 @@ int yt2_combat_repaint_keep_portraits(yt2_combat *combat,
    Formal verbs present through the callback like keys do. */
 int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
                      yt2_room_present_fn present, void *context);
+
+/*
+ * Repaint the open sheet's numbers plus border over a fresh idle
+ * render (B1's fn_10E6A never repaints the scene bitmap, so the
+ * numbers persist; B2's idle render would wipe them). No-op unless
+ * a sheet is open; never presents.
+ */
+void yt2_combat_sheet_retain(yt2_combat *combat);
+
+/*
+ * Left-hold (B1's 50CC 6 press): a held portrait opens the stat
+ * sheet (explore, open modal). Held quick access cells use items (B1
+ * fn_1760E, deferred with the pack UI); formal holds re-poll.
+ */
+int yt2_combat_hold(yt2_combat *combat, int x, int y,
+                    yt2_room_present_fn present, void *context);
 
 /* SFX log drain for the gate. */
 unsigned int yt2_combat_sfx_count(const yt2_combat *combat);

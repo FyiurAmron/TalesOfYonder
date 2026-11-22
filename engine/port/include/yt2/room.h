@@ -253,6 +253,13 @@ int yt2_room_portrait_origin(unsigned int slot, int *x, int *y);
  */
 int yt2_room_strip_hit(int x, int y, unsigned int *member, unsigned int *cell);
 
+/*
+ * Portrait-rect hit (fn_09619 over DGROUP:0x61C8 ids 1/11/21/31).
+ * Sets *member to 1..4; cells are a miss. Returns 1 on a hit,
+ * 0 on a miss.
+ */
+int yt2_room_portrait_hit(int x, int y, unsigned int *member);
+
 /* Window cell pointer (fn_06FF0): NULL when outside the cached window. */
 yt2_room_cell *yt2_room_window_cell(yt2_room *room, int x, int y);
 

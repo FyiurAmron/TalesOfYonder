@@ -75,6 +75,16 @@ K1 = key(0x02, 0x31)
 K2 = key(0x03, 0x32)
 K6 = key(0x07, 0x36)
 S = key(0x1F, 0x53)
+F1 = key(0x3B, 0x00)
+F2 = key(0x3C, 0x00)
+
+
+def down():
+    return (3, bytes([2, 0, 1]))
+
+
+def up():
+    return (3, bytes([2, 0, 0]))
 
 
 def doctor(save):
@@ -268,7 +278,40 @@ def main():
         # like vanilla, so only the SFX asserts.
         if burst(stream, [absm(24, 163), click()]) != []:
             return fail("portrait click not silent")
-        print("live-member: OK (13 pages + silent portrait)")
+        # Stat sheet (fn_09619): F1 opens ([2, 9]), F2 switches,
+        # highlight boxes toggle silently, ESC closes ([2]), and a
+        # 6+ tick portrait hold reopens.
+        got = burst(stream, [F1])
+        if got != [2, 9]:
+            return fail("sheet open burst %s" % (got,))
+        snap(stream, "sheet1")
+        got = burst(stream, [F2])
+        if got != [2, 9]:
+            return fail("sheet switch burst %s" % (got,))
+        snap(stream, "sheet2")
+        got = burst(stream, [absm(180, 45), click()])
+        if got != []:
+            return fail("sheet toggle not silent: %s" % (got,))
+        snap(stream, "sheet-toggle")
+        got = burst(stream, [absm(180, 45), click()])
+        if got != []:
+            return fail("sheet untoggle not silent: %s" % (got,))
+        got = burst(stream, [ESC])
+        if got != [2]:
+            return fail("sheet close burst %s" % (got,))
+        snap(stream, "sheet-closed")
+        stream.write(record(frame(*absm(23, 163))))
+        stream.write(record(frame(*down())))
+        stream.flush()
+        time.sleep(1)
+        got = burst(stream, [up()])
+        if got != [2, 9]:
+            return fail("sheet hold burst %s" % (got,))
+        snap(stream, "sheet-hold")
+        got = burst(stream, [ESC])
+        if got != [2]:
+            return fail("sheet hold close burst %s" % (got,))
+        print("live-member: OK (13 pages + silent portrait + sheet)")
         print("live-member: snaps in %s" % SNAPS)
         return 0
     finally:

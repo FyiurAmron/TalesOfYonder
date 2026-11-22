@@ -252,6 +252,25 @@ int yt2_room_strip_hit(int x, int y, unsigned int *member, unsigned int *cell)
     return 0;
 }
 
+int yt2_room_portrait_hit(int x, int y, unsigned int *member)
+{
+    unsigned int slot;
+
+    if (member == NULL) {
+        return 0;
+    }
+    for (slot = 0u; slot < 4u; slot++) {
+        const uint16_t *entry = &room_portraits[slot][0];
+
+        if ((int)entry[0] <= x && x <= (int)entry[1] &&
+            (int)entry[2] <= y && y <= (int)entry[3]) {
+            *member = slot + 1u;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Arrow feedback cells (DGROUP:0x6420, x0, x1, y0, y1, id). */
 static const uint16_t room_arrows[6][5] = {
     {246, 261, 161, 177, 1},

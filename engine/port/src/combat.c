@@ -193,6 +193,7 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
     combat->award_pending = 0;
     combat->menu_requested = 0;
     combat->member_page = 0;
+    combat->sheet_open = 0u;
     combat->menu_formal = 0;
     combat->chest_open = 0;
     combat->chest_prompt = 0;
@@ -1227,14 +1228,14 @@ static int combat_next_hero(yt2_combat *combat, unsigned int index,
 }
 
 /* fn_171AE current-member bit: 1px color-219 border on the 32x32 pic. */
-static void combat_paint_highlight(yt2_combat *combat)
+static void combat_paint_highlight_at(yt2_combat *combat, unsigned int slot)
 {
     yt2_surface *surface = combat->surface;
     int x;
     int y;
     int i;
 
-    if (yt2_room_portrait_origin(combat->current, &x, &y) != YT2_STATUS_OK) {
+    if (yt2_room_portrait_origin(slot, &x, &y) != YT2_STATUS_OK) {
         return;
     }
     for (i = 0; i < 32; i++) {
@@ -1247,6 +1248,11 @@ static void combat_paint_highlight(yt2_combat *combat)
         surface->pixels[(size_t)(y + i) * surface->stride + x] = 219u;
         surface->pixels[(size_t)(y + i) * surface->stride + (x + 31)] = 219u;
     }
+}
+
+static void combat_paint_highlight(yt2_combat *combat)
+{
+    combat_paint_highlight_at(combat, combat->current);
 }
 
 /* sub_06AC5: build the combat queue, pick monster targets, sort. */
@@ -3395,6 +3401,206 @@ static int combat_member_page(yt2_combat *combat, unsigned int member,
     return YT2_STATUS_OK;
 }
 
+/* sub_09855: current value, tan when buffed past max. */
+static void sheet_pair(yt2_combat *combat, int x, int y, uint16_t cur,
+                       uint16_t max, uint8_t plain, uint8_t buffed)
+{
+    char number[8];
+
+    member_plain(cur, number);
+    yt2_text_draw(combat->surface, x, y, number,
+                  cur > max ? buffed : plain);
+}
+
+/*
+ * sub_0987F: the stat sheet, bare current values over the scene (no
+ * labels, no backdrop): 6 attributes, battle acc/dam/absorption,
+ * 8+5 skills in three columns. Rows past max print tan; the last
+ * five skill rows print the highlight pair when this member holds
+ * the party highlight slot.
+ */
+static void combat_paint_sheet(yt2_combat *combat,
+                               const yt2_character *member,
+                               unsigned int slot)
+{
+    static const unsigned int skill_x[2] = {116, 203};
+    const uint16_t *cur = (const uint16_t *)&member->current;
+    const uint16_t *max = (const uint16_t *)&member->maximum;
+    yt2_party *party = combat->room->party;
+    unsigned int i;
+
+    /* Attributes: strength..charisma are the first six words. */
+    for (i = 0u; i < 6u; i++) {
+        sheet_pair(combat, 42, 37 + (int)i * 10, cur[i], max[i], 0x0Fu,
+                   0x8Au);
+    }
+    /* Battle accuracy/damage/absorption (+0x4C words 8..10). */
+    for (i = 0u; i < 3u; i++) {
+        sheet_pair(combat, 42, 99 + (int)i * 10, cur[8u + i],
+                   max[8u + i], 0x0Fu, 0x8Au);
+    }
+    /* Skills 0..7 at x 116, 8..12 at x 203 (+0x58/+0x68 words). */
+    for (i = 0u; i < 13u; i++) {
+        unsigned int col = i < 8u ? 0u : 1u;
+        int y = 43 + (int)(i < 8u ? i : i - 8u) * 10;
+        uint8_t plain = 0x0Fu;
+        uint8_t buffed = 0x8Au;
+
+        if (col == 1u && party->active[i - 8u] == (uint16_t)slot) {
+            plain = 0xCBu;
+            buffed = 0x9Bu;
+        }
+        sheet_pair(combat, (int)skill_x[col], y, cur[14u + i],
+                   max[14u + i], plain, buffed);
+    }
+}
+
+/*
+ * fn_09619 open/switch (loc_0969F): side panel stats plus the sheet
+ * numbers plus the member border. Unassigned members are silent.
+ */
+static int combat_sheet_open(yt2_combat *combat, unsigned int member,
+                             yt2_room_present_fn present, void *context)
+{
+    yt2_room *room;
+    unsigned int slot;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    room = combat->room;
+    if (member == 0u || member > 4u) {
+        return YT2_STATUS_OK;
+    }
+    slot = room->party->assigned[member - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return YT2_STATUS_OK;
+    }
+    combat_sfx(combat, 2u);
+    if (combat_member_page(combat, member, 4u, NULL, NULL) !=
+        YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    combat_paint_sheet(combat, &room->party->roster[slot - 1u], slot);
+    combat_paint_highlight_at(combat, member - 1u);
+    combat->sheet_open = member;
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
+}
+
+/* loc_097D8: close the sheet (numbers stay stale, like vanilla). */
+static int combat_sheet_close(yt2_combat *combat,
+                              yt2_room_present_fn present, void *context)
+{
+    yt2_room *room;
+
+    if (combat == NULL || combat->room == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    room = combat->room;
+    combat_sfx(combat, 2u);
+    yt2_room_paint_portraits(room->party, combat->pictures,
+                             combat->surface);
+    /* fn_076AC: "$" plus the gold purse, gated on f5060 bit 0x80. */
+    if ((room->f5060 & 0x80u) != 0u && room->party != NULL) {
+        char purse[24];
+
+        combat_bcd_format(room->party->gold, purse, sizeof(purse));
+        yt2_text_draw(combat->surface, 241, 87, "$", 0x8Au);
+        yt2_text_draw(combat->surface, 247, 87, purse, 0x8Au);
+    }
+    combat->sheet_open = 0u;
+    combat->member_page = 1;
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
+}
+
+/* loc_097FA: toggle a party highlight for this member, if fit. */
+static int combat_sheet_toggle(yt2_combat *combat, unsigned int hl,
+                               yt2_room_present_fn present, void *context)
+{
+    yt2_room *room;
+    yt2_character *member;
+    unsigned int slot;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    room = combat->room;
+    if (combat->sheet_open == 0u || combat->sheet_open > 4u || hl > 4u) {
+        return YT2_STATUS_OK;
+    }
+    slot = room->party->assigned[combat->sheet_open - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return YT2_STATUS_OK;
+    }
+    member = &room->party->roster[slot - 1u];
+    if ((member->status & 0x1C40u) != 0u) {
+        /* fn_0A692 buzz (the cursor flash is presentation). */
+        combat_sfx(combat, 3u);
+        return YT2_STATUS_OK;
+    }
+    room->party->active[hl] =
+        room->party->active[hl] == (uint16_t)slot ? 0u : (uint16_t)slot;
+    combat_paint_sheet(combat, member, slot);
+    combat->member_page = 1;
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
+}
+
+/* Sheet click boxes (DGROUP:0x6334): 1 close, 2..6 highlights. */
+static const combat_box sheet_boxes[] = {
+    {164, 197, 112, 121, 1},
+    {138, 220, 42, 48, 2},
+    {138, 220, 52, 58, 3},
+    {138, 220, 62, 68, 4},
+    {138, 220, 72, 78, 5},
+    {138, 220, 82, 88, 6},
+};
+
+static int combat_sheet_click(yt2_combat *combat, int x, int y, int right,
+                              yt2_room_present_fn present, void *context)
+{
+    unsigned int hit;
+    unsigned int member;
+    unsigned int cell;
+
+    if (right) {
+        return combat_sheet_close(combat, present, context);
+    }
+    hit = chest_hit(sheet_boxes, 6u, x, y);
+    if (hit == 1u) {
+        return combat_sheet_close(combat, present, context);
+    }
+    if (hit >= 2u && hit <= 6u) {
+        return combat_sheet_toggle(combat, hit - 2u, present, context);
+    }
+    /* Portrait clicks switch the sheet member (cells re-poll). */
+    {
+        static const combat_box portraits[] = {
+            {8, 39, 148, 179, 1},
+            {66, 96, 148, 179, 2},
+            {124, 154, 148, 179, 3},
+            {182, 212, 148, 179, 4},
+        };
+
+        (void)cell;
+        member = chest_hit(portraits, 4u, x, y);
+    }
+    if (member >= 1u && member <= 4u) {
+        return combat_sheet_open(combat, member, present, context);
+    }
+    return YT2_STATUS_OK;
+}
+
 /* One item icon (fn_19E12 class 0x80, transparent 0xFF). */
 static void chest_icon(yt2_combat *combat, int x, int y, unsigned int id)
 {
@@ -4806,6 +5012,14 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
     }
     room = combat->room;
     combat->member_page = 0;
+    if (combat->sheet_open != 0u) {
+        /* The sheet owns input (B1's loc_096C0 loop); ESC and C
+           close, everything else re-polls. */
+        if (ascii == 0x1Bu || ascii == 'C') {
+            return combat_sheet_close(combat, present, context);
+        }
+        return YT2_STATUS_OK;
+    }
     if ((room->f5064 & 0x1000u) != 0u) {
         /* The modal owns input (B1's fn_073E3 loop replaces the
            formal loop); rounds wait. */
@@ -4930,19 +5144,18 @@ int yt2_combat_fkey(yt2_combat *combat, unsigned int number,
         return YT2_STATUS_ERROR;
     }
     combat->member_page = 0;
-    if ((combat->room->f5064 & 0x1000u) != 0u && !combat->chest_open &&
-        !combat->chest_prompt) {
-        /* Formal member stats (sub_09A1D synthesizes KeyCode 1-4). */
-        if (number == 0u || number > 4u) {
-            return YT2_STATUS_ERROR;
-        }
-        return combat_member_page(combat, number, 4u, present, context);
-    }
-    if (!combat->chest_prompt || combat->chest_open) {
-        return YT2_STATUS_ERROR;
-    }
     if (number == 0u || number > 4u) {
         return YT2_STATUS_ERROR;
+    }
+    if (combat->sheet_open != 0u) {
+        /* The sheet switches members (B1 loc_0978D); empty slots
+           re-poll inside the open. */
+        return combat_sheet_open(combat, number, present, context);
+    }
+    if (!combat->chest_prompt || combat->chest_open) {
+        /* Stat sheet (fn_09619): explore, formal and the open
+           modal; the prompt answers F-keys itself below. */
+        return combat_sheet_open(combat, number, present, context);
     }
     was_open = combat->chest_open;
     was_prompt = combat->chest_prompt;
@@ -5299,6 +5512,9 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
         return YT2_STATUS_ERROR;
     }
     combat->member_page = 0;
+    if (combat->sheet_open != 0u) {
+        return combat_sheet_click(combat, x, y, right, present, context);
+    }
     if ((combat->room->f5064 & 0x1000u) != 0u && !combat->chest_open &&
         !combat->chest_prompt) {
         return combat_formal_click(combat, x, y, right, present, context);
@@ -5359,6 +5575,9 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
                 if (combat->chest_cursor != 0u) {
                     chest_portrait_drop(combat, i + 1u);
                 }
+                /* Empty-cursor portrait presses are vanilla
+                   silence (fn_16044 ignores the rect); holds open
+                   the sheet via yt2_combat_hold. */
                 return YT2_STATUS_OK;
             }
         }
@@ -5377,6 +5596,64 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
     }
     /* Regions 1/3/4: viewport drops need prompt 4 (deferred with the
        ground spawn); the rest ignore clicks. */
+    return YT2_STATUS_OK;
+}
+
+void yt2_combat_sheet_retain(yt2_combat *combat)
+{
+    yt2_room *room;
+    unsigned int slot;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL || combat->sheet_open == 0u ||
+        combat->sheet_open > 4u) {
+        return;
+    }
+    room = combat->room;
+    slot = room->party->assigned[combat->sheet_open - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return;
+    }
+    combat_paint_sheet(combat, &room->party->roster[slot - 1u], slot);
+    combat_paint_highlight_at(combat, combat->sheet_open - 1u);
+}
+
+int yt2_combat_hold(yt2_combat *combat, int x, int y,
+                    yt2_room_present_fn present, void *context)
+{
+    unsigned int member;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    combat->member_page = 0;
+    if (combat->sheet_open != 0u) {
+        /* Holds re-poll under the sheet. */
+        return YT2_STATUS_OK;
+    }
+    if (combat->chest_open) {
+        /* Stat sheet (fn_09619 via fn_073E3's hold arm). */
+        if (combat->chest_cursor == 0u &&
+            yt2_room_portrait_hit(x, y, &member)) {
+            return combat_sheet_open(combat, member, present, context);
+        }
+        return YT2_STATUS_OK;
+    }
+    if (combat->chest_prompt ||
+        (combat->room->f5064 & 0x1000u) != 0u) {
+        /* Prompt and formal holds re-poll (formal quick access holds ride
+           with the pack UI). */
+        return YT2_STATUS_OK;
+    }
+    if ((combat->room->party->explore_flags & 0x1000u) != 0u) {
+        /* Pack-open holds use pack items (fn_1760E, pack UI). */
+        return YT2_STATUS_OK;
+    }
+    /* Stat sheet (fn_09619 via loc_0033F). */
+    if (yt2_room_portrait_hit(x, y, &member)) {
+        return combat_sheet_open(combat, member, present, context);
+    }
     return YT2_STATUS_OK;
 }
 
