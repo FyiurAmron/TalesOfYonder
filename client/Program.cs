@@ -343,6 +343,37 @@ internal static class Program
         return null;
     }
 
+    private static SdlAudioStream? OpenAudioWithTimeout(int rate,
+                                                             TimeSpan timeout,
+                                                             out string error)
+    {
+        SdlAudioStream? opened = null;
+        string openError = "";
+        var attempt = new Thread(() =>
+        {
+            try
+            {
+                opened = SdlAudio.TryOpen(rate, out openError);
+            }
+            catch (Exception ex)
+            {
+                openError = ex.Message;
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "audio-open",
+        };
+        attempt.Start();
+        if (attempt.Join(timeout))
+        {
+            error = openError;
+            return opened;
+        }
+        error = "timed out opening the audio device";
+        return null;
+    }
+
     private static string DefaultSessionPath() => Path.Combine(
         "build", "runs", "session",
         $"{DateTime.UtcNow.ToString(
@@ -458,7 +489,13 @@ internal static class Program
         SdlAudioStream? audio = null;
         if (!options.Headless && !options.NoAudio)
         {
-            audio = SdlAudio.TryOpen(44100, out string audioError);
+            // A broken audio backend (stale PipeWire/Pulse socket, no
+            // server) can block inside the device open forever; never
+            // let that wedge startup. The attempt runs on a dedicated
+            // thread with a bounded wait, and a timeout degrades to
+            // the same silent path as a clean open failure.
+            audio = OpenAudioWithTimeout(44100, TimeSpan.FromSeconds(3),
+                                          out string audioError);
             if (audio is null)
             {
                 Console.Error.WriteLine($"client: audio unavailable ({audioError}); " +
