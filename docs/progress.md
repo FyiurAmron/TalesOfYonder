@@ -3579,3 +3579,24 @@ items now live in `docs/roadmap.md`).
   - **gates**: `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-22 - explore top-right panel (minimap/quick access/chapter) vs B1:
+  - **found**: the port never left the chapter state (F5 and the
+    quick-access-grid click were unported/miswired, the minimap a stub,
+    modal/combat residue never restored), so the panel disagreed
+    with B1 everywhere except fresh boot.
+  - **fix**: B1's fn_117AC/fn_11836/fn_1270C/fn_1755C/fn_1765A/
+    fn_176EC ported nearly verbatim - state painter (chapter /
+    quick access + currency pane / 9x7 minimap with facing marker) on a
+    room gather callback, F5 toggle (QUICK ACCESS<->MAP with the skill,
+    QUICK ACCESS<->CHAPTER else), region-2 click open/select/close,
+    panel-bit save/restore across modal and formal fight, icon
+    tables byte-verbatim from a DGROUP dump (terrain 60 reads
+    24, was wrongly zeroed). Flag writes sit at entry points
+    only (a per-repaint write broke the combat gate's A04/A05).
+  - **gates**: `yt2p-tests: OK` (toggle branches, marker facings),
+    `port-combat: OK`, `replay: OK`, `live-chest: OK`,
+    `live-explore: OK` (+ resume); B1-vs-port frames match per
+    state (chapter bare, map tiles + marker, quick access + GOLD COINS:).
+  - **noted, not ported**: explore-quick-access item pick/drop/swap
+    shares the modal code path untouched (works, unpinned live);
+    minimap out-of-window cells read void (B1 reads blind).

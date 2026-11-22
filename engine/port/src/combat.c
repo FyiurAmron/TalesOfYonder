@@ -6,6 +6,7 @@
 #include "yt2/create.h"
 #include "yt2/cursor.h"
 #include "yt2/item_detail.h"
+#include "yt2/mapview.h"
 #include "yt2/text.h"
 
 /* Init-block constants (sub_02064 neighborhood): SFX ids, panel
@@ -129,6 +130,10 @@ static void quick_access_paint(yt2_combat *combat);
 static void combat_paint_icon(yt2_combat *combat, unsigned int id);
 static void combat_paint_swords(yt2_combat *combat);
 static void chest_side_panel_clear(yt2_combat *combat, int compass);
+static void combat_panel_save_modal(yt2_combat *combat);
+static void combat_panel_restore_modal(yt2_combat *combat);
+static void combat_panel_save_formal(yt2_combat *combat);
+static void combat_panel_restore_formal(yt2_combat *combat);
 static void chest_side_panel_paint(yt2_combat *combat);
 
 int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
@@ -171,6 +176,10 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
     combat->current = 0u;
     combat->attacker = 0u;
     combat->target = -1;
+    combat->panel_saved_modal = 0u;
+    combat->panel_saved_modal_valid = 0;
+    combat->panel_saved_formal = 0u;
+    combat->panel_saved_formal_valid = 0;
     for (award = 0u; award < 4u; award++) {
         combat->award[award][0] = 0u;
         combat->award[award][1] = 0u;
@@ -1247,6 +1256,15 @@ static void combat_build_queue(yt2_combat *combat)
     unsigned int count = 0u;
     unsigned int i;
 
+    /* First build of the fight saves the explore panel bits
+       (rebuilds at queue end keep the original save), then the
+       formal entry forces quick access exclusive like fn_1755C. */
+    if (!combat->panel_saved_formal_valid) {
+        combat_panel_save_formal(combat);
+        combat->room->party->explore_flags = (uint16_t)(
+            (combat->room->party->explore_flags & 0x9FFFu) | 0x1000u);
+    }
+
     for (i = 0u; i < YT2_COMBAT_ATTACKERS_MAX; i++) {
         unsigned int slot = party->assigned[i];
         yt2_character *member;
@@ -2078,6 +2096,8 @@ static void combat_check_wipe(yt2_combat *combat,
     combat->queue_pos = 0u;
     combat->target = -1;
     combat->award_pending = 0;
+    /* The abandoned fight never victorious-restores; drop its save. */
+    combat->panel_saved_formal_valid = 0;
     combat->chest_side_panel_lines = 0u;
     combat_sfx(combat, 19u);
     yt2_combat_repaint(combat, present, context);
@@ -2491,6 +2511,8 @@ static void combat_formal_key(yt2_combat *combat, unsigned int ascii,
             code = combat_scan(combat);
             if (code == 0u) {
                 room->f5064 &= 0x0FFFu;
+                combat_panel_restore_formal(combat);
+                yt2_combat_panel_paint(combat, combat->surface);
                 combat_finish_award(combat);
                 room->f5062 |= 0x20u;
                 combat->queue_count = 0u;
@@ -2530,6 +2552,8 @@ static void combat_formal_key(yt2_combat *combat, unsigned int ascii,
         code = combat_scan(combat);
         if (code == 0u) {
             room->f5064 &= 0x0FFFu;
+            combat_panel_restore_formal(combat);
+            yt2_combat_panel_paint(combat, combat->surface);
             combat_finish_award(combat);
             room->f5062 |= 0x20u;
             combat->queue_count = 0u;
@@ -3055,6 +3079,29 @@ static void chest_paint_loot(yt2_combat *combat)
     }
 }
 
+/* The (240,8) 74x58 backdrop rect both quick access and chapter restore. */
+static void chest_panel_backdrop(yt2_combat *combat, yt2_surface *surface)
+{
+    const yt2_picture_group *back;
+    const uint8_t *back_pic;
+
+    back = yt2_pictures_group(combat->pictures, 0u);
+    back_pic = yt2_picture_data(combat->pictures, 0u, 1u);
+    if (back == NULL || back_pic == NULL) {
+        return;
+    }
+    /* The backdrop blits at (1,1): file (239,7) lands on (240,8). */
+    for (int row = 0u; row < 58; row++) {
+        for (int col = 0u; col < 74; col++) {
+            size_t src = (size_t)(7 + row) * back->width + (239u + col);
+            size_t dst =
+                (size_t)(8 + row) * surface->stride + (240u + col);
+
+            surface->pixels[dst] = back_pic[src];
+        }
+    }
+}
+
 /* fn_1755C: restore the panel backdrop, blit the grid frame
    (group 6 pic 0x14 at (248,9), transparent), then the 9 icons
    (sub_17951). The restore wipes explore's 0x15 plaque. The
@@ -3067,27 +3114,12 @@ static void quick_access_paint(yt2_combat *combat)
 {
     static const unsigned int currencies[3] = {1u, 2u, 3u};
     static const uint8_t zero[4] = {0u, 0u, 0u, 0u};
-    const yt2_picture_group *back;
     const yt2_picture_group *over;
-    const uint8_t *back_pic;
     const uint8_t *quick_access_frame;
     const uint8_t *purses[3];
     yt2_surface *surface = combat->surface;
 
-    back = yt2_pictures_group(combat->pictures, 0u);
-    back_pic = yt2_picture_data(combat->pictures, 0u, 1u);
-    if (back != NULL && back_pic != NULL) {
-        /* The backdrop blits at (1,1): file (239,7) lands on (240,8). */
-        for (int row = 0u; row < 58; row++) {
-            for (int col = 0u; col < 74; col++) {
-                size_t src = (size_t)(7 + row) * back->width + (239u + col);
-                size_t dst =
-                    (size_t)(8 + row) * surface->stride + (240u + col);
-
-                surface->pixels[dst] = back_pic[src];
-            }
-        }
-    }
+    chest_panel_backdrop(combat, surface);
     over = yt2_pictures_group(combat->pictures, 6u);
     quick_access_frame = yt2_picture_data(combat->pictures, 6u, 0x14u);
     if (over != NULL && quick_access_frame != NULL) {
@@ -3107,6 +3139,98 @@ static void quick_access_paint(yt2_combat *combat)
         if (combat->quick_access[i].id != 0u) {
             chest_icon(combat, quick_access_cells[3u + i].x0,
                        quick_access_cells[3u + i].y0, combat->quick_access[i].id);
+        }
+    }
+}
+
+/* fn_117AC + fn_11836 fill (the compass stays in the room):
+   the explore top-right panel by state. Unvisited and
+   out-of-window cells read the void icon; the facing chain
+   (sub_118C0: N->0, S->2, E->1, else 3) picks the marker. */
+void yt2_combat_panel_paint(yt2_combat *combat, yt2_surface *dst)
+{
+    yt2_room *room;
+    uint16_t flags;
+
+    if (combat == NULL || combat->room == NULL || dst == NULL ||
+        combat->pictures == NULL) {
+        return;
+    }
+    room = combat->room;
+    flags = room->party->explore_flags;
+    if ((flags & 0x2000u) != 0u) {
+        /* fn_1270C: backdrop rect restore plus the chapter logo
+           (the restore is a no-op on fresh gathers and required
+           on stale toggles). */
+        const yt2_picture_group *group =
+            yt2_pictures_group(combat->pictures, 6u);
+        const uint8_t *pic =
+            yt2_picture_data(combat->pictures, 6u, 0x15u);
+
+        chest_panel_backdrop(combat, dst);
+        if (group != NULL && pic != NULL) {
+            yt2_surface_blit_transparent(dst, 248, 9, pic, group->width,
+                                         group->height, 0xFFu);
+        }
+        return;
+    }
+    if ((flags & 0x1000u) != 0u) {
+        quick_access_paint(combat);
+        return;
+    }
+    for (unsigned int row = 0u; row < 7u; row++) {
+        for (unsigned int col = 0u; col < 9u; col++) {
+            yt2_room_cell *cell = yt2_room_window_cell(
+                room, (int)room->party->x - 4 + (int)col,
+                (int)room->party->y - 3 + (int)row);
+            unsigned int base = YT2_MAPVIEW_VOID_ICON;
+            unsigned int over = 0u;
+            const uint8_t *pic;
+
+            if (cell != NULL &&
+                (cell->flags & YT2_ROOM_CELL_VISITED) != 0u) {
+                base = yt2_mapview_terrain_icon(cell->terrain);
+                over = yt2_mapview_object_icon(cell->object);
+            }
+            pic = yt2_picture_data(combat->pictures,
+                                   YT2_MAPVIEW_PICTURE_GROUP, base);
+            if (pic != NULL) {
+                yt2_surface_blit(dst, 240 + (int)col * 8,
+                                 8 + (int)row * 8, pic,
+                                 YT2_MAPVIEW_ICON_SIZE,
+                                 YT2_MAPVIEW_ICON_SIZE);
+            }
+            if (over != 0u) {
+                pic = yt2_picture_data(combat->pictures,
+                                       YT2_MAPVIEW_PICTURE_GROUP, over);
+                if (pic != NULL) {
+                    yt2_surface_blit_transparent(
+                        dst, 240 + (int)col * 8, 8 + (int)row * 8, pic,
+                        YT2_MAPVIEW_ICON_SIZE, YT2_MAPVIEW_ICON_SIZE,
+                        YT2_MAPVIEW_ICON_TRANSPARENT);
+                }
+            }
+        }
+    }
+    {
+        unsigned int facing = room->party->facing;
+        unsigned int id = 3u;
+        const uint8_t *pic;
+
+        if ((facing & YT2_ROOM_FACING_NORTH) != 0u) {
+            id = 0u;
+        } else if ((facing & YT2_ROOM_FACING_SOUTH) != 0u) {
+            id = 2u;
+        } else if ((facing & YT2_ROOM_FACING_EAST) != 0u) {
+            id = 1u;
+        }
+        pic = yt2_picture_data(combat->pictures, YT2_MAPVIEW_PICTURE_GROUP,
+                               id);
+        if (pic != NULL) {
+            yt2_surface_blit_transparent(dst, 272, 32, pic,
+                                         YT2_MAPVIEW_ICON_SIZE,
+                                         YT2_MAPVIEW_ICON_SIZE,
+                                         YT2_MAPVIEW_ICON_TRANSPARENT);
         }
     }
 }
@@ -3604,6 +3728,10 @@ static void chest_enter_modal(yt2_combat *combat)
 {
     yt2_room *room = combat->room;
 
+    combat_panel_save_modal(combat);
+    /* fn_1755C head: the modal forces quick access exclusive. */
+    combat->room->party->explore_flags = (uint16_t)(
+        (combat->room->party->explore_flags & 0x9FFFu) | 0x1000u);
     chest_stage(combat);
     combat->chest_open = 1;
     combat->chest_prompt = 0;
@@ -3816,29 +3944,27 @@ static void chest_drop_back(yt2_combat *combat)
 /* Currency pane (fn_1765A): three labeled pairs at rows
    96/102/114/120/132/138, then the sticky set. Shared by the
    modal cells and the explore quick access pane (loc_0023B). */
-static void chest_currency_pane(yt2_combat *combat)
+/* fn_1765A proper (silent; the toggle tail owns SFX 2). */
+static void chest_currency_stage(yt2_combat *combat)
 {
     static const int rows[6] = {96, 102, 114, 120, 132, 138};
     char numbers[3][16];
     const char *labels[3] = {COMBAT_TEXT_GOLD, COMBAT_TEXT_ORE,
                              COMBAT_TEXT_NUORE};
-
-    /* fn_1765A's fn_06EA4 consumes a pending award first. */
-    combat->award_pending = 0;
     const uint8_t *purses[3];
     unsigned int i;
 
+    /* fn_1765A's fn_06EA4 consumes a pending award first. */
+    combat->award_pending = 0;
     purses[0] = combat->room->party->gold;
     purses[1] = combat->room->party->ore;
     purses[2] = combat->room->party->nuore;
-    /* Gated clear first (usually a no-op), then the set. SFX 2,
-       stale frame (loc_00272 presents, never gathers). */
+    /* Gated clear first (usually a no-op), then the set. */
     if (combat->chest_side_panel_sticky) {
         combat->chest_side_panel_compass = 1u;
     }
     combat->chest_side_panel_sticky = 1u;
     combat->chest_paint_stale = 1u;
-    combat_sfx(combat, 2u);
     combat->chest_side_panel_lines = 0u;
     for (i = 0u; i < 3u; i++) {
         combat_bcd_format(purses[i], numbers[i], sizeof(numbers[i]));
@@ -3848,6 +3974,13 @@ static void chest_currency_pane(yt2_combat *combat)
                         CHEST_SIDE_PANEL_VALUE_COLOR, rows[2u * i + 1u]);
     }
     combat->chest_side_panel_lines = 6u;
+}
+
+static void chest_currency_pane(yt2_combat *combat)
+{
+    /* Modal/cell entry: the click itself blips (stale frame). */
+    chest_currency_stage(combat);
+    combat_sfx(combat, 2u);
 }
 
 /* fn_176EC on a quick access cell: drop, swap, pickup, or the currency pane. */
@@ -4266,6 +4399,10 @@ static void chest_close(yt2_combat *combat)
     /* Back to explore: the compass repaints fresh. */
     combat->chest_compass_fresh = 1u;
     combat->room->f5060 &= (uint16_t)~0x200u;
+    combat_panel_restore_modal(combat);
+    /* The close presents stale: repaint the restored panel now
+       (B1's fn_11836 + fn_117AC at loc_00465). */
+    yt2_combat_panel_paint(combat, combat->surface);
 }
 
 /* SPACE search without the present (shared by the key and the
@@ -4543,6 +4680,109 @@ static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
    (viewport left, empty cursor) or deferred slices (spell cast, ZZZ
    rest, message link, portraits/equip, member/item inspect). Formal
    combat routes through the 0x669E table above. */
+/* Quick access open (fn_1755C + fn_1765A): exclusive flags, grid paint,
+   silent currency stage; the caller presents stale. */
+static void combat_panel_open_quick_access(yt2_combat *combat)
+{
+    combat->room->party->explore_flags = (uint16_t)(
+        (combat->room->party->explore_flags & 0x8FFFu) | 0x1000u);
+    quick_access_paint(combat);
+    chest_currency_stage(combat);
+}
+
+/* Panel bits across the modal / the formal fight (B1 pushes
+   explore_flags & 0x7000 on the stack at open/entry and restores
+   with and-0xEFFF/or-saved on close/victory). */
+static void combat_panel_save_modal(yt2_combat *combat)
+{
+    combat->panel_saved_modal =
+        (uint16_t)(combat->room->party->explore_flags & 0x7000u);
+    combat->panel_saved_modal_valid = 1;
+}
+
+static void combat_panel_restore_modal(yt2_combat *combat)
+{
+    if (!combat->panel_saved_modal_valid) {
+        return;
+    }
+    combat->room->party->explore_flags = (uint16_t)(
+        (combat->room->party->explore_flags & 0xEFFFu) |
+        combat->panel_saved_modal);
+    combat->panel_saved_modal_valid = 0;
+}
+
+static void combat_panel_save_formal(yt2_combat *combat)
+{
+    combat->panel_saved_formal =
+        (uint16_t)(combat->room->party->explore_flags & 0x7000u);
+    combat->panel_saved_formal_valid = 1;
+}
+
+static void combat_panel_restore_formal(yt2_combat *combat)
+{
+    if (!combat->panel_saved_formal_valid) {
+        return;
+    }
+    combat->room->party->explore_flags = (uint16_t)(
+        (combat->room->party->explore_flags & 0xEFFFu) |
+        combat->panel_saved_formal);
+    combat->panel_saved_formal_valid = 0;
+}
+
+/* Quick access close (v_50CC=1): map when available, else chapter. */
+static void combat_panel_close_quick_access(yt2_combat *combat)
+{
+    uint16_t flags = (uint16_t)(combat->room->party->explore_flags &
+                                0xEFFFu);
+
+    if ((flags & 0x8000u) != 0u) {
+        flags |= 0x4000u;
+    } else {
+        flags |= 0x2000u;
+    }
+    combat->room->party->explore_flags = flags;
+    yt2_combat_panel_paint(combat, combat->surface);
+}
+
+/* F5 (B1 path B): QUICK ACCESS<->MAP with the skill, QUICK ACCESS<->CHAPTER else.
+   Stale present, never gather. */
+int yt2_combat_panel_toggle(yt2_combat *combat,
+                            yt2_room_present_fn present, void *context)
+{
+    uint16_t flags;
+
+    if (combat == NULL || combat->room == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    if ((combat->room->f5064 & 0x1000u) != 0u) {
+        return YT2_STATUS_ERROR;
+    }
+    flags = combat->room->party->explore_flags;
+    if ((flags & 0x8000u) != 0u) {
+        if ((flags & 0x4000u) != 0u) {
+            combat_panel_open_quick_access(combat);
+            chest_side_panel_paint(combat);
+        } else {
+            combat->room->party->explore_flags =
+                (uint16_t)((flags & 0x8FFFu) | 0x4000u);
+            yt2_combat_panel_paint(combat, combat->surface);
+        }
+    } else if ((flags & 0x2000u) != 0u) {
+        combat_panel_open_quick_access(combat);
+        chest_side_panel_paint(combat);
+    } else {
+        combat->room->party->explore_flags =
+            (uint16_t)((flags & 0x8FFFu) | 0x2000u);
+        yt2_combat_panel_paint(combat, combat->surface);
+    }
+    combat->chest_paint_stale = 1u;
+    combat_sfx(combat, 2u);
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
+}
+
 static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
                                yt2_room_present_fn present, void *context)
 {
@@ -4617,12 +4857,32 @@ static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
         return YT2_STATUS_OK;
     }
     if (hit == 2u) {
-        unsigned int cell = chest_hit(quick_access_cells, 9u, x, y);
+        /* B1 loc_0021F: side-panel-clear head, then quick access open/select/close.
+           Everything presents stale (loc_00272 never gathers). */
+        uint16_t flags = room->party->explore_flags;
+        unsigned int cell;
 
-        if (cell == 0u) {
-            return YT2_STATUS_ERROR;
+        chest_fill(combat, 240, 96, 72, 60);
+        combat->chest_side_panel_lines = 0u;
+        combat->chest_paint_stale = 1u;
+        if ((flags & 0x1000u) == 0u) {
+            combat_panel_open_quick_access(combat);
+            combat_sfx(combat, 2u);
+            return YT2_STATUS_OK;
         }
-        chest_currency_pane(combat);
+        cell = chest_hit(quick_access_cells, 9u, x, y);
+        if (cell >= 1u && cell <= 3u) {
+            chest_currency_stage(combat);
+            return YT2_STATUS_OK;
+        }
+        if (cell >= 4u && cell <= 9u &&
+            (combat->chest_cursor != 0u ||
+             combat->quick_access[cell - 4u].id != 0u)) {
+            quick_access_click(combat, cell);
+            return YT2_STATUS_OK;
+        }
+        combat_panel_close_quick_access(combat);
+        combat_sfx(combat, 2u);
         return YT2_STATUS_OK;
     }
     return YT2_STATUS_ERROR;

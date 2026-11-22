@@ -144,6 +144,14 @@ typedef int (*yt2_room_present_fn)(void *context);
  */
 typedef void (*yt2_room_delay_fn)(unsigned int ticks, void *context);
 
+struct yt2_combat;
+
+/* Explore panel painter (B1 fn_117AC: chapter/pack/minimap by state);
+   the room calls it on gathers so callers without combat keep the
+   legacy overlay. */
+typedef void (*yt2_room_panel_fn)(struct yt2_combat *combat,
+                                  yt2_surface *dst);
+
 typedef struct yt2_room {
     const yt2_world *world;
     const yt2_pictures *pictures;
@@ -215,6 +223,8 @@ typedef struct yt2_room {
     /* Animation pacing (stamped by the live session, NULL-safe). */
     yt2_room_delay_fn delay;
     void *delay_context;
+    yt2_room_panel_fn panel_paint;
+    struct yt2_combat *panel_combat;
 } yt2_room;
 
 /*
@@ -233,6 +243,9 @@ void yt2_room_paint_portraits(const yt2_party *party,
 
 /* Portrait picture origin for assigned slot 0..3 (fn_171AE highlight). */
 int yt2_room_portrait_origin(unsigned int slot, int *x, int *y);
+
+/* Window cell pointer (fn_06FF0): NULL when outside the cached window. */
+yt2_room_cell *yt2_room_window_cell(yt2_room *room, int x, int y);
 
 /* fn_0ABEC: recompute the skill means and flags from the party. Runs on
    menu E (like vanilla) and at explore entry. */

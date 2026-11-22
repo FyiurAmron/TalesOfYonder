@@ -77,4 +77,8 @@ int yt2_map_view_draw_legend(yt2_surface *surface,
 int yt2_map_view_legend_at(const yt2_world *world, unsigned int map, int x,
                            int y, unsigned int *line);
 
+/* Minimap tile icon for a terrain/object type (0 when out of range). */
+unsigned int yt2_mapview_terrain_icon(unsigned int type);
+unsigned int yt2_mapview_object_icon(unsigned int type);
+
 #endif /* YT2_MAPVIEW_H */

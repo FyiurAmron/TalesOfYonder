@@ -862,5 +862,79 @@ int test_combat(void)
         CHECK(fix.combat.chest_side_panel[1][0] == '\0');
         test_formal_free(&fix);
     }
+    /* F5 toggle (B1 path B): QUICK ACCESS<->MAP with the skill,
+       QUICK ACCESS<->CHAPTER else; silent ERROR when formal. */
+    {
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        fix.room.party->explore_flags = 0xA400u;
+        CHECK(yt2_combat_panel_toggle(&fix.combat, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK((fix.room.party->explore_flags & 0x7000u) == 0x4000u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 0u) == 2u);
+        CHECK(yt2_combat_panel_toggle(&fix.combat, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK((fix.room.party->explore_flags & 0x7000u) == 0x1000u);
+        fix.room.party->explore_flags = 0x0400u;
+        CHECK(yt2_combat_panel_toggle(&fix.combat, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK((fix.room.party->explore_flags & 0x7000u) == 0x2000u);
+        CHECK(yt2_combat_panel_toggle(&fix.combat, NULL, NULL) ==
+              YT2_STATUS_OK);
+        CHECK((fix.room.party->explore_flags & 0x7000u) == 0x1000u);
+        fix.room.f5064 |= 0x1000u;
+        CHECK(yt2_combat_panel_toggle(&fix.combat, NULL, NULL) ==
+              YT2_STATUS_ERROR);
+        test_formal_free(&fix);
+    }
+    /* Minimap marker follows facing (sub_118C0: N->0, S->2, E->1,
+       else 3); the gather path paints it through the callback. */
+    {
+        static const unsigned int pics[4] = {0u, 2u, 1u, 3u};
+        static const uint16_t facings[4] = {
+            YT2_ROOM_FACING_NORTH, YT2_ROOM_FACING_SOUTH,
+            YT2_ROOM_FACING_EAST, YT2_ROOM_FACING_WEST
+        };
+        test_formal fix;
+
+        if (!test_formal_init(&fix)) {
+            return 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        fix.room.party->explore_flags = 0xC400u;
+        fix.room.panel_paint = yt2_combat_panel_paint;
+        fix.room.panel_combat = &fix.combat;
+        for (unsigned int f = 0u; f < 4u; f++) {
+            const uint8_t *pic;
+            unsigned int same = 1u;
+
+            fix.room.party->facing = facings[f];
+            yt2_combat_panel_paint(&fix.combat, &fix.surface);
+            pic = yt2_picture_data(&fix.pictures, 9u, pics[f]);
+            CHECK(pic != NULL);
+            for (unsigned int row = 0u; row < 8u && pic != NULL; row++) {
+                for (unsigned int col = 0u; col < 8u; col++) {
+                    uint8_t want = pic[row * 8u + col];
+
+                    if (want == 0xFFu) {
+                        continue;
+                    }
+                    if (fix.surface.pixels[(size_t)(32 + row) *
+                                               fix.surface.stride +
+                                           (size_t)(272 + col)] !=
+                        want) {
+                        same = 0u;
+                    }
+                }
+            }
+            CHECK(same);
+        }
+        test_formal_free(&fix);
+    }
     return test_failures == 0;
 }

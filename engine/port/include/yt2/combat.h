@@ -192,6 +192,13 @@ typedef struct yt2_combat {
     unsigned int chest_compass_fresh;
     /* Message-queue counter ([v_5560]+2, 0x6ED6/0x6EEE select). */
     uint16_t chest_messages;
+    /* Saved panel bits (explore_flags & 0x7000) across the modal
+       and the formal fight (B1 pushes them on the stack); each
+       side restores its own on close/victory. */
+    uint16_t panel_saved_modal;
+    int panel_saved_modal_valid;
+    uint16_t panel_saved_formal;
+    int panel_saved_formal_valid;
     /* Counter base (v_5560): 0x6ED6, or 0x6EEE when the search hit
        the party cell (v_50CC == 1). The word aliases view column
        46/49's object id, so the open/close ++/-- flips the chest
@@ -282,5 +289,15 @@ unsigned int yt2_combat_sfx_at(const yt2_combat *combat, unsigned int index);
 /* fn_0EBD6 opens the nested menu with fn_06EA4: consume the side panels so a
    pending award or message never paints under the menu. */
 void yt2_combat_menu_open(yt2_combat *combat);
+
+/* fn_117AC + fn_11836 fill: the explore top-right panel by state
+   (0x2000 chapter, 0x1000 pack, else the 9x7 minimap). The room
+   calls it on gathers; callers present (stale, never gather). */
+void yt2_combat_panel_paint(yt2_combat *combat, yt2_surface *dst);
+
+/* F5 (B1 path B): QUICK ACCESS<->MAP with the skill, QUICK ACCESS<->CHAPTER else;
+   paints, blips, presents stale. Silent ERROR when formal. */
+int yt2_combat_panel_toggle(yt2_combat *combat,
+                            yt2_room_present_fn present, void *context);
 
 #endif /* YT2_COMBAT_H */

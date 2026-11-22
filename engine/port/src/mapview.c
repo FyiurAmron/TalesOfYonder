@@ -10,10 +10,9 @@
 
 /*
  * DGROUP:E5B3h / DGROUP:E1D7h: the executable's terrain and object map-icon
- * tables (12 and 10 bytes per entry; the icon is at +0Ah and +8).  The tables
- * agree with YT2_TerrainDescriptors.json / YT2_ObjectDescriptors.json for every
- * type the maps use; the four trailing terrain types and empty object types are
- * zero here because they have no icon.
+ * tables (12 and 10 bytes per entry; the icon is at +0Ah and +8),
+ * byte-verbatim from a live DGROUP dump (trailing terrain 58-59/61
+ * and empty object types read zero in the binary itself).
  */
 static const uint8_t terrain_map_icons[MAPVIEW_TERRAIN_TYPE_COUNT] = {
     22u, 23u, 24u, 27u, 30u, 32u, 34u, 24u, 34u, 27u,
@@ -22,7 +21,7 @@ static const uint8_t terrain_map_icons[MAPVIEW_TERRAIN_TYPE_COUNT] = {
     41u, 41u, 44u, 45u, 42u, 42u, 41u, 41u, 71u, 71u,
     71u, 71u, 71u, 71u, 37u, 38u, 42u, 42u, 44u, 45u,
     37u, 38u, 36u, 36u, 15u, 16u, 15u, 16u, 0u, 0u,
-    0u, 0u
+    24u, 0u
 };
 
 static const uint8_t object_map_icons[MAPVIEW_OBJECT_TYPE_COUNT] = {
@@ -238,4 +237,20 @@ int yt2_map_view_legend_at(const yt2_world *world, unsigned int map, int x,
         }
     }
     return YT2_STATUS_ERROR;
+}
+
+unsigned int yt2_mapview_terrain_icon(unsigned int type)
+{
+    if (type >= MAPVIEW_TERRAIN_TYPE_COUNT) {
+        return 0u;
+    }
+    return terrain_map_icons[type];
+}
+
+unsigned int yt2_mapview_object_icon(unsigned int type)
+{
+    if (type >= MAPVIEW_OBJECT_TYPE_COUNT) {
+        return 0u;
+    }
+    return object_map_icons[type];
 }

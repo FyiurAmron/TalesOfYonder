@@ -631,6 +631,14 @@ static yt2_room_cell *room_window_cell(yt2_room *room, int x, int y)
     return &room->window[iy][ix];
 }
 
+yt2_room_cell *yt2_room_window_cell(yt2_room *room, int x, int y)
+{
+    if (room == NULL) {
+        return NULL;
+    }
+    return room_window_cell(room, x, y);
+}
+
 /* fn_10BF6: load the 78x78 window around the party. */
 static int room_load_window(yt2_room *room)
 {
@@ -2486,6 +2494,10 @@ static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather,
     }
     if ((room->f5064 & 0x1000u) != 0u) {
         /* Combat panel (fn_1755C): the combat slice draws it. */
+    } else if (room->panel_paint != NULL && room->panel_combat != NULL &&
+               gather) {
+        /* fn_117AC: explore panel by state (chapter/pack/map). */
+        room->panel_paint(room->panel_combat, surface);
     } else if ((room->party->explore_flags & 0x2000u) != 0u) {
         room->blit_pic = 0x15u;
         room->blit_class = ROOM_CLASS_OVERLAY;
@@ -2506,9 +2518,6 @@ static int room_render_impl(yt2_room *room, yt2_surface *surface, int gather,
     }
     if (!room->no_compass) {
         room_draw_compass(room, surface);
-    }
-    if ((room->party->explore_flags & 0x4000u) != 0u) {
-        /* Minimap (fn_11836/fn_117AC): a later slice draws it. */
     }
     return YT2_STATUS_OK;
 }

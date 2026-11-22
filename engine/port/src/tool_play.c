@@ -1573,9 +1573,19 @@ static void session_key(play_state *state, const yt2_input_event *event,
                 return;
             }
         }
+        if (event->ascii == 0u && event->scancode == PLAY_SCAN_F5 &&
+            state->have_combat) {
+            /* F5 panel toggle (B1 path B); silent when formal. */
+            if (yt2_combat_panel_toggle(&state->combat, explore_present,
+                                        state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+                session_drain_sfx(state);
+            }
+            return;
+        }
         if (event->ascii == 0u &&
             ((event->scancode >= PLAY_SCAN_F1 &&
-              event->scancode <= PLAY_SCAN_F1 + 4u) ||
+              event->scancode <= PLAY_SCAN_F1 + 3u) ||
              event->scancode == PLAY_SCAN_F1 + 6u)) {
             fprintf(stderr, "play: explore key scan %02X unported\n",
                     event->scancode);
@@ -1979,6 +1989,8 @@ static int run_session(play_state *state, yt2_folder_out *out,
                                         &state->surface) ==
                         YT2_STATUS_OK) {
                         state->combat_sfx_seen = 0u;
+                        state->room.panel_paint = yt2_combat_panel_paint;
+                        state->room.panel_combat = &state->combat;
                     }
                 }
                 /* CONTINUE: B1 re-renders on menu close (loc_00614
@@ -2034,6 +2046,8 @@ static int run_session(play_state *state, yt2_folder_out *out,
                                     &state->surface) == YT2_STATUS_OK) {
                     state->have_combat = 1;
                     state->combat_sfx_seen = 0u;
+                    state->room.panel_paint = yt2_combat_panel_paint;
+                    state->room.panel_combat = &state->combat;
                 }
                 printf("play: explore start\n");
             }
@@ -2486,6 +2500,8 @@ int main(int argc, char **argv)
                                         &state.surface) == YT2_STATUS_OK) {
                         state.have_combat = 1;
                         state.combat_sfx_seen = 0u;
+                        state.room.panel_paint = yt2_combat_panel_paint;
+                        state.room.panel_combat = &state.combat;
                     }
                     state.session_mode = 3;
                     state.titlemenu_requested = 0;
