@@ -192,6 +192,7 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
     }
     combat->award_pending = 0;
     combat->menu_requested = 0;
+    combat->member_page = 0;
     combat->menu_formal = 0;
     combat->chest_open = 0;
     combat->chest_prompt = 0;
@@ -2472,7 +2473,8 @@ static void combat_formal_key(yt2_combat *combat, unsigned int ascii,
         return;
     }
     if (ascii >= '1' && ascii <= '4') {
-        /* Member inspect (fn_16044) is a deferred slice; re-poll. */
+        /* Member stats paints in the caller (fn_16044); a direct
+           call re-polls. */
         return;
     }
     for (;;) {
@@ -3040,6 +3042,357 @@ static void chest_side_panel_paint(yt2_combat *combat)
         yt2_text_draw(surface, CHEST_SIDE_PANEL_X, combat->chest_side_panel_row[i],
                       combat->chest_side_panel[i], combat->chest_side_panel_color[i]);
     }
+}
+
+/*
+ * Member inspect pages (fn_16044 over the bottom strip, keys 1-4,
+ * formal F-keys via sub_09A1D). Strip cells 0-2 open afflictions,
+ * 3 training, 4 protections, 5 transports, 6 stats; keys always
+ * open stats. Pages are painted pixels only: the next repaint wipes
+ * them, exactly like vanilla (no page state anywhere).
+ */
+#define MEMBER_PAGE_X 241
+#define MEMBER_PAGE_NAME_Y 87
+#define MEMBER_PAGE_TITLE_Y 96
+#define MEMBER_PAGE_ROW_Y 102
+#define MEMBER_PAGE_TRAIN_VALUE_X 283
+#define MEMBER_PAGE_PROT_VALUE_X 295
+
+/* fn_08070 + fn_15A06: thousands comma, then spaces stripped. */
+static void member_commas(uint16_t value, char *out)
+{
+    unsigned int digits[5];
+    unsigned int pos = 0u;
+    unsigned int i;
+
+    digits[0] = value / 10000u;
+    digits[1] = (value / 1000u) % 10u;
+    digits[2] = (value / 100u) % 10u;
+    digits[3] = (value / 10u) % 10u;
+    digits[4] = value % 10u;
+    /* Leading-zero suppression with one thousands comma. */
+    for (i = 0u; i < 5u; i++) {
+        unsigned int place = 1u;
+
+        if (i == 0u) {
+            place = 10000u;
+        } else if (i == 1u) {
+            place = 1000u;
+        } else if (i == 2u) {
+            place = 100u;
+        } else if (i == 3u) {
+            place = 10u;
+        }
+        if (i == 2u && value >= 1000u) {
+            out[pos++] = ',';
+        }
+        if (value >= place || i == 4u) {
+            out[pos++] = (char)('0' + digits[i]);
+        }
+    }
+    out[pos] = '\0';
+}
+
+/* fn_08070 + fn_15A22: plain digits, no comma. */
+static void member_plain(uint16_t value, char *out)
+{
+    unsigned int divisor = 10000u;
+    unsigned int pos = 0u;
+    int started = 0;
+
+    while (divisor > 0u) {
+        unsigned int digit = (value / divisor) % 10u;
+
+        if (digit != 0u || started || divisor == 1u) {
+            out[pos++] = (char)('0' + digit);
+            started = 1;
+        }
+        divisor /= 10u;
+    }
+    out[pos] = '\0';
+}
+
+/* fn_062EE with v_0C46 = 1: decimal point before the last digit
+   (tenths; small values keep vanilla's leading dot: ".5"). */
+static void member_tenths(uint16_t value, char *out)
+{
+    char plain[8];
+    unsigned int len = 0u;
+
+    member_plain(value, plain);
+    while (plain[len] != '\0') {
+        len++;
+    }
+    for (unsigned int i = 0u; i < len; i++) {
+        out[i + 1u] = plain[i];
+    }
+    out[len + 1u] = '\0';
+    out[0] = '.';
+    /* Shift the dot left past all but the last digit. */
+    for (unsigned int i = 0u; i < len - 1u; i++) {
+        out[i] = out[i + 1u];
+    }
+    out[len - 1u] = '.';
+}
+
+/* sub_1636E: cur/max pair joined with "/". */
+static void member_pair(uint16_t cur, uint16_t max, int decimal, char *out)
+{
+    char first[8];
+    char second[8];
+    unsigned int pos = 0u;
+
+    if (decimal) {
+        member_tenths(cur, first);
+        member_tenths(max, second);
+    } else {
+        member_commas(cur, first);
+        member_commas(max, second);
+    }
+    for (unsigned int i = 0u; first[i] != '\0'; i++) {
+        out[pos++] = first[i];
+    }
+    out[pos++] = '/';
+    for (unsigned int i = 0u; second[i] != '\0'; i++) {
+        out[pos++] = second[i];
+    }
+    out[pos] = '\0';
+}
+
+/* sub_163E1: the member name at (241,87). Vanilla also prints a
+   12-space blank first; the side panel pre-clear makes it a no-op. */
+static void member_header(yt2_combat *combat, const yt2_character *member)
+{
+    yt2_text_draw(combat->surface, MEMBER_PAGE_X, MEMBER_PAGE_NAME_Y,
+                  member->name, 0x8Au);
+}
+
+/* sub_16292: status-bit afflictions, display order. */
+static void member_afflictions(yt2_combat *combat,
+                               const yt2_character *member)
+{
+    static const struct {
+        uint16_t bit;
+        const char *label;
+    } rows[] = {
+        {0x2000u, "DISEASED"}, {0x4000u, "POISONED"}, {0x8000u, "SICK"},
+        {0x0400u, "STONED"}, {0x0800u, "FROZEN"}, {0x1000u, "PARALYZED"},
+        {0x0080u, "CURSED"}, {0x0100u, "HEXED"}, {0x0200u, "JINXED"},
+    };
+    yt2_surface *surface = combat->surface;
+    int y = MEMBER_PAGE_ROW_Y;
+
+    member_header(combat, member);
+    yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_TITLE_Y, "AFFLICTIONS:",
+                  0xAAu);
+    if ((member->status & 0xFF80u) == 0u) {
+        yt2_text_draw(surface, MEMBER_PAGE_X, y, "NONE", 0x0Fu);
+        return;
+    }
+    for (unsigned int i = 0u;
+         i < sizeof(rows) / sizeof(rows[0]); i++) {
+        if ((member->status & rows[i].bit) != 0u) {
+            yt2_text_draw(surface, MEMBER_PAGE_X, y, rows[i].label, 0x0Fu);
+            y += 6;
+        }
+    }
+}
+
+/* fn_16171: current and ready-for levels. */
+static void member_training(yt2_combat *combat, const yt2_character *member)
+{
+    yt2_surface *surface = combat->surface;
+    char number[8];
+
+    member_header(combat, member);
+    yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_TITLE_Y, "TRAINING:",
+                  0xAAu);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 102, "CURRENTLY", 0x8Au);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 108, "LEVEL", 0x8Au);
+    member_plain(member->level, number);
+    yt2_text_draw(surface, MEMBER_PAGE_TRAIN_VALUE_X, 108, number, 0x8Au);
+    if (member->ready != 0u) {
+        yt2_text_draw(surface, MEMBER_PAGE_X, 114, "READY FOR", 0x0Fu);
+        yt2_text_draw(surface, MEMBER_PAGE_X, 120, "LEVEL", 0x0Fu);
+        member_plain(member->ready, number);
+        yt2_text_draw(surface, MEMBER_PAGE_TRAIN_VALUE_X, 120, number,
+                      0x0Fu);
+    }
+}
+
+/* sub_164DD: nine buff counters beside their names. */
+static void member_protections(yt2_combat *combat,
+                               const yt2_character *member)
+{
+    static const char *names[9] = {
+        "DISEASE", "POISON", "SICKNESS", "STONING", "FROZEN", "PARALYZE",
+        "CURSING", "HEXING", "JINXING",
+    };
+    yt2_surface *surface = combat->surface;
+
+    member_header(combat, member);
+    yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_TITLE_Y, "PROTECTIONS:",
+                  0xAAu);
+    for (unsigned int i = 0u; i < 9u; i++) {
+        char number[8];
+
+        yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_ROW_Y + (int)i * 6,
+                      names[i], 0x0Fu);
+        member_plain(member->buffs[i], number);
+        yt2_text_draw(surface, MEMBER_PAGE_PROT_VALUE_X,
+                      MEMBER_PAGE_ROW_Y + (int)i * 6, number, 0x0Fu);
+    }
+}
+
+/*
+ * fn_1620A: owned rides from the +0xB4 mask (bits 15..12 gate rows
+ * 1..4). The 0x77CC table holds the names, uses (+0x16) and time
+ * flags (+0x18 bit 0 anytime-at-night, bit 1 anytime-by-day);
+ * v_94F1 0x1A4..0x474 is day. An exhausted counter greys the row.
+ * Vanilla also sets f5062 bit 0x1000 here (the quick-access-open flag).
+ */
+static void member_transports(yt2_combat *combat, const yt2_character *member)
+{
+    static const struct {
+        const char *name;
+        uint16_t uses;
+        uint16_t flags;
+    } rides[4] = {
+        {"PEGASUS", 1u, 3u},
+        {"GIANT EAGLE", 2u, 3u},
+        {"@FLYING RUG", 4u, 2u},
+        {"MAGIC DRAGON", 4u, 1u},
+    };
+    yt2_surface *surface = combat->surface;
+    yt2_room *room = combat->room;
+    uint16_t mask = member->icon_sel;
+    int y = MEMBER_PAGE_ROW_Y;
+
+    if (mask == 0u) {
+        /* B1 returns before the header on an empty mask: the
+           cleared side panel stays fully blank. */
+        return;
+    }
+    member_header(combat, member);
+    yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_TITLE_Y, "TRANSPORTS:",
+                  0xAAu);
+    for (unsigned int i = 0u; i < 4u; i++) {
+        uint8_t color = 0x0Fu;
+
+        if (((mask >> (15u - i)) & 1u) == 0u) {
+            continue;
+        }
+        if (member->transport[i] >= rides[i].uses) {
+            color = 7u;
+        } else if (room->shade_scene < 0x1A4u ||
+                   room->shade_scene > 0x474u) {
+            if ((rides[i].flags & 1u) == 0u) {
+                color = 7u;
+            }
+        } else if ((rides[i].flags & 2u) == 0u) {
+            color = 7u;
+        }
+        yt2_text_draw(surface, MEMBER_PAGE_X, y, rides[i].name, color);
+        y += 6;
+    }
+    room->f5062 |= 0x1000u;
+}
+
+/* sub_16420: health/magic/weight labels with their cur/max pairs
+   in the same side panel column (B1 never moves x off 241; 0x0F is the
+   ink, not the column). */
+static void member_stats(yt2_combat *combat, const yt2_character *member)
+{
+    yt2_surface *surface = combat->surface;
+    char pair[24];
+
+    member_header(combat, member);
+    yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_TITLE_Y, "HEALTH:",
+                  member->current.combat.hit_points >
+                          member->maximum.combat.hit_points
+                      ? 0x5Bu
+                      : 0x59u);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 114, "MAGIC:",
+                  member->current.combat.magic_points >
+                          member->maximum.combat.magic_points
+                      ? 0xCCu
+                      : 0xCAu);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 132, "WEIGHT:",
+                  member->current.combat.carry_capacity >
+                          member->maximum.combat.carry_capacity
+                      ? 0x88u
+                      : 0x86u);
+    if ((member->status & 0x40u) != 0u) {
+        yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_ROW_Y, "DEAD",
+                      0x0Fu);
+    } else {
+        member_pair(member->current.combat.hit_points,
+                    member->maximum.combat.hit_points, 0, pair);
+        yt2_text_draw(surface, MEMBER_PAGE_X, MEMBER_PAGE_ROW_Y, pair,
+                      0x0Fu);
+    }
+    member_pair(member->current.combat.magic_points,
+                member->maximum.combat.magic_points, 0, pair);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 120, pair, 0x0Fu);
+    member_pair(member->carried_weight,
+                member->current.combat.carry_capacity, 1, pair);
+    yt2_text_draw(surface, MEMBER_PAGE_X, 138, pair, 0x0Fu);
+}
+
+/*
+ * fn_16044 page dispatch (0 afflictions, 1 training, 2
+ * protections, 3 transports, 4 stats) for assigned member 1..4.
+ * Unassigned members are a silent no-op; anything else paints and
+ * presents with no repaint (the next repaint wipes the page).
+ */
+static int combat_member_page(yt2_combat *combat, unsigned int member,
+                              unsigned int page,
+                              yt2_room_present_fn present, void *context)
+{
+    yt2_room *room;
+    yt2_character *character;
+    unsigned int slot;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    room = combat->room;
+    if (member == 0u || member > 4u || page > 4u) {
+        return YT2_STATUS_OK;
+    }
+    slot = room->party->assigned[member - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return YT2_STATUS_OK;
+    }
+    character = &room->party->roster[slot - 1u];
+    /* fn_06EA4 side panel prep: the explore arm clears the name row and
+       rows 96+, the formal arm clears x 240-312, y 86-194. */
+    if ((room->f5064 & 0x1000u) != 0u) {
+        chest_fill(combat, 240, 86, 73, 109);
+        room->f5062 &= (uint16_t)~0x1000u;
+    } else {
+        chest_side_panel_clear(combat, 1);
+    }
+    if (page == 0u) {
+        member_afflictions(combat, character);
+    } else if (page == 1u) {
+        member_training(combat, character);
+    } else if (page == 2u) {
+        member_protections(combat, character);
+    } else if (page == 3u) {
+        member_transports(combat, character);
+    } else {
+        member_stats(combat, character);
+    }
+    /* fn_1A6B5's page blip (SFX 9; vanilla gates it on the sound
+       bit, the port logs sfx ungated like the pack-open blip). */
+    combat_sfx(combat, 9u);
+    combat->member_page = 1;
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
 }
 
 /* One item icon (fn_19E12 class 0x80, transparent 0xFF). */
@@ -4452,11 +4805,19 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
         return YT2_STATUS_ERROR;
     }
     room = combat->room;
+    combat->member_page = 0;
     if ((room->f5064 & 0x1000u) != 0u) {
         /* The modal owns input (B1's fn_073E3 loop replaces the
            formal loop); rounds wait. */
         if (combat->chest_open || combat->chest_prompt) {
             return YT2_STATUS_OK;
+        }
+        if (ascii >= '1' && ascii <= '4') {
+            /* Member stats (fn_16044 key path): pure inspect, the
+               queue and its pick roll are untouched, no repaint. */
+            return combat_member_page(combat,
+                                      (unsigned int)(ascii - '1') + 1u, 4u,
+                                      present, context);
         }
         combat_formal_key(combat, ascii, present, context);
         if (combat->queue_count == 0u &&
@@ -4540,6 +4901,14 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
         } else {
             return YT2_STATUS_OK;
         }
+    } else if (ascii >= '1' && ascii <= '4') {
+        /* Member stats (fn_16044 key path); the modal owns input. */
+        if (combat->chest_open || combat->chest_prompt) {
+            return YT2_STATUS_OK;
+        }
+        status = combat_member_page(combat,
+                                    (unsigned int)(ascii - '1') + 1u, 4u,
+                                    present, context);
     } else {
         return YT2_STATUS_ERROR;
     }
@@ -4559,6 +4928,15 @@ int yt2_combat_fkey(yt2_combat *combat, unsigned int number,
 
     if (combat == NULL || combat->room == NULL) {
         return YT2_STATUS_ERROR;
+    }
+    combat->member_page = 0;
+    if ((combat->room->f5064 & 0x1000u) != 0u && !combat->chest_open &&
+        !combat->chest_prompt) {
+        /* Formal member stats (sub_09A1D synthesizes KeyCode 1-4). */
+        if (number == 0u || number > 4u) {
+            return YT2_STATUS_ERROR;
+        }
+        return combat_member_page(combat, number, 4u, present, context);
     }
     if (!combat->chest_prompt || combat->chest_open) {
         return YT2_STATUS_ERROR;
@@ -4629,7 +5007,7 @@ static void combat_side_panel_click(yt2_combat *combat, int x, int y)
    quick access grid runs the quick access handler; the icon row verbs A (swords)
    and D (disk, nested menu 0x5E) while C (spell) is a deferred
    slice (cast UI) and ZZZ re-polls; the side panel selects targets; the
-   bottom strip (portraits/equip) is a deferred slice. Right
+   bottom strip opens the member inspect pages (fn_16044). Right
    clicks re-poll (their P-verb/inspect arms belong to the
    deferred sheet slice). Verbs present through the caller. */
 static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
@@ -4668,6 +5046,18 @@ static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
     }
     if (hit == 4u) {
         combat_side_panel_click(combat, x, y);
+        return YT2_STATUS_OK;
+    }
+    if (hit == 6u) {
+        unsigned int member;
+        unsigned int cell;
+
+        /* Bottom-strip inspect (fn_16044 via sub_06493). */
+        if (yt2_room_strip_hit(x, y, &member, &cell)) {
+            combat_member_page(combat, member,
+                               cell <= 2u ? 0u : cell - 2u,
+                               present, context);
+        }
         return YT2_STATUS_OK;
     }
     return YT2_STATUS_OK;
@@ -4885,6 +5275,18 @@ static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
         combat_sfx(combat, 2u);
         return YT2_STATUS_OK;
     }
+    if (hit == 6u) {
+        unsigned int member;
+        unsigned int cell;
+
+        /* Bottom-strip inspect (fn_16044 mouse path). */
+        if (!yt2_room_strip_hit(x, y, &member, &cell)) {
+            return YT2_STATUS_ERROR;
+        }
+        return combat_member_page(combat, member,
+                                  cell <= 2u ? 0u : cell - 2u,
+                                  present, context);
+    }
     return YT2_STATUS_ERROR;
 }
 
@@ -4896,6 +5298,7 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
     if (combat == NULL || combat->room == NULL) {
         return YT2_STATUS_ERROR;
     }
+    combat->member_page = 0;
     if ((combat->room->f5064 & 0x1000u) != 0u && !combat->chest_open &&
         !combat->chest_prompt) {
         return combat_formal_click(combat, x, y, right, present, context);
@@ -4957,6 +5360,17 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
                     chest_portrait_drop(combat, i + 1u);
                 }
                 return YT2_STATUS_OK;
+            }
+        }
+        if (combat->chest_cursor == 0u) {
+            unsigned int member;
+            unsigned int cell;
+
+            /* Status-cell inspect (fn_16044 via fn_073E3). */
+            if (yt2_room_strip_hit(x, y, &member, &cell)) {
+                return combat_member_page(combat, member,
+                                          cell <= 2u ? 0u : cell - 2u,
+                                          present, context);
             }
         }
         return YT2_STATUS_OK;

@@ -3600,3 +3600,26 @@ items now live in `docs/roadmap.md`).
   - **noted, not ported**: explore-quick-access item pick/drop/swap
     shares the modal code path untouched (works, unpinned live);
     minimap out-of-window cells read void (B1 reads blind).
+- 2026-11-22 — member inspect pages (fn_16044):
+  - **ask**: per-character inventory and stat screens; B1 has no
+    worn-equipment list (the modal quick access panel covers inventory),
+    so the five side panel pages are the feature: afflictions,
+    training, protections, transports, stats.
+  - **port**: strip-cell dispatch (cells 0-2/3/4/5/6, portrait
+    rect silent), keys 1-4 (stats, explore+formal), formal F1-F4
+    (sub_09A1D), modal cells (fn_073E3); painters mirror
+    sub_16292/fn_16171/sub_164DD/fn_1620A/sub_16420 incl. the
+    comma/dot number formats, transport time windows and the
+    f5062 quick-access-open quirk; pages are paint-only (next repaint
+    wipes them, no new state); transport words +0xB6 parsed.
+  - **fixed on the way**: values column is x 241 (0x0F is ink,
+    caught by B1 pixels); click trailing repaint wiped pages
+    (member_page flag); explore idle repainted the compass row
+    over page names (now skipped like formal, B1's fn_10E6A
+    never paints it).
+  - **gates**: `yt2p-tests: OK` (strip hit, transport roundtrip,
+    formal key/click/explore click paints), `port-combat: OK`,
+    `replay: OK`, `live-chest: OK`, `live-member: OK` (explore
+    13 pages, formal stats, doctored values); B1-vs-B2 side panel
+    pixels index-identical (stats1/2, training, protections,
+    transports-blank, afflictions, formal body).

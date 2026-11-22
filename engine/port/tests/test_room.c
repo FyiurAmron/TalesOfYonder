@@ -364,11 +364,47 @@ static void test_stale_keep_portraits(void)
     yt2_world_free(&world);
 }
 
+/* Bottom-strip status cells (fn_16044): member 1..4, cell 0..6. */
+static void test_strip_hit(void)
+{
+    unsigned int member = 0u;
+    unsigned int cell = 0u;
+
+    /* Member 1 left column, right column, name cell. */
+    CHECK(yt2_room_strip_hit(43, 153, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 0u);
+    CHECK(yt2_room_strip_hit(43, 163, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 1u);
+    CHECK(yt2_room_strip_hit(43, 173, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 2u);
+    CHECK(yt2_room_strip_hit(53, 153, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 3u);
+    CHECK(yt2_room_strip_hit(53, 163, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 4u);
+    CHECK(yt2_room_strip_hit(53, 173, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 5u);
+    CHECK(yt2_room_strip_hit(28, 188, &member, &cell) == 1);
+    CHECK(member == 1u && cell == 6u);
+    /* Member 4 right column and name cell. */
+    CHECK(yt2_room_strip_hit(227, 153, &member, &cell) == 1);
+    CHECK(member == 4u && cell == 3u);
+    CHECK(yt2_room_strip_hit(202, 188, &member, &cell) == 1);
+    CHECK(member == 4u && cell == 6u);
+    /* The portrait rects are misses, like vanilla. */
+    CHECK(yt2_room_strip_hit(23, 163, &member, &cell) == 0);
+    CHECK(yt2_room_strip_hit(197, 163, &member, &cell) == 0);
+    /* Outside the strip. */
+    CHECK(yt2_room_strip_hit(160, 100, &member, &cell) == 0);
+    CHECK(yt2_room_strip_hit(43, 153, NULL, &cell) == 0);
+    CHECK(yt2_room_strip_hit(43, 153, &member, NULL) == 0);
+}
+
 int test_room(void)
 {
     test_movement();
     test_time();
     test_room_gate();
     test_stale_keep_portraits();
+    test_strip_hit();
     return 0;
 }

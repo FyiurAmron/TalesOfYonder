@@ -56,6 +56,8 @@ int test_party(void)
     yt2_write_u16(block + TEST_SLOT_BASE + 0x1E, 1u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x22, 3u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0xB4, 0u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0xB6, 11u);
+    yt2_write_u16(block + TEST_SLOT_BASE + 0xB8, 22u);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x15E, 0u);
 
     set_current(block, 0u, 0x00u, 50u);
@@ -142,6 +144,9 @@ int test_party(void)
     CHECK(party.roster[0].buffs[0] == 0u);
     CHECK(party.roster[0].buffs[1] == 3u);
     CHECK(party.roster[0].icon_sel == 0u);
+    CHECK(party.roster[0].transport[0] == 11u);
+    CHECK(party.roster[0].transport[1] == 22u);
+    CHECK(party.roster[0].transport[3] == 0u);
     CHECK(party.roster[0].overlay == 0u);
     CHECK(party.roster[0].base[0] == 0x5A5Bu);
     CHECK(party.roster[0].base[1] == 0x1112u);
@@ -179,6 +184,7 @@ int test_party(void)
             party.roster[0].ready = 0u;
             party.roster[0].buffs[1] = 7u;
             party.roster[0].icon_sel = 2u;
+            party.roster[0].transport[2] = 33u;
             party.roster[0].overlay = 0x8000u;
 
             CHECK(yt2_party_write(written, YT2_PARTY_BLOCK_SIZE, &party) ==
@@ -189,6 +195,7 @@ int test_party(void)
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1E) == 0u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x22) == 7u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0xB4) == 2u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0xBA) == 33u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x15E) == 0x8000u);
 
             CHECK(yt2_party_parse(written, YT2_PARTY_BLOCK_SIZE, &reread) ==
@@ -202,6 +209,8 @@ int test_party(void)
             CHECK(reread.roster[0].pack[1].id == 0xBEEFu);
             CHECK(reread.roster[0].pack[1].count == 5u);
             CHECK(reread.roster[0].pack[0].id == 0x1234u);
+            CHECK(reread.roster[0].transport[0] == 11u);
+            CHECK(reread.roster[0].transport[2] == 33u);
             free(written);
         }
     }

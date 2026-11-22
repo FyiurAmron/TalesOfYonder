@@ -221,6 +221,9 @@ typedef struct yt2_combat {
        0x5E formal per menu_formal). Cleared when taken. */
     int menu_requested;
     int menu_formal;
+    /* Member page painted (fn_16044): the caller skips its trailing
+       repaint (which would wipe the page). Cleared when taken. */
+    int member_page;
     /* Save power (v_555C): monster +0x52, spell id, or event
        param feeding fn_17D2C as the difficulty. */
     uint16_t save_power;

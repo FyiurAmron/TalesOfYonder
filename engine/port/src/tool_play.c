@@ -1514,7 +1514,9 @@ static void session_key(play_state *state, const yt2_input_event *event,
                  (state->room.f5064 & 0x1000u) != 0u);
             return;
         }
-        if ((ascii == 'S' || ascii == 'A') && state->have_combat) {
+        if ((ascii == 'S' || ascii == 'A' ||
+             (ascii >= '1' && ascii <= '4')) &&
+            state->have_combat) {
             if (yt2_combat_key(&state->combat, ascii, explore_present,
                                state) == YT2_STATUS_OK) {
                 explore_flush_save(state);
@@ -1556,7 +1558,7 @@ static void session_key(play_state *state, const yt2_input_event *event,
             ascii == 'P' || ascii == 'S' ||
             ascii == 'T' || ascii == 'W' || ascii == 'C' ||
             ascii == 'A' || ascii == 'K' || ascii == 'V' ||
-            ascii == ' ' || (ascii >= '1' && ascii <= '4')) {
+            ascii == ' ') {
             fprintf(stderr, "play: explore key %02X unported\n", ascii);
             return;
         }
@@ -1662,6 +1664,15 @@ static void session_click(play_state *state, int x, int y, int right,
                block like the key path before the file flush. */
             yt2_party_write(state->save.bytes + YT2_SAVE_PARTY_OFFSET,
                             YT2_SAVE_PARTY_SIZE, state->room.party);
+            if (state->combat.member_page) {
+                /* Inspect pages present themselves; a repaint
+                   would wipe the page (B1 paints through). */
+                state->combat.member_page = 0;
+                explore_flush_save(state);
+                *dirty = 1;
+                session_drain_sfx(state);
+                return;
+            }
             if (yt2_combat_repaint(&state->combat, explore_present,
                                    state) == YT2_STATUS_OK) {
                 explore_flush_save(state);
@@ -2093,12 +2104,13 @@ static int run_session(play_state *state, yt2_folder_out *out,
                 if (idle_explore || idle_formal) {
                     int no_compass = state->room.no_compass;
 
-                    /* Formal idle keeps panel and side panel (no plaque
-                       repaint, no compass over the names); portraits
+                    /* Idle keeps panel and side panel (no plaque repaint,
+                       no compass over the names/pages); portraits
                        stay retained too (B1's fn_10E6A never paints
-                       them), so the member border survives ticks. */
+                       them), so the member border and any open
+                       inspect page survive ticks. */
+                    state->room.no_compass = 1;
                     if (idle_formal) {
-                        state->room.no_compass = 1;
                         yt2_room_render_stale_keep_portraits(
                             &state->room, &state->surface);
                     } else {

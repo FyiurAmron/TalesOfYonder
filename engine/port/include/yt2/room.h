@@ -244,6 +244,15 @@ void yt2_room_paint_portraits(const yt2_party *party,
 /* Portrait picture origin for assigned slot 0..3 (fn_171AE highlight). */
 int yt2_room_portrait_origin(unsigned int slot, int *x, int *y);
 
+/*
+ * Bottom-strip status cell hit (fn_16044 over DGROUP:0x61C8). On a hit
+ * sets *member to 1..4 and *cell to 0..6 (left cells 0..2, right
+ * column 3..5, name/bar cell 6); the portrait rect itself is a miss,
+ * like vanilla (cell ids below 2 are ignored). Returns 1 on a hit,
+ * 0 on a miss.
+ */
+int yt2_room_strip_hit(int x, int y, unsigned int *member, unsigned int *cell);
+
 /* Window cell pointer (fn_06FF0): NULL when outside the cached window. */
 yt2_room_cell *yt2_room_window_cell(yt2_room *room, int x, int y);
 

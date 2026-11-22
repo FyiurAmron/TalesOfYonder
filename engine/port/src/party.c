@@ -35,6 +35,7 @@
 #define CHARACTER_READY 0x1Eu
 #define CHARACTER_BUFFS 0x20u
 #define CHARACTER_ICON_SEL 0xB4u
+#define CHARACTER_TRANSPORT 0xB6u
 #define CHARACTER_OVERLAY 0x15Eu
 #define CHARACTER_SPELLBOOK 0xCAu
 #define CHARACTER_CURRENT 0x3Cu
@@ -206,6 +207,10 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
         }
     }
     character->icon_sel = yt2_read_u16(slot + CHARACTER_ICON_SEL);
+    for (unsigned int ride = 0; ride < YT2_TRANSPORT_SLOTS; ride++) {
+        character->transport[ride] =
+            yt2_read_u16(slot + CHARACTER_TRANSPORT + ride * 2u);
+    }
     character->carried_weight = yt2_read_u16(slot + CHARACTER_CARRIED_WEIGHT);
 
     for (unsigned int index = 0; index < YT2_PACK_SLOTS; index++) {
@@ -362,6 +367,10 @@ static void write_character(uint8_t *slot, const yt2_character *character)
         }
     }
     yt2_write_u16(slot + CHARACTER_ICON_SEL, character->icon_sel);
+    for (unsigned int ride = 0; ride < YT2_TRANSPORT_SLOTS; ride++) {
+        yt2_write_u16(slot + CHARACTER_TRANSPORT + ride * 2u,
+                      character->transport[ride]);
+    }
     yt2_write_u16(slot + CHARACTER_CARRIED_WEIGHT, character->carried_weight);
 
     for (unsigned int index = 0; index < YT2_PACK_SLOTS; index++) {

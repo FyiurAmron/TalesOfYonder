@@ -306,8 +306,13 @@ int test_combat(void)
         CHECK(frames == 0u);
         CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
         fix.combat.chest_prompt = 0;
+        /* Formal F-keys open member stats (B1 sub_09A1D), no prompt
+           needed: the page paints and presents with the SFX 9 blip. */
         CHECK(yt2_combat_fkey(&fix.combat, 1u, test_present_count,
-                              &frames) == YT2_STATUS_ERROR);
+                              &frames) == YT2_STATUS_OK);
+        CHECK(frames == 1u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 2u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 1u) == 9u);
         fix.combat.chest_prompt = 1;
         CHECK(yt2_combat_fkey(&fix.combat, 0u, test_present_count,
                               &frames) == YT2_STATUS_ERROR);
@@ -934,6 +939,104 @@ int test_combat(void)
             }
             CHECK(same);
         }
+        test_formal_free(&fix);
+    }
+    /* Member inspect (fn_16044): formal keys paint stats over the
+       formal side panel clear with no queue built, formal strip clicks
+       page by cell, explore clicks use the explore clear. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        unsigned int x;
+        unsigned int y;
+        int name_ink;
+        int title_ink;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        CHECK(yt2_combat_key(&fix.combat, '1', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(frames == 1u);
+        CHECK(fix.combat.queue_count == 0u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
+        CHECK(yt2_combat_sfx_at(&fix.combat, 0u) == 9u);
+        /* The formal clear wipes x 240-312, y 86-194. */
+        for (y = 86u; y < 195u; y++) {
+            for (x = 240u; x < 313u; x++) {
+                uint8_t p =
+                    fix.surface.pixels[(size_t)y * fix.surface.stride +
+                                       x];
+
+                if (p != 4u) {
+                    /* Ink rows only: name/title/values. */
+                    CHECK(y < 93u || (y >= 96u && y < 144u));
+                }
+            }
+        }
+        name_ink = 0;
+        title_ink = 0;
+        for (x = 241u; x < 290u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)88u * fix.surface.stride + x];
+
+            if (p == 0x8Au) {
+                name_ink = 1;
+            }
+        }
+        for (x = 241u; x < 290u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)97u * fix.surface.stride + x];
+
+            if (p == 0x59u) {
+                title_ink = 1;
+            }
+        }
+        CHECK(name_ink);
+        CHECK(title_ink);
+        /* Formal strip click, member 1 cell 3: training. */
+        CHECK(yt2_combat_click(&fix.combat, 53, 153, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(frames == 2u);
+        title_ink = 0;
+        for (x = 241u; x < 300u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)97u * fix.surface.stride + x];
+
+            if (p == 0xAAu) {
+                title_ink = 1;
+            }
+        }
+        CHECK(title_ink);
+        /* Explore clicks use the explore clear (name row + 96+). */
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        CHECK(yt2_combat_click(&fix.combat, 53, 163, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(frames == 3u);
+        title_ink = 0;
+        for (x = 241u; x < 300u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)97u * fix.surface.stride + x];
+
+            if (p == 0xAAu) {
+                title_ink = 1;
+            }
+        }
+        CHECK(title_ink);
+        /* Protections names row carries 0x0F ink (training's row
+           would be 0x8A). */
+        title_ink = 0;
+        for (x = 241u; x < 300u; x++) {
+            uint8_t p =
+                fix.surface.pixels[(size_t)103u * fix.surface.stride + x];
+
+            if (p == 0x0Fu) {
+                title_ink = 1;
+            }
+        }
+        CHECK(title_ink);
         test_formal_free(&fix);
     }
     return test_failures == 0;

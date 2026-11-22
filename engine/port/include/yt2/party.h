@@ -97,6 +97,7 @@ typedef struct yt2_item {
 #define YT2_SPELLBOOK_WORDS 16u
 
 #define YT2_BUFF_SLOTS 9u
+#define YT2_TRANSPORT_SLOTS 4u
 
 typedef struct yt2_character {
     char name[YT2_CHARACTER_NAME_SIZE]; /* always NUL-terminated */
@@ -119,7 +120,11 @@ typedef struct yt2_character {
     uint16_t spellbook[YT2_SPELLBOOK_WORDS]; /* +0xCA bit legs */
     yt2_stats current;
     yt2_stats maximum;
-    uint16_t icon_sel; /* +0xB4: ready-cell picture (0x14 when set, 0x15) */
+    uint16_t icon_sel; /* +0xB4: ready-cell picture (0x14 when set, 0x15);
+                        top four bits are the fn_1620A transport mask */
+    /* Per-ride counters (+0xB6, fn_1620A compares each against the
+       ride's uses from the 0x77CC table). */
+    uint16_t transport[YT2_TRANSPORT_SLOTS];
     uint16_t carried_weight;
     yt2_item pack[YT2_PACK_SLOTS];
     yt2_item equipment[YT2_EQUIPMENT_SLOTS];
