@@ -199,7 +199,7 @@ static void check_conan_flow(void)
     CHECK(save.party.roster_count == 4u);
     CHECK(yt2_surface_init(&surface, 320u, 200u) == YT2_STATUS_OK);
 
-    CHECK(yt2_create_begin(&create, &save.party, &items, &pictures, &surface,
+    CHECK(yt2_create_begin(&create, &save, &items, &pictures, &surface,
                            0x1234u) == YT2_STATUS_OK);
     CHECK(create.slot == 0u);
     CHECK(yt2_create_open_class(&create) == YT2_STATUS_OK);
@@ -295,7 +295,7 @@ static void check_conan_hashes(void)
     }
     CHECK(yt2_save_start(&world, &save) == YT2_STATUS_OK);
     CHECK(yt2_surface_init(&surface, 320u, 200u) == YT2_STATUS_OK);
-    CHECK(yt2_create_begin(&create, &save.party, &items, &pictures, &surface,
+    CHECK(yt2_create_begin(&create, &save, &items, &pictures, &surface,
                            0x1234u) == YT2_STATUS_OK);
     CHECK(yt2_create_open_class(&create) == YT2_STATUS_OK);
     CHECK(hash_frame(&surface, &pictures, 230, 180) ==
@@ -337,7 +337,7 @@ static void check_conan_hashes(void)
     CHECK(hash_frame(&surface, &pictures, 115, 162) ==
           0x5B9AAFD86CEB1917ull);
     yt2_create_key(&create, 'K');
-    CHECK(yt2_create_begin(&second, &save.party, &items, &pictures, &surface,
+    CHECK(yt2_create_begin(&second, &save, &items, &pictures, &surface,
                            0x1234u) == YT2_STATUS_OK);
     CHECK(hash_frame(&surface, &pictures, -1, -1) ==
           0x87D84580471BA4B4ull);
@@ -388,7 +388,7 @@ static int fixture_begin(create_fixture *fix, yt2_create *create)
         yt2_surface_init(&fix->surface, 320u, 200u) != YT2_STATUS_OK) {
         return 0;
     }
-    if (yt2_create_begin(create, &fix->save.party, &fix->items,
+    if (yt2_create_begin(create, &fix->save, &fix->items,
                          &fix->pictures, &fix->surface,
                          0x1234u) != YT2_STATUS_OK) {
         return 0;
@@ -512,7 +512,7 @@ static void check_quits(void)
     CHECK(yt2_create_done(&create));
     CHECK(fix.save.party.roster[0].class_id == YT2_CLASS_NONE);
 
-    CHECK(yt2_create_begin(&create, &fix.save.party, &fix.items,
+    CHECK(yt2_create_begin(&create, &fix.save, &fix.items,
                            &fix.pictures, &fix.surface,
                            0x1234u) == YT2_STATUS_OK);
     yt2_create_open_class(&create);
@@ -524,7 +524,7 @@ static void check_quits(void)
     CHECK(fix.save.party.roster[0].class_id == YT2_CLASS_FIGHTER);
     CHECK(fix.save.party.roster[0].name[0] == '\0');
 
-    CHECK(yt2_create_begin(&create, &fix.save.party, &fix.items,
+    CHECK(yt2_create_begin(&create, &fix.save, &fix.items,
                            &fix.pictures, &fix.surface,
                            0x1234u) == YT2_STATUS_OK);
     CHECK(create.slot == 1u);

@@ -146,7 +146,7 @@ writes the party block, at confirm time. B2 keeps this record in the
 party struct (no session copy, no seeding) and matches the file timing
 exactly.
 Mouse tables: `66DCh` class, `6742h` portrait, `5F84h` options,
-`606Eh/6098h` items, `60F4h` doll (origin 116,60), `5B58h` roster; clicks
+`606Eh/6098h` items, `60F4h` paperdoll (origin 116,60), `5B58h` roster; clicks
 shift `+8,+8` while a carried icon is the cursor, and the cursor window
 is `(1,8)-(316,195)`.
 

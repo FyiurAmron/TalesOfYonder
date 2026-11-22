@@ -3636,3 +3636,119 @@ items now live in `docs/roadmap.md`).
     `live-chest: OK`, `live-member: OK` (+ sheet open/switch/
     toggle/close/hold); B1-vs-B2 sheet ink index-identical
     (0/539).
+- 2026-11-22 — pack/inventory UI (fn_08763):
+  - **ask**: inventory screens had no entry; B1 opens them via P,
+    portrait right-press, strip right-hold and formal P.
+  - **port**: pack modal (member panes with portrait/equipment/
+    pack/effects, pool grid, F-key/pane switching, pane pickup,
+    portrait drops, close with pool writeback); shared pool
+    header words +0x11A parsed; idle retains panes; item-use
+    verbs, count splits and containers deferred.
+  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`,
+    `live-chest: OK`, `live-member: OK` (+ pack open/nested
+    sheet/close/press/hold); B1-vs-B2 panes and quick access pane
+    index-identical (0 diffs).
+- 2026-11-22 — hold timing + evidence decode fixes:
+  - **holds**: B1 fires holds while the button stays down (6+
+    ticks); the port fired on release, so held buttons did
+    nothing. Now tick-based at the current cursor (B1's poll);
+    live_chest releases buttons per burst (a stuck down is a
+    real hold now).
+  - **evidence**: B1 reference PNGs rendered 6-bit DAC palettes
+    as 8-bit (4x too dark); re-rendered with proper expansion.
+    Title 0/64000 vs B1; camp chrome matches (cursor/shading
+    aside).
+- 2026-11-22 — paired screenshot gate green (17/17 UI-identical):
+  - **harness** (`tests/sshot/`): B1 captures a deterministic
+    save + settled frames per step; B2 loads the save and
+    captures live; `compare.py` requires byte-identical
+    framebuffer indices over UI rects (scene excluded as
+    time-drifted). b1.py link-checks every input (fails loudly
+    on a lost press); clicks use press trains, toggles single
+    presses with phase calibration, the portrait sheet uses
+    double-presses (yt2game's transition-only seam reports
+    HELD only when a second edge re-latches inside the poll's
+    6-tick window; a wall-time hold is one edge).
+  - **input model** (all code-read from B1): fn_PollInput
+    classifies press-vs-held via the 6-tick re-test; explore
+    left-press routes regions (viewport search, chapter, icons,
+    side panel link, arrows, strip pages via fn_16044); portrait
+    presses are silent; portrait holds open the sheet
+    (fn_09619); right-press picks single pack panes (fn_085CA);
+    right-hold opens all panes. Sheet/pack/chest modal loops
+    ported incl. nested sheet-in-pack, pane toggles,
+    held-close, 1-4/F-keys and C-to-close.
+  - **port**: sheet panel art reconstructed from four B1 sheet
+    frames (zero-inpaint) + title row (tiered class, level,
+    BCD experience); 505E-bit side panel gate with the key-path
+    always-wipe vs mouse-path gated asymmetry; pack close
+    ends explore+WEST; sheet close erases via the caller's
+    stale repaint; room frozen under sheet/pack like B1's
+    modal loops; pages are silent (SFX 9 is a countdown blip,
+    never set by page paints); P-open plays SFX 1 (loc_0061C).
+  - **gates**: `sh tests/sshot/run.sh` all 17 steps
+    UI-identical; `yt2p-tests: OK`, `port-combat: OK`,
+    `replay: OK`, `live-chest: OK`, `live-member: OK`.
+  - **open**: vanilla hold semantics need a DOSBox-X check
+    (wall-time level-INT33 vs double-press transition-INT33);
+    B2 implements wall-time holds. Countdown SFX 9 wiring
+    (room tick 0x40 bit) deferred. Chest right-viewport-close
+    and strip single-pane pick ported; chapter-examine
+    (fn_1789B) mapped, item verbs deferred.
+- 2026-11-23 — pack verbs + sheet/pack layering + containers:
+  - **input**: exclusive press/hold driver (330 ms window,
+    latched press position); modal time-unfreeze (ticks run,
+    only sheet/pack repaint idle; prompt/map/bare chest hold).
+  - **pack**: take/drop/swap/equip with weight/compat/buzz,
+    equip bonuses incl. effect cells, wear clear, trinket
+    alt icons, silent pickup, pool-take icon/weight; cursor
+    (not carried) dispatch like B1 incl. the icon-0 and
+    currency-take quirks, both pinned.
+  - **examine**: B1 fn_16925 tree (plain gear silent,
+    socket/readable arms); stats receipt is enhanced-only
+    (`YT2_MODE=enhanced`); the 19B42 use modals stay deferred.
+  - **layering**: sheet owns input over pack (B1 nested
+    loops); pack-entry viewport snapshot restores on
+    toggle-off and nested close (B1 sub_092F2/091AF/092C2);
+    v_505E boots zero (first-P WEST survives).
+  - **containers**: 3 staging slots per char (0x17C/1A2/1C8),
+    file stores at 0x4BC8+index*0x22 (levels head, verified
+    live), right-click stage (pack/cell-11), cell-9 close,
+    grid redirect + open-bag indicators, drop-onto-bag
+    insert with size gates, mint-on-drop allocator (boot
+    0/0, new-game 2/0), verbatim weight cascades incl.
+    magic-container weightlessness; cell 11/12 compat fixed
+    to B1 (empty-11 takes only bags; text-bit armor needs
+    cell 13 empty).
+  - **evidence**: 23-step B1/B2 layering matrix identical;
+    5-step cell-11 + 5-step pack-bag container matrices
+    identical; bit-exact play-port session replay drove the
+    backdrop fix; unit, port-combat, replay, live-member,
+    live-chest, sshot 17/17 green.
+  - **open**: fn_19B42 use modals, keyring consume (v_9471),
+    roster-delete store free (leak-only; saves stay valid).
+    No separate gem system exists (0x2000 is containers only).
+- 2026-11-24 — creation equipment shares the paperdoll verbs (paperdoll.c):
+  - **roll report unreproduced**: R/r/row-2-click all reroll +
+    repaint in probes (B1 + B2), dispatch + RNG + client ASCII
+    path all check out; awaiting the reporter's repro steps.
+  - **shared core**: fn_1672C/16925/0B3D2/16532 extracted
+    from combat.c into engine/port/src/paperdoll.c (yt2_paperdoll_ctx);
+    pack panes and the creation items stage run the same
+    verbs B1 runs (sub_148C4 calls fn_1672C/16925 directly).
+  - **creation fixes**: full 21-cell 0x60F4 table (was 14;
+    E5 + effect cells were dead), right-click wired
+    (was a stub; opens/closes the bag), effect-cell compat,
+    container insert/stage/mint, staged-grid + effect paint.
+  - **latent bugs exposed + fixed**: record never wiped at
+    alloc (sub_146D9) nor ACC bases on roll (sub_15605 head);
+    drop/swap/insert skipped the fn_0B3D2 recompute B1's
+    sub_16BE4 runs (stale ACC on equip; no combat test
+    asserted it); insert skipped the fn_1658F pane repaint.
+  - **allocator**: v_95FD/v_95FF live in yt2_save (RAM-only),
+    shared by creation + play; start 2/0, load 0/0 like B1.
+  - **evidence**: 5 B1/B2 creation pairs 0-diff on the paperdoll
+    (drop/insert/open/close/effect); live KEEP persists the
+    bag store + effect; unit, port-combat, replay, sshot
+    green. B1 oracle note: scripted `move`+park clicks
+    flake; `abs` clicks + roll-prefix timing are reliable.

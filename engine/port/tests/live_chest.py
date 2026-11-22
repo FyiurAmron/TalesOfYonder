@@ -122,6 +122,10 @@ def burst(stream, frames, wait=3):
         mark = handle.tell()
     for item in frames:
         stream.write(record(frame(item[0], item[1])))
+    # Release both buttons fast: a stuck down is a real hold (B1
+    # fires the hold while down), which would pollute the burst.
+    stream.write(record(frame(3, bytes([2, 0, 0]))))
+    stream.write(record(frame(3, bytes([2, 2, 0]))))
     stream.flush()
     time.sleep(wait)
     with open(LOGPATH, errors="replace") as handle:

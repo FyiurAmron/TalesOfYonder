@@ -73,6 +73,13 @@ const uint8_t *yt2_item_def(const yt2_items *items, unsigned int id);
 const uint8_t *yt2_item_param_row(const yt2_items *items,
                                   const uint8_t *record);
 
+/*
+ * Bonus list for a record (fn_02262's v_0CE4 window): 8 words, four
+ * stat-offset/value pairs applied on equip and removed on unequip,
+ * or NULL when the record has none.
+ */
+const uint8_t *yt2_item_adds(const yt2_items *items, const uint8_t *record);
+
 /* Plain %u with thousands commas (fn_08070 + fn_15A06). */
 void yt2_item_format_commas(char *buffer, size_t size, unsigned int value);
 

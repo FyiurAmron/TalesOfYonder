@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include "test.h"
 
 #include <stdlib.h>
@@ -308,13 +310,13 @@ int test_combat(void)
         fix.combat.chest_prompt = 0;
         /* Formal F-keys open the stat sheet (B1 fn_09619), no prompt
            needed: stats plus numbers plus border, one present, the
-           SFX 2 pick plus the SFX 9 page blip. */
+           SFX 2 pick (pages are silent; SFX 9 is a countdown
+           blip, never set by the page paints). */
         CHECK(yt2_combat_fkey(&fix.combat, 1u, test_present_count,
                               &frames) == YT2_STATUS_OK);
         CHECK(frames == 1u);
-        CHECK(yt2_combat_sfx_count(&fix.combat) == 3u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 2u);
         CHECK(yt2_combat_sfx_at(&fix.combat, 1u) == 2u);
-        CHECK(yt2_combat_sfx_at(&fix.combat, 2u) == 9u);
         CHECK(fix.combat.sheet_open == 1u);
         fix.combat.chest_prompt = 1;
         CHECK(yt2_combat_fkey(&fix.combat, 0u, test_present_count,
@@ -962,8 +964,7 @@ int test_combat(void)
                              &frames) == YT2_STATUS_OK);
         CHECK(frames == 1u);
         CHECK(fix.combat.queue_count == 0u);
-        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
-        CHECK(yt2_combat_sfx_at(&fix.combat, 0u) == 9u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 0u);
         /* The formal clear wipes x 240-312, y 86-194. */
         for (y = 86u; y < 195u; y++) {
             for (x = 240u; x < 313u; x++) {
@@ -1126,6 +1127,858 @@ int test_combat(void)
         CHECK(yt2_combat_hold(&fix.combat, 100, 80, test_present_count,
                               &frames) == YT2_STATUS_OK);
         CHECK(fix.combat.sheet_open == 1u);
+        test_formal_free(&fix);
+    }
+    /* Pack UI (fn_08763): P opens all panes, portrait right-press
+       opens one, grid edits the staged pool, pane clicks pick up,
+       P closes staging back. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        CHECK(fix.combat.pack_current == 0u);
+        CHECK(frames == 1u);
+        /* P again closes. */
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0u);
+        /* Right-press portrait 2 opens member 2. */
+        CHECK(yt2_combat_click(&fix.combat, 80, 163, 1,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x2000u);
+        CHECK(fix.combat.pack_current == 2u);
+        /* Right-hold strip closes. */
+        CHECK(yt2_combat_rhold(&fix.combat, 100, 170, test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0u);
+        /* Right-hold strip reopens all. */
+        CHECK(yt2_combat_rhold(&fix.combat, 100, 170, test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        /* Pane click selects the member. */
+        CHECK(yt2_combat_click(&fix.combat, 140, 100, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_current == 3u);
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0u);
+        test_formal_free(&fix);
+    }
+    /* Pack item flow: pane pickup to the cursor, portrait drop to
+       another member's pack, pool staging round-trips. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 412u;
+        party->roster[0].pack[0].count = 1u;
+        party->pool[0].id = 542u;
+        party->pool[0].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        /* Pool stages into the shared grid. */
+        CHECK(fix.combat.quick_access[0].id == 542u);
+        /* Pane pickup (member 1 pack slot 1) to the cursor. */
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 412u);
+        CHECK(party->roster[0].pack[0].id == 0u);
+        /* Portrait drop lands in member 2's pack. */
+        CHECK(yt2_combat_click(&fix.combat, 80, 163, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_cursor == 0u);
+        CHECK(party->roster[5].pack[0].id == 412u);
+        CHECK(party->roster[5].pack[0].count == 1u);
+        /* Grid pickup from the staged pool. */
+        CHECK(yt2_combat_click(&fix.combat, 256, 35, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 542u);
+        CHECK(fix.combat.quick_access[0].id == 0u);
+        /* Close stages the pool back. */
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0u);
+        CHECK(party->pool[0].id == 0u);
+        test_formal_free(&fix);
+    }
+    /* Pack verbs (fn_1672C): drop-back, swap, weight refusal. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 21u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 18u;
+        party->roster[0].pack[1].count = 3u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        /* Pickup is silent and names the side panel. */
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(party->roster[0].pack[0].id == 0u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
+        /* Drop into an empty cell plays SFX 6. */
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].pack[3].id == 21u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              6u);
+        /* Swap with a full cell keeps carrying (SFX 6). */
+        party->roster[0].carried_weight = 100u;
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 18u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(party->roster[0].pack[3].id == 18u);
+        test_formal_free(&fix);
+    }
+    /* B1 icon-0 quirk (fn_1672C tests the cursor, not the
+       carried item): taking icon-0 item 17 then clicking a
+       full cell takes again and the carried item is lost. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 17u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 21u;
+        party->roster[0].pack[1].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 17u);
+        CHECK(fix.combat.chest_cursor == 0u);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(party->roster[0].pack[1].id == 0u);
+        test_formal_free(&fix);
+    }
+    /* Effect equip applies the bonus list (+24 intell). */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint16_t before;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 175u;
+        party->roster[0].pack[0].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        before = party->roster[0].current.attributes.intelligence;
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 175u);
+        CHECK(yt2_combat_click(&fix.combat, 30, 70, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].effects[0] == 175u);
+        CHECK(party->roster[0].current.attributes.intelligence == before + 24u);
+        /* Over-capacity drops buzz (SFX 3) and keep carrying. */
+        party->roster[0].pack[4].id = 21u;
+        party->roster[0].pack[4].count = 1u;
+        CHECK(yt2_combat_click(&fix.combat, 28, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        party->roster[0].current.combat.carry_capacity = 1u;
+        CHECK(yt2_combat_click(&fix.combat, 46, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        test_formal_free(&fix);
+    }
+    /* Pack examine (fn_16925), enhanced: right-press on a full
+       paperdoll cell paints the item name receipt into the side panel. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 21u;
+        party->roster[0].pack[0].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(setenv("YT2_MODE", "enhanced", 1) == 0);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(unsetenv("YT2_MODE") == 0);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].pack[0].id == 21u);
+        /* The name receipt paints white ink at the side panel top. */
+        CHECK(fix.combat.surface->pixels[96u *
+                                              fix.combat.surface->stride +
+                                              240u] == 0x0Fu ||
+              fix.combat.surface->pixels[96u *
+                                              fix.combat.surface->stride +
+                                              241u] == 0x0Fu);
+        test_formal_free(&fix);
+    }
+    /* Pack examine, vanilla: plain gear (item 175, no text bits)
+       is silent (B1 50CC 1): no sfx, no side panel paint, no take. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t before[18][72];
+        unsigned int sfx;
+        unsigned int r;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 175u;
+        party->roster[0].pack[0].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(unsetenv("YT2_MODE") == 0);
+        sfx = yt2_combat_sfx_count(&fix.combat);
+        for (r = 0u; r < 18u; r++) {
+            memcpy(before[r],
+                   fix.combat.surface->pixels +
+                       (96u + r) * fix.combat.surface->stride + 240u,
+                   sizeof(before[r]));
+        }
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].pack[0].id == 175u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == sfx);
+        for (r = 0u; r < 18u; r++) {
+            CHECK(memcmp(before[r],
+                         fix.combat.surface->pixels +
+                             (96u + r) * fix.combat.surface->stride + 240u,
+                         sizeof(before[r])) == 0);
+        }
+        test_formal_free(&fix);
+    }
+    /* Pack examine, vanilla: flag-0x100 potions route to the
+       deferred 19B42 use modal, silent until it lands. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t before[18][72];
+        unsigned int sfx;
+        unsigned int r;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 21u;
+        party->roster[0].pack[0].count = 1u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(unsetenv("YT2_MODE") == 0);
+        sfx = yt2_combat_sfx_count(&fix.combat);
+        for (r = 0u; r < 18u; r++) {
+            memcpy(before[r],
+                   fix.combat.surface->pixels +
+                       (96u + r) * fix.combat.surface->stride + 240u,
+                   sizeof(before[r]));
+        }
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.pack_open == 0x7800u);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].pack[0].id == 21u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == sfx);
+        for (r = 0u; r < 18u; r++) {
+            CHECK(memcmp(before[r],
+                         fix.combat.surface->pixels +
+                             (96u + r) * fix.combat.surface->stride + 240u,
+                         sizeof(before[r])) == 0);
+        }
+        test_formal_free(&fix);
+    }
+    /* Container stage (B1 loc_16996): right-press on a pack
+       bag stages it (contents load from its file store); the
+       bag stays in its cell, hidden by the grid redirect. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        store = fix.save.bytes + 0x4BC8u + 1u * 0x22u;
+        store[0] = 5u;
+        store[1] = 0u;
+        store[2] = 21u;
+        store[3] = 0u;
+        store[4] = 2u;
+        store[5] = 0u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].stage[2].id == 6u);
+        CHECK(party->roster[0].stage[2].count == 1u);
+        CHECK(party->roster[0].stage[2].weight == 5u);
+        CHECK(party->roster[0].stage[2].cells[0].id == 21u);
+        CHECK(party->roster[0].stage[2].cells[0].count == 2u);
+        CHECK((party->roster[0].flags & 0x2000u) != 0u);
+        CHECK(party->roster[0].pack[0].id == 6u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == 1u);
+        /* Cell-9 close flushes the stage back to its store. */
+        party->roster[0].stage[2].cells[1].id = 18u;
+        party->roster[0].stage[2].cells[1].count = 1u;
+        party->roster[0].stage[2].weight = 15u;
+        CHECK(yt2_combat_click(&fix.combat, 46, 44, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].stage[2].id == 0u);
+        CHECK((party->roster[0].flags & 0xE000u) == 0u);
+        CHECK(store[0] == 15u);
+        CHECK(store[2] == 21u);
+        CHECK(store[6] == 18u);
+        CHECK(store[8] == 1u);
+        test_formal_free(&fix);
+    }
+    /* Cell-11 bag toggle (B1 loc_169A0/16A09): stage on first
+       press (0x1000), flush-all and clear on re-press. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].equipment[1].id = 6u;
+        party->roster[0].equipment[1].count = 1u;
+        store = fix.save.bytes + 0x4BC8u + 1u * 0x22u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].stage[2].id == 6u);
+        CHECK((party->roster[0].flags & 0x1000u) != 0u);
+        CHECK(party->roster[0].equipment[1].id == 6u);
+        /* Taking the open bag buzzes (B1 loc_1677E). */
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        CHECK(party->roster[0].equipment[1].id == 6u);
+        party->roster[0].stage[2].cells[0].id = 21u;
+        party->roster[0].stage[2].cells[0].count = 4u;
+        party->roster[0].stage[2].weight = 40u;
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].stage[2].id == 0u);
+        CHECK((party->roster[0].flags & 0xF000u) == 0u);
+        CHECK(store[0] == 40u);
+        CHECK(store[2] == 21u);
+        CHECK(store[4] == 4u);
+        test_formal_free(&fix);
+    }
+    /* Staged take/drop (B1 sub_1705F/16BE4): the grid addresses
+       the open bag; weights cascade to its accumulator. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint16_t before;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 21u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        memset(fix.save.bytes + 0x4BC8u + 1u * 0x22u, 0, 0x22u);
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        /* Take first (the grid hides the pack once staged). */
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        /* Staging works with a full cursor (B1 loc_16996). */
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK((party->roster[0].flags & 0x2000u) != 0u);
+        CHECK(fix.combat.chest_carried == 21u);
+        before = party->roster[0].carried_weight;
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].stage[2].cells[1].id == 21u);
+        CHECK(party->roster[0].stage[2].cells[1].count == 1u);
+        CHECK(party->roster[0].pack[1].id == 0u);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].stage[2].weight == 10u);
+        CHECK(party->roster[0].carried_weight == before + 10u);
+        /* Take it back out. */
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(party->roster[0].stage[2].cells[1].id == 0u);
+        CHECK(party->roster[0].stage[2].weight == 0u);
+        CHECK(party->roster[0].carried_weight == before);
+        test_formal_free(&fix);
+    }
+    /* Staged size gate (B1 sub_17132): item 730 (size 0) fits no
+       bag and buzzes; the cursor keeps it. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 730u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        memset(fix.save.bytes + 0x4BC8u + 1u * 0x22u, 0, 0x22u);
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 730u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 2,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 730u);
+        CHECK(party->roster[0].stage[2].cells[1].id == 0u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        test_formal_free(&fix);
+    }
+    /* Drop onto a closed bag (B1 loc_1683B): inserts into its
+       file store (first empty cell), SFX 6, name-silent. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 21u;
+        party->roster[0].pack[1].count = 3u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        store = fix.save.bytes + 0x4BC8u + 1u * 0x22u;
+        memset(store, 0, 0x22u);
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(store[0] == 10u);
+        CHECK(store[2] == 21u);
+        CHECK(store[4] == 3u);
+        CHECK(fix.combat.chest_carried == 0u);
+        CHECK(party->roster[0].pack[0].id == 6u);
+        CHECK(party->roster[0].pack[1].id == 0u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              6u);
+        test_formal_free(&fix);
+    }
+    /* Insert into a full bag buzzes and keeps the cursor. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store;
+        unsigned int i;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 21u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        store = fix.save.bytes + 0x4BC8u + 1u * 0x22u;
+        for (i = 0u; i < 8u; i++) {
+            store[2u + i * 4u] = 21u;
+        }
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        test_formal_free(&fix);
+    }
+    /* Fresh bags mint a store on drop (B1 fn_16532): boot 0/0
+       mints 0 then 1 (vanilla post-load collision included),
+       zeroing each store. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store0;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 0u;
+        party->roster[0].pack[1].id = 6u;
+        party->roster[0].pack[1].count = 0u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        store0 = fix.save.bytes + 0x4BC8u;
+        memset(store0, 0xAAu, 0x22u);
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 6u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].pack[3].id == 6u);
+        CHECK(party->roster[0].pack[3].count == 0u);
+        CHECK(fix.save.store_bump == 1u);
+        CHECK(store0[0] == 0u && store0[2] == 0u &&
+              store0[0x21u] == 0u);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].pack[0].count == 1u);
+        CHECK(fix.save.store_bump == 2u);
+        test_formal_free(&fix);
+    }
+    /* Taking a bag carries its contents weight along. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint8_t *store;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 6u;
+        party->roster[0].pack[0].count = 1u;
+        store = fix.save.bytes + 0x4BC8u + 1u * 0x22u;
+        store[0] = 30u;
+        store[1] = 0u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 6u);
+        CHECK(fix.combat.chest_carried_weight == 50u);
+        test_formal_free(&fix);
+    }
+    /* Magic containers weigh nothing to carry (B1 loc_170DB). */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        uint16_t before;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 17u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        before = party->roster[0].carried_weight;
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 17u);
+        CHECK(fix.combat.chest_cursor == 0u);
+        CHECK(party->roster[0].carried_weight == before);
+        /* Icon-0 reads empty: the drop click takes instead (the
+           B1 strand quirk), silently on an empty cell. */
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 17u);
+        CHECK(party->roster[0].pack[3].id == 0u);
+        CHECK(party->roster[0].carried_weight == before);
+        test_formal_free(&fix);
+    }
+    /* Cell 11 (B1 sub_16F85): full swaps anything, empty takes
+       only bags. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 542u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 6u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].equipment[1].id = 0u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        party->roster[0].carried_weight = 5000u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 542u);
+        CHECK(party->roster[0].equipment[1].id == 0u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        /* Park the sword, place the bag. */
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].equipment[1].id == 6u);
+        /* Dropping onto the bag inserts (B1 loc_1683B). */
+        CHECK(yt2_combat_click(&fix.combat, 10, 27, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].equipment[1].id == 6u);
+        CHECK(fix.combat.chest_carried == 0u);
+        /* Full-with-gear swaps anything (setup-only state: verbs
+           never put gear there). */
+        party->roster[0].equipment[1].id = 730u;
+        party->roster[0].equipment[1].count = 1u;
+        party->roster[0].pack[0].id = 542u;
+        party->roster[0].pack[0].count = 1u;
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 48, 72, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].equipment[1].id == 542u);
+        CHECK(fix.combat.chest_carried == 730u);
+        test_formal_free(&fix);
+    }
+    /* Cell 12 (B1 sub_16F85): flag 0x4000 plus row word 1 bit 0
+       clear, or cell 13 empty when set. */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].flags =
+            (uint16_t)(party->roster[0].flags & ~0x20u);
+        party->roster[0].pack[0].id = 412u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 504u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].equipment[2].id = 0u;
+        party->roster[0].equipment[3].id = 730u;
+        party->roster[0].equipment[3].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        party->roster[0].carried_weight = 5000u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 10, 111, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].equipment[2].id == 412u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 111, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 412u);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 504u);
+        CHECK(yt2_combat_click(&fix.combat, 10, 111, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 504u);
+        CHECK(party->roster[0].equipment[2].id == 0u);
+        CHECK(yt2_combat_sfx_at(&fix.combat,
+                                yt2_combat_sfx_count(&fix.combat) - 1u) ==
+              3u);
+        party->roster[0].equipment[3].id = 0u;
+        party->roster[0].equipment[3].count = 0u;
+        CHECK(yt2_combat_click(&fix.combat, 10, 111, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(party->roster[0].equipment[2].id == 504u);
+        test_formal_free(&fix);
+    }
+    /* Dropping onto item 47 (keyring) with a non-key is silent
+       (B1 loc_16832); the key consume needs v_9471 (deferred). */
+    {
+        test_formal fix;
+        unsigned int frames = 0u;
+        yt2_party *party;
+        unsigned int sfx;
+
+        if (!test_formal_init(&fix)) {
+            return test_failures == 0;
+        }
+        fix.room.f5064 &= (uint16_t)~0x1000u;
+        party = fix.room.party;
+        party->roster[0].pack[0].id = 47u;
+        party->roster[0].pack[0].count = 1u;
+        party->roster[0].pack[1].id = 21u;
+        party->roster[0].pack[1].count = 1u;
+        party->roster[0].current.combat.carry_capacity = 9999u;
+        CHECK(yt2_combat_key(&fix.combat, 'P', test_present_count,
+                             &frames) == YT2_STATUS_OK);
+        CHECK(yt2_combat_click(&fix.combat, 28, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        sfx = yt2_combat_sfx_count(&fix.combat);
+        CHECK(yt2_combat_click(&fix.combat, 10, 10, 0,
+                               test_present_count,
+                               &frames) == YT2_STATUS_OK);
+        CHECK(fix.combat.chest_carried == 21u);
+        CHECK(party->roster[0].pack[0].id == 47u);
+        CHECK(yt2_combat_sfx_count(&fix.combat) == sfx);
         test_formal_free(&fix);
     }
     return test_failures == 0;

@@ -96,6 +96,20 @@ static int compare_entries(const void *a, const void *b)
     return (int)left->index - (int)right->index;
 }
 
+const char *yt2_class_sheet_name(unsigned int class_id)
+{
+    unsigned int tier;
+    unsigned int index;
+
+    /* fn_0982E: 1..9 tier 0, 10..18 tier 1, 19..27 tier 2. */
+    if (class_id == 0u || class_id > 27u) {
+        return "?";
+    }
+    tier = (class_id - 1u) / 9u;
+    index = (class_id - 1u) % 9u;
+    return tier_names[tier][index];
+}
+
 int yt2_classes_load(yt2_classes *classes, const yt2_spells *spells)
 {
     class_entry entries[YT2_CLASSES_MAX_MEMBERS];

@@ -115,6 +115,10 @@ int yt2_save_start(const yt2_world *world, yt2_save *save)
         yt2_save_free(save);
         return status;
     }
+    /* New parties reset the store allocator (B1 v_95FD 2 / v_95FF 0);
+       loads keep the memset 0/0 (post-load mints collide like B1). */
+    save->store_bump = 2u;
+    save->store_free = 0u;
     return YT2_STATUS_OK;
 }
 

@@ -27,6 +27,7 @@ int test_walkthrough(void);
 int test_text(void);
 int test_cluebook(void);
 int test_create(void);
+int test_paperdoll(void);
 int test_room(void);
 
 int main(void)
@@ -56,6 +57,7 @@ int main(void)
     test_text();
     test_cluebook();
     test_create();
+    test_paperdoll();
     test_room();
     if (test_failures != 0) {
         fprintf(stderr, "yt2p-tests: %d failure(s)\n", test_failures);

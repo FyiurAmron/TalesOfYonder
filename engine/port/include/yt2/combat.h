@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "yt2/paperdoll.h"
 #include "yt2/items.h"
 #include "yt2/party.h"
 #include "yt2/pictures.h"
@@ -80,6 +81,14 @@
 
 #define YT2_CHEST_SLOTS 8u
 #define YT2_QUICK_ACCESS_SLOTS 6u
+
+/* Stat-sheet panel art (sub_09A1D blit at (15,23)), 8-bit indices. */
+#define YT2_SHEET_ART_X 15
+#define YT2_SHEET_ART_Y 23
+#define YT2_SHEET_ART_W 210u
+#define YT2_SHEET_ART_H 105u
+extern const uint8_t
+    yt2_sheet_art[YT2_SHEET_ART_H][YT2_SHEET_ART_W];
 #define YT2_CHEST_RECORD_SIZE 26u
 
 /* WORLD.DAT offsets behind the EMS work pages (boot sub_02001/02064). */
@@ -227,6 +236,23 @@ typedef struct yt2_combat {
     /* Stat sheet open (fn_09619) for assigned member 1..4, 0 when
        closed. The sheet owns input like the chest modal. */
     unsigned int sheet_open;
+    /* Pack UI open (fn_08763): picked-member bits (B1 v_5060
+       0x4000/0x2000/0x1000/0x800), 0 when closed. The current
+       member (B1 v_50C0) is 1..4 while open. */
+    unsigned int pack_open;
+    unsigned int pack_current;
+    /* Pack-open panel stash (B1 pushes 946F&0x7000 around fn_08763). */
+    uint16_t panel_saved_pack;
+    int panel_saved_pack_valid;
+    /* Shared paperdoll-verb context (fn_1672C/16925/0B3D2/16532): bound
+       to the save's store region and allocator at init. */
+    yt2_paperdoll_ctx paperdoll;
+    /* Pack-entry viewport snapshot (B1 sub_092F2's EMS stash,
+       x8-231/y8-143): restored on pane toggle-off (sub_091AF)
+       and nested sheet close (sub_092C2). Valid once a pack
+       opens from zero. */
+    uint8_t pack_backdrop[136][224];
+    int pack_backdrop_valid;
     /* Save power (v_555C): monster +0x52, spell id, or event
        param feeding fn_17D2C as the difficulty. */
     uint16_t save_power;
@@ -277,6 +303,10 @@ void yt2_combat_formal_entry(yt2_combat *combat,
 int yt2_combat_repaint(yt2_combat *combat, yt2_room_present_fn present,
                        void *context);
 
+/* New parties reset the container store allocator (B1 v_95FD 2,
+   v_95FF 0); call once when the roster finishes a fresh party. */
+void yt2_combat_new_party(yt2_combat *combat);
+
 /* Modal-close restore: same, but portraits (and the border) stay
    retained like B1's gather. */
 int yt2_combat_repaint_keep_portraits(yt2_combat *combat,
@@ -289,10 +319,10 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
                      yt2_room_present_fn present, void *context);
 
 /*
- * Repaint the open sheet's numbers plus border over a fresh idle
- * render (B1's fn_10E6A never repaints the scene bitmap, so the
- * numbers persist; B2's idle render would wipe them). No-op unless
- * a sheet is open; never presents.
+ * Repaint open sheet numbers/panes over a fresh idle render (B1's
+ * fn_10E6A never repaints the scene bitmap, so they persist; B2's
+ * idle render would wipe them). No-op unless a sheet or the pack
+ * UI is open; never presents.
  */
 void yt2_combat_sheet_retain(yt2_combat *combat);
 
@@ -303,6 +333,14 @@ void yt2_combat_sheet_retain(yt2_combat *combat);
  */
 int yt2_combat_hold(yt2_combat *combat, int x, int y,
                     yt2_room_present_fn present, void *context);
+
+/*
+ * Right-hold (B1's 50CC 0x0A press): a held bottom strip toggles
+ * the pack UI (loc_0052C opens, loc_08BC9 closes). Only in
+ * explore/formal outside the chest modal and the sheet.
+ */
+int yt2_combat_rhold(yt2_combat *combat, int x, int y,
+                     yt2_room_present_fn present, void *context);
 
 /* SFX log drain for the gate. */
 unsigned int yt2_combat_sfx_count(const yt2_combat *combat);

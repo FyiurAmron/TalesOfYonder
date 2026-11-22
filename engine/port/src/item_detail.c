@@ -198,6 +198,16 @@ const uint8_t *yt2_item_param_row(const yt2_items *items, const uint8_t *record)
     return param_row(items, record);
 }
 
+const uint8_t *yt2_item_adds(const yt2_items *items, const uint8_t *record)
+{
+    /* fn_02262's v_0CE4 window: 8 words (4 offset/value pairs)
+       at the record+2 byte offset, NULL when absent. */
+    if (items == NULL || record == NULL || read_u16(record + 2) == 0u) {
+        return NULL;
+    }
+    return table_at(items, YT2_ITEM_ADDS_OFFSET, read_u16(record + 2), 16u);
+}
+
 void yt2_item_format_commas(char *buffer, size_t size, unsigned int value)
 {
     if (buffer == NULL || size == 0u) {

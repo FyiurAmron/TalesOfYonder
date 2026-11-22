@@ -14,6 +14,7 @@
 #define PARTY_HEADER_YEAR 0xA0u
 #define PARTY_HEADER_SCENE 0xA2u
 #define PARTY_HEADER_ACTIVE 0xA4u
+#define PARTY_HEADER_POOL 0x11Au
 #define PARTY_HEADER_ASSIGNED 0x1ECu
 #define PARTY_HEADER_EXPLORE_FLAGS 0x20u
 #define PARTY_HEADER_MUSIC_ID 0x52u
@@ -55,6 +56,9 @@
 #define CHARACTER_EQUIPMENT 0x13Au
 #define CHARACTER_EFFECTS 0x152u
 #define CHARACTER_FLAGS 0x15Cu
+#define CHARACTER_STAGE_0 0x17Cu
+#define CHARACTER_STAGE_1 0x1A2u
+#define CHARACTER_STAGE_2 0x1C8u
 #define CHARACTER_WEAR 0xBEu
 
 /* Stat block offsets. */
@@ -230,6 +234,25 @@ static void parse_character(const uint8_t *slot, yt2_character *character)
             yt2_read_u16(slot + CHARACTER_EFFECTS + index * 2u);
     }
     character->flags = yt2_read_u16(slot + CHARACTER_FLAGS);
+    {
+        static const unsigned int offs[YT2_CONTAINER_SLOTS] = {
+            CHARACTER_STAGE_0, CHARACTER_STAGE_1, CHARACTER_STAGE_2,
+        };
+
+        for (unsigned int s = 0u; s < YT2_CONTAINER_SLOTS; s++) {
+            const uint8_t *stage = slot + offs[s];
+
+            character->stage[s].id = yt2_read_u16(stage);
+            character->stage[s].count = yt2_read_u16(stage + 2u);
+            character->stage[s].weight = yt2_read_u16(stage + 4u);
+            for (unsigned int c = 0u; c < YT2_CONTAINER_CELLS; c++) {
+                character->stage[s].cells[c].id =
+                    yt2_read_u16(stage + 6u + c * 4u);
+                character->stage[s].cells[c].count =
+                    yt2_read_u16(stage + 8u + c * 4u);
+            }
+        }
+    }
     character->overlay = yt2_read_u16(slot + CHARACTER_OVERLAY);
     for (unsigned int wear = 0; wear < 3u; wear++) {
         character->wear[wear] =
@@ -265,6 +288,12 @@ int yt2_party_parse(const uint8_t *block, size_t size, yt2_party *party)
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         party->active[index] =
             yt2_read_u16(block + PARTY_HEADER_ACTIVE + index * 2u);
+    }
+    for (unsigned int index = 0; index < YT2_POOL_SLOTS; index++) {
+        const uint8_t *item = block + PARTY_HEADER_POOL + index * 4u;
+
+        party->pool[index].id = yt2_read_u16(item);
+        party->pool[index].count = yt2_read_u16(item + 2u);
     }
     for (unsigned int index = 0; index < YT2_PARTY_ASSIGNED_MAX; index++) {
         party->assigned[index] =
@@ -390,6 +419,25 @@ static void write_character(uint8_t *slot, const yt2_character *character)
                       character->effects[index]);
     }
     yt2_write_u16(slot + CHARACTER_FLAGS, character->flags);
+    {
+        static const unsigned int offs[YT2_CONTAINER_SLOTS] = {
+            CHARACTER_STAGE_0, CHARACTER_STAGE_1, CHARACTER_STAGE_2,
+        };
+
+        for (unsigned int s = 0u; s < YT2_CONTAINER_SLOTS; s++) {
+            uint8_t *stage = slot + offs[s];
+
+            yt2_write_u16(stage, character->stage[s].id);
+            yt2_write_u16(stage + 2u, character->stage[s].count);
+            yt2_write_u16(stage + 4u, character->stage[s].weight);
+            for (unsigned int c = 0u; c < YT2_CONTAINER_CELLS; c++) {
+                yt2_write_u16(stage + 6u + c * 4u,
+                              character->stage[s].cells[c].id);
+                yt2_write_u16(stage + 8u + c * 4u,
+                              character->stage[s].cells[c].count);
+            }
+        }
+    }
     yt2_write_u16(slot + CHARACTER_OVERLAY, character->overlay);
     for (unsigned int wear = 0; wear < 3u; wear++) {
         yt2_write_u16(slot + CHARACTER_WEAR + wear * 2u,
@@ -421,6 +469,12 @@ int yt2_party_write(uint8_t *block, size_t size, const yt2_party *party)
     for (unsigned int index = 0; index < YT2_PARTY_ACTIVE_MAX; index++) {
         yt2_write_u16(block + PARTY_HEADER_ACTIVE + index * 2u,
                       party->active[index]);
+    }
+    for (unsigned int index = 0; index < YT2_POOL_SLOTS; index++) {
+        uint8_t *item = block + PARTY_HEADER_POOL + index * 4u;
+
+        yt2_write_u16(item, party->pool[index].id);
+        yt2_write_u16(item + 2u, party->pool[index].count);
     }
     for (unsigned int index = 0; index < YT2_PARTY_ASSIGNED_MAX; index++) {
         yt2_write_u16(block + PARTY_HEADER_ASSIGNED + index * 2u,

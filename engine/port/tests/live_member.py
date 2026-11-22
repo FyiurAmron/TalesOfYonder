@@ -77,6 +77,7 @@ K6 = key(0x07, 0x36)
 S = key(0x1F, 0x53)
 F1 = key(0x3B, 0x00)
 F2 = key(0x3C, 0x00)
+P = key(0x19, 0x50)
 
 
 def down():
@@ -85,6 +86,10 @@ def down():
 
 def up():
     return (3, bytes([2, 0, 0]))
+
+
+def rclick(x, y):
+    return [absm(x, y), (3, bytes([2, 2, 1])), (3, bytes([2, 2, 0]))]
 
 
 def doctor(save):
@@ -238,7 +243,7 @@ def main():
         park(stream)
         if FORMAL:
             got = burst(stream, [K1])
-            if got != [9]:
+            if got != []:
                 return fail("explore stats burst %s" % (got,))
             snap(stream, "formal-explore-stats1")
             burst(stream, [S])
@@ -246,7 +251,7 @@ def main():
             if 7 in got:
                 return fail("spider died before the formal page (RNG)")
             got = burst(stream, [K1])
-            if got != [9]:
+            if got != []:
                 return fail("formal stats burst %s" % (got,))
             snap(stream, "formal-stats1")
             print("live-member: OK (formal stats)")
@@ -255,63 +260,136 @@ def main():
         K3 = key(0x04, 0x33)
         steps = [
             ("stats1", [K1]),
-            ("afflict1", [absm(43, 153), click()]),
-            ("train1", [absm(53, 153), click()]),
-            ("prot1", [absm(53, 163), click()]),
-            ("transp1", [absm(53, 173), click()]),
-            ("stats1b", [absm(28, 188), click()]),
+            ("afflict1", [absm(43, 153), down(), up()]),
+            ("train1", [absm(53, 153), down(), up()]),
+            ("prot1", [absm(53, 163), down(), up()]),
+            ("transp1", [absm(53, 173), down(), up()]),
+            ("stats1b", [absm(28, 188), down(), up()]),
             ("stats2", [K2]),
-            ("afflict2", [absm(101, 153), click()]),
-            ("train2", [absm(111, 153), click()]),
-            ("prot2", [absm(111, 163), click()]),
-            ("transp2", [absm(111, 173), click()]),
+            ("afflict2", [absm(101, 153), down(), up()]),
+            ("train2", [absm(111, 153), down(), up()]),
+            ("prot2", [absm(111, 163), down(), up()]),
+            ("transp2", [absm(111, 173), down(), up()]),
             ("stats3", [K3]),
-            ("afflict3", [absm(159, 153), click()]),
+            ("afflict3", [absm(159, 153), down(), up()]),
         ]
         for name, inputs in steps:
             got = burst(stream, inputs)
-            if got != [9]:
+            if got != []:
                 return fail("%s burst %s" % (name, got))
             snap(stream, name)
         # Portrait rect clicks are vanilla silence (B1 ignores cell
         # ids below 2): no blip. The cursor move itself presents,
-        # like vanilla, so only the SFX asserts.
-        if burst(stream, [absm(24, 163), click()]) != []:
+        # like vanilla, so only the SFX asserts. Released fast so
+        # no hold fires.
+        if burst(stream, [absm(24, 163), down(), up()]) != []:
             return fail("portrait click not silent")
-        # Stat sheet (fn_09619): F1 opens ([2, 9]), F2 switches,
+        # Stat sheet (fn_09619): F1 opens ([2]), F2 switches,
         # highlight boxes toggle silently, ESC closes ([2]), and a
         # 6+ tick portrait hold reopens.
         got = burst(stream, [F1])
-        if got != [2, 9]:
+        if got != [2]:
             return fail("sheet open burst %s" % (got,))
         snap(stream, "sheet1")
         got = burst(stream, [F2])
-        if got != [2, 9]:
+        if got != [2]:
             return fail("sheet switch burst %s" % (got,))
         snap(stream, "sheet2")
-        got = burst(stream, [absm(180, 45), click()])
+        got = burst(stream, [absm(180, 45), down(), up()])
         if got != []:
             return fail("sheet toggle not silent: %s" % (got,))
         snap(stream, "sheet-toggle")
-        got = burst(stream, [absm(180, 45), click()])
+        got = burst(stream, [absm(180, 45), down(), up()])
         if got != []:
             return fail("sheet untoggle not silent: %s" % (got,))
         got = burst(stream, [ESC])
         if got != [2]:
             return fail("sheet close burst %s" % (got,))
         snap(stream, "sheet-closed")
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(0, 2)
+            mark = handle.tell()
         stream.write(record(frame(*absm(23, 163))))
         stream.write(record(frame(*down())))
         stream.flush()
         time.sleep(1)
-        got = burst(stream, [up()])
-        if got != [2, 9]:
+        stream.write(record(frame(*up())))
+        stream.flush()
+        time.sleep(3)
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(mark)
+            tail = handle.read()
+        got = [int(line.rsplit(" sfx ", 1)[1])
+               for line in tail.splitlines()
+               if "play: audio " in line and " sfx " in line]
+        if got != [2]:
             return fail("sheet hold burst %s" % (got,))
         snap(stream, "sheet-hold")
         got = burst(stream, [ESC])
         if got != [2]:
             return fail("sheet hold close burst %s" % (got,))
-        print("live-member: OK (13 pages + silent portrait + sheet)")
+        # Pack UI (fn_08763): P opens ([1]), F1 nests the sheet,
+        # ESC closes the sheet, P closes ([1]); portrait
+        # right-press opens one ([1]); right-hold toggles.
+        got = burst(stream, [P])
+        if got != [1]:
+            return fail("pack open burst %s" % (got,))
+        snap(stream, "pack-all")
+        got = burst(stream, [F1])
+        if got != [2]:
+            return fail("pack sheet burst %s" % (got,))
+        snap(stream, "pack-sheet")
+        got = burst(stream, [ESC])
+        if got != [2]:
+            return fail("pack sheet close burst %s" % (got,))
+        got = burst(stream, [P])
+        if got != [1]:
+            return fail("pack close burst %s" % (got,))
+        got = burst(stream, rclick(80, 163))
+        if got != [1]:
+            return fail("pack portrait burst %s" % (got,))
+        snap(stream, "pack-m2")
+        got = burst(stream, [P])
+        if got != [1]:
+            return fail("pack m2 close burst %s" % (got,))
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(0, 2)
+            mark = handle.tell()
+        stream.write(record(frame(*absm(100, 170))))
+        stream.write(record(frame(3, bytes([2, 2, 1]))))
+        stream.flush()
+        time.sleep(1)
+        stream.write(record(frame(3, bytes([2, 2, 0]))))
+        stream.flush()
+        time.sleep(3)
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(mark)
+            tail = handle.read()
+        got = [int(line.rsplit(" sfx ", 1)[1])
+               for line in tail.splitlines()
+               if "play: audio " in line and " sfx " in line]
+        if got != [1]:
+            return fail("pack rhold burst %s" % (got,))
+        snap(stream, "pack-hold")
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(0, 2)
+            mark = handle.tell()
+        stream.write(record(frame(*absm(100, 170))))
+        stream.write(record(frame(3, bytes([2, 2, 1]))))
+        stream.flush()
+        time.sleep(1)
+        stream.write(record(frame(3, bytes([2, 2, 0]))))
+        stream.flush()
+        time.sleep(3)
+        with open(LOGPATH, errors="replace") as handle:
+            handle.seek(mark)
+            tail = handle.read()
+        got = [int(line.rsplit(" sfx ", 1)[1])
+               for line in tail.splitlines()
+               if "play: audio " in line and " sfx " in line]
+        if got != [1]:
+            return fail("pack rhold close burst %s" % (got,))
+        print("live-member: OK (13 pages + silent portrait + sheet + pack)")
         print("live-member: snaps in %s" % SNAPS)
         return 0
     finally:

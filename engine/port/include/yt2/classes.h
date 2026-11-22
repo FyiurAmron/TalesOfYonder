@@ -69,6 +69,10 @@ int yt2_classes_render_list(yt2_surface *surface,
                             const yt2_pictures *pictures,
                             const yt2_classes *classes, unsigned int selected);
 
+/* Sheet title class name (fn_0982E): 1-based class id across the
+   three nine-name tiers, or "?" out of range. */
+const char *yt2_class_sheet_name(unsigned int class_id);
+
 /*
  * Compose line `class`'s spell page with `selected` (a rank) selected.
  * The fourteen-row window starts at the selected rank's page.

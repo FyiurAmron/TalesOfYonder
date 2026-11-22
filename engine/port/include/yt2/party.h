@@ -93,11 +93,27 @@ typedef struct yt2_item {
     uint16_t count;
 } yt2_item;
 
+/* Container staging slots (+0x17C/+0x1A2/+0x1C8, 38 bytes each):
+   the staged bag id, its file-store index (the bag's count),
+   the contents weight, and the 8 content cells. Occupied flags
+   live in character flags (+0x15C): 0x1000 cell-11, 0x2000 /
+   0x4000 / 0x8000 pack (1C8/1A2/17C). */
+#define YT2_CONTAINER_SLOTS 3u
+#define YT2_CONTAINER_CELLS 8u
+
+typedef struct yt2_container_stage {
+    uint16_t id;
+    uint16_t count;
+    uint16_t weight;
+    yt2_item cells[YT2_CONTAINER_CELLS];
+} yt2_container_stage;
+
 /* Known spellbook bits (sub_17FD1 addresses +0xCA legs by spell/16). */
 #define YT2_SPELLBOOK_WORDS 16u
 
 #define YT2_BUFF_SLOTS 9u
 #define YT2_TRANSPORT_SLOTS 4u
+#define YT2_POOL_SLOTS 6u
 
 typedef struct yt2_character {
     char name[YT2_CHARACTER_NAME_SIZE]; /* always NUL-terminated */
@@ -130,6 +146,7 @@ typedef struct yt2_character {
     yt2_item equipment[YT2_EQUIPMENT_SLOTS];
     uint16_t effects[YT2_EFFECT_SLOTS];
     uint16_t flags;
+    yt2_container_stage stage[YT2_CONTAINER_SLOTS];
     uint16_t overlay; /* +0x15E: 0x8000 paints the skull overlay */
     /* Weapon wear counters (fn_0AD9D): +0xBE missile (cap 0x78),
        +0xC0 melee (cap 0x50), +0xC2 spell (cap 0x14).  Past the cap the
@@ -160,6 +177,10 @@ typedef struct yt2_party {
     uint16_t mean_survival;
     /* Header 0xA4: v_94F3 highlight slots (opaque words, preserved). */
     uint16_t active[YT2_PARTY_ACTIVE_MAX];
+    /* Shared pool (header 0x11A, DGROUP 0x9569): the P pack UI's
+       six grid slots (the chest modal stages opener-synced packs
+       instead, pre-existing). */
+    yt2_item pool[YT2_POOL_SLOTS];
     /* Header 0x1EC: v_963B assigned party, 1-based roster slots
        (0 = empty).  The roster keeps this and the per-slot 0x800
        flags in sync on every toggle (fn_1C354); DONE compacts it

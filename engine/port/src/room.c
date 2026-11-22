@@ -3551,6 +3551,11 @@ int yt2_room_init(yt2_room *room, const yt2_world *world,
     /* v_946F comes from the party (boot 0x2000); vanilla never resets it. */
     /* v_5060 bit 10 is always set once the engine runs (B1 0x0400). */
     room->f5060 = 0x0400u;
+    /* v_505E boots zero (db 0,0); the gate is set only by
+       message paints (fn_16044 and friends), so the first
+       post-load 06EA4 leaves the entry compass in place (B1's
+       first-P WEST survives; the s01 key wipe is
+       unconditional and proves nothing about the boot). */
     return YT2_STATUS_OK;
 }
 

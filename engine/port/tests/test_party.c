@@ -44,6 +44,8 @@ int test_party(void)
     yt2_write_u16(block + 0x98, 161u);
     yt2_write_u16(block + 0x9A, 34u);
     yt2_write_u16(block + 0xA2, 453u);
+    yt2_write_u16(block + 0x11A, 412u);
+    yt2_write_u16(block + 0x11A + 2u, 3u);
 
     memcpy(block + TEST_SLOT_BASE, "CONAN", 5);
     yt2_write_u16(block + TEST_SLOT_BASE + 0x0E, 1u);
@@ -121,6 +123,8 @@ int test_party(void)
     CHECK(party.game_speed == 5u);
     CHECK(party.x == 161u && party.y == 34u);
     CHECK(party.facing == 0x4000u && party.scene == 453u);
+    CHECK(party.pool[0].id == 412u && party.pool[0].count == 3u);
+    CHECK(party.pool[5].id == 0u);
     CHECK(party.roster_count == 1u);
     CHECK(strcmp(party.roster[0].name, "CONAN") == 0);
     CHECK(party.roster[0].class_id == YT2_CLASS_FIGHTER);
@@ -164,7 +168,6 @@ int test_party(void)
         if (written != NULL) {
             block[0x10] = 0xA5u;
             block[TEST_SLOT_BASE + 0x100u] = 0x5Au;
-            block[TEST_SLOT_BASE + 0x17Cu] = 0x3Cu;
 
             memcpy(written, block, YT2_PARTY_BLOCK_SIZE);
             CHECK(yt2_party_write(written, YT2_PARTY_BLOCK_SIZE, &party) ==
@@ -191,7 +194,6 @@ int test_party(void)
                   YT2_STATUS_OK);
             CHECK(written[0x10] == 0xA5u);
             CHECK(written[TEST_SLOT_BASE + 0x100u] == 0x5Au);
-            CHECK(written[TEST_SLOT_BASE + 0x17Cu] == 0x3Cu);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1E) == 0u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x22) == 7u);
             CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0xB4) == 2u);
@@ -202,6 +204,7 @@ int test_party(void)
                   YT2_STATUS_OK);
             CHECK(reread.game_speed == 7u);
             CHECK(reread.x == 0x1111u && reread.y == 0x2222u);
+            CHECK(reread.pool[0].id == 412u && reread.pool[0].count == 3u);
             CHECK(reread.facing == 0x3333u && reread.scene == 0x4444u);
             CHECK(strcmp(reread.roster[0].name, "CONAN2") == 0);
             CHECK(reread.roster[0].level == 3u);
@@ -211,6 +214,32 @@ int test_party(void)
             CHECK(reread.roster[0].pack[0].id == 0x1234u);
             CHECK(reread.roster[0].transport[0] == 11u);
             CHECK(reread.roster[0].transport[2] == 33u);
+            /* Staging round-trips (0x17C/0x1A2/0x1C8 slots). */
+            party.roster[0].stage[2].id = 6u;
+            party.roster[0].stage[2].count = 1u;
+            party.roster[0].stage[2].weight = 30u;
+            party.roster[0].stage[2].cells[0].id = 21u;
+            party.roster[0].stage[2].cells[0].count = 2u;
+            party.roster[0].stage[0].id = 17u;
+            party.roster[0].stage[0].count = 3u;
+            CHECK(yt2_party_write(written, YT2_PARTY_BLOCK_SIZE, &party) ==
+                  YT2_STATUS_OK);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1C8) == 6u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1CA) == 1u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1CC) == 30u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1CE) == 21u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x1D0) == 2u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x17C) == 17u);
+            CHECK(yt2_read_u16(written + TEST_SLOT_BASE + 0x17E) == 3u);
+            CHECK(yt2_party_parse(written, YT2_PARTY_BLOCK_SIZE, &reread) ==
+                  YT2_STATUS_OK);
+            CHECK(reread.roster[0].stage[2].id == 6u);
+            CHECK(reread.roster[0].stage[2].count == 1u);
+            CHECK(reread.roster[0].stage[2].weight == 30u);
+            CHECK(reread.roster[0].stage[2].cells[0].id == 21u);
+            CHECK(reread.roster[0].stage[2].cells[0].count == 2u);
+            CHECK(reread.roster[0].stage[0].id == 17u);
+            CHECK(reread.roster[0].stage[0].count == 3u);
             free(written);
         }
     }

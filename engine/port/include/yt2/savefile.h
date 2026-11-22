@@ -36,6 +36,15 @@
 #define YT2_SAVE_CACHE_SIZE 0x30C0u
 #define YT2_SAVE_SIZE 0x12EC5u
 
+/* Container file stores (B1 op 0x0B): 34-byte records at the
+   levels head, indexed by the bag's count (store = base + index
+   * size): u16 contents weight, then 8 (id, count-or-nested-
+   index) pairs. B1 grows them into level data (verified live:
+   bag-count 1 flushes to 0x4BEA); level 0's head is zero in
+   every surveyed save. */
+#define YT2_SAVE_STORE_OFFSET 0x04BC8u
+#define YT2_SAVE_STORE_SIZE 0x22u
+
 typedef enum yt2_save_chunk_id {
     YT2_SAVE_CHUNK_PARTY = 0,
     YT2_SAVE_CHUNK_OBJECTS,
@@ -61,6 +70,10 @@ typedef struct yt2_save {
     uint8_t *bytes;             /* owned file image */
     size_t size;
     yt2_party party;
+    /* Container-store allocator (B1 v_95FD/v_95FF): RAM-only,
+       shared by creation and play over the same file image. */
+    uint16_t store_bump;
+    uint16_t store_free;
 } yt2_save;
 
 int yt2_save_load(const char *path, yt2_save *save);

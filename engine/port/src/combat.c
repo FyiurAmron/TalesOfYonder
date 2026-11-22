@@ -1,8 +1,11 @@
 #include "yt2/combat.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "yt2/boot.h"
+#include "yt2/classes.h"
 #include "yt2/create.h"
 #include "yt2/cursor.h"
 #include "yt2/item_detail.h"
@@ -18,6 +21,12 @@
 #define COMBAT_SFX_VICTORY 7u
 #define COMBAT_MISSILE_LO 542u
 #define COMBAT_MISSILE_HI 547u
+
+/* Staging occupied flags (+0x15C): 0x1000 cell-11 bag, 0x2000 /
+   0x4000 / 0x8000 pack bags (slots 1C8 / 1A2 / 17C). */
+#define COMBAT_STAGE_CELL11 0x1000u
+#define COMBAT_STAGE_PACK \
+    ((unsigned int)(0x2000u | 0x4000u | 0x8000u))
 
 /* fn_0AD9D weapon kinds (equipment slot, wear counter, wear cap). */
 #define COMBAT_WEAR_MISSILE 0u
@@ -114,6 +123,8 @@ static void combat_build_queue(yt2_combat *combat);
 static void combat_paint_highlight(yt2_combat *combat);
 static void combat_delay(yt2_combat *combat, unsigned int ticks);
 static void combat_rederive(yt2_character *member);
+static void combat_recompute(yt2_combat *combat, yt2_character *member);
+static void combat_write16(uint8_t *bytes, uint16_t value);
 static void combat_apply_damage(yt2_combat *combat,
                                 yt2_room_present_fn present, void *context);
 static void combat_check_wipe(yt2_combat *combat,
@@ -135,6 +146,14 @@ static void combat_panel_restore_modal(yt2_combat *combat);
 static void combat_panel_save_formal(yt2_combat *combat);
 static void combat_panel_restore_formal(yt2_combat *combat);
 static void chest_side_panel_paint(yt2_combat *combat);
+static void quick_access_click(yt2_combat *combat, unsigned int cell);
+static void chest_portrait_drop(yt2_combat *combat, unsigned int position);
+static void pack_paint_member(yt2_combat *combat, unsigned int member);
+static void combat_paperdoll_bonus(void *bonus_ctx, unsigned int slot,
+                              unsigned int id, int plus);
+static void pack_backdrop_snap(yt2_combat *combat);
+static void pack_backdrop_blit(yt2_combat *combat, int x0, int y0,
+                               unsigned int w, unsigned int h);
 
 int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
                     const yt2_pictures *pictures, const yt2_world *world,
@@ -194,6 +213,24 @@ int yt2_combat_init(yt2_combat *combat, yt2_room *room, yt2_save *save,
     combat->menu_requested = 0;
     combat->member_page = 0;
     combat->sheet_open = 0u;
+    combat->pack_open = 0u;
+    combat->pack_current = 0u;
+    combat->panel_saved_pack = 0u;
+    combat->panel_saved_pack_valid = 0;
+    combat->pack_backdrop_valid = 0;
+    {
+        uint8_t *store_base = NULL;
+        size_t store_size = 0u;
+
+        if (save->bytes != NULL && save->size > YT2_SAVE_STORE_OFFSET) {
+            store_base = save->bytes + YT2_SAVE_STORE_OFFSET;
+            store_size = save->size - YT2_SAVE_STORE_OFFSET;
+        }
+        yt2_paperdoll_init(&combat->paperdoll, combat->items, store_base,
+                      store_size, &save->store_bump, &save->store_free,
+                      combat->sfx, &combat->sfx_count,
+                      YT2_COMBAT_SFX_LOG, combat_paperdoll_bonus, combat);
+    }
     combat->menu_formal = 0;
     combat->chest_open = 0;
     combat->chest_prompt = 0;
@@ -333,6 +370,12 @@ static void combat_bcd_format(const uint8_t *bcd, char *buffer, size_t size)
 static uint16_t combat_read16(const uint8_t *bytes)
 {
     return (uint16_t)((uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8));
+}
+
+static void combat_write16(uint8_t *bytes, uint16_t value)
+{
+    bytes[0] = (uint8_t)(value & 0xFFu);
+    bytes[1] = (uint8_t)((value >> 8) & 0xFFu);
 }
 
 /* fn_16024: 1-based roster slot to character (sets v_5070/72). */
@@ -2616,7 +2659,9 @@ static int combat_repaint_impl(yt2_combat *combat,
     }
     room = combat->room;
     /* Combat rounds keep the stale row (B1 paints sprites
-       incrementally); explore returns repaint it fresh. */
+       incrementally); explore returns repaint it fresh. Under
+       the open chest the stale row is the entry compass, which
+       the fresh paint reproduces (no moves under the modal). */
     room->no_compass = (room->f5064 & 0x1000u) != 0u ||
                        combat->chest_prompt ||
                        combat->award_pending ||
@@ -3353,7 +3398,8 @@ static void member_stats(yt2_combat *combat, const yt2_character *member)
  */
 static int combat_member_page(yt2_combat *combat, unsigned int member,
                               unsigned int page,
-                              yt2_room_present_fn present, void *context)
+                              yt2_room_present_fn present, void *context,
+                              int key)
 {
     yt2_room *room;
     yt2_character *character;
@@ -3372,14 +3418,22 @@ static int combat_member_page(yt2_combat *combat, unsigned int member,
         return YT2_STATUS_OK;
     }
     character = &room->party->roster[slot - 1u];
-    /* fn_06EA4 side panel prep: the explore arm clears the name row and
-       rows 96+, the formal arm clears x 240-312, y 86-194. */
-    if ((room->f5064 & 0x1000u) != 0u) {
-        chest_fill(combat, 240, 86, 73, 109);
-        room->f5062 &= (uint16_t)~0x1000u;
-    } else {
-        chest_side_panel_clear(combat, 1);
+    /* fn_06EA4 side panel prep. The key path pre-sets v_505E bit
+       0x100, so it always wipes; the mouse path consumes the
+       bit first and skips the wipe when clear (painting over
+       the stale row like B1). Either way the bit ends set.
+       The explore arm clears the name row and rows 96+, the
+       formal arm clears x 240-312, y 86-194. */
+    if (key || (room->f505e & 0x100u) != 0u) {
+        if ((room->f5064 & 0x1000u) != 0u) {
+            chest_fill(combat, 240, 86, 73, 109);
+            room->f5062 &= (uint16_t)~0x1000u;
+        } else {
+            chest_side_panel_clear(combat, 1);
+        }
+        room->f505e &= (uint16_t)~0x100u;
     }
+    room->f505e |= 0x100u;
     if (page == 0u) {
         member_afflictions(combat, character);
     } else if (page == 1u) {
@@ -3391,9 +3445,8 @@ static int combat_member_page(yt2_combat *combat, unsigned int member,
     } else {
         member_stats(combat, character);
     }
-    /* fn_1A6B5's page blip (SFX 9; vanilla gates it on the sound
-       bit, the port logs sfx ungated like the pack-open blip). */
-    combat_sfx(combat, 9u);
+    /* Pages are silent (B1's SFX 9 is a countdown blip gated
+       on v_5064 bit 0x40, never set by the page paints). */
     combat->member_page = 1;
     if (present != NULL) {
         present(context);
@@ -3456,6 +3509,34 @@ static void combat_paint_sheet(yt2_combat *combat,
 }
 
 /*
+ * sub_09A1D panel: the opaque working-set picture at (15,23)
+ * plus the title row (class name, level, experience, all
+ * 0x0F). Labels (LEVEL/DM/CLOSE/stats) ride in the art.
+ */
+static void combat_paint_sheet_panel(yt2_combat *combat,
+                                     const yt2_character *member)
+{
+    uint8_t xp[4];
+    char number[24];
+
+    yt2_surface_blit(combat->surface, YT2_SHEET_ART_X, YT2_SHEET_ART_Y,
+                     &yt2_sheet_art[0][0], YT2_SHEET_ART_W,
+                     YT2_SHEET_ART_H);
+    yt2_text_draw(combat->surface, 20, 27,
+                  yt2_class_sheet_name((unsigned int)member->class_id),
+                  0x0Fu);
+    sheet_pair(combat, 122, 27, member->level, member->level, 0x0Fu, 0x8Au);
+    /* fn_09C46 reads the BCD bytes in file order (most
+       significant first). */
+    xp[0] = (uint8_t)(member->experience & 0xFFu);
+    xp[1] = (uint8_t)((member->experience >> 8) & 0xFFu);
+    xp[2] = (uint8_t)((member->experience >> 16) & 0xFFu);
+    xp[3] = (uint8_t)((member->experience >> 24) & 0xFFu);
+    combat_bcd_format(xp, number, sizeof(number));
+    yt2_text_draw(combat->surface, 160, 27, number, 0x0Fu);
+}
+
+/*
  * fn_09619 open/switch (loc_0969F): side panel stats plus the sheet
  * numbers plus the member border. Unassigned members are silent.
  */
@@ -3478,11 +3559,16 @@ static int combat_sheet_open(yt2_combat *combat, unsigned int member,
         return YT2_STATUS_OK;
     }
     combat_sfx(combat, 2u);
-    if (combat_member_page(combat, member, 4u, NULL, NULL) !=
+    if (combat_member_page(combat, member, 4u, NULL, NULL, 1) !=
         YT2_STATUS_OK) {
         return YT2_STATUS_ERROR;
     }
+    combat_paint_sheet_panel(combat, &room->party->roster[slot - 1u]);
     combat_paint_sheet(combat, &room->party->roster[slot - 1u], slot);
+    /* fn_171AE repaints the portraits (erasing the old border)
+       before the new one. */
+    yt2_room_paint_portraits(room->party, combat->pictures,
+                             combat->surface);
     combat_paint_highlight_at(combat, member - 1u);
     combat->sheet_open = member;
     if (present != NULL) {
@@ -3513,6 +3599,27 @@ static int combat_sheet_close(yt2_combat *combat,
         yt2_text_draw(combat->surface, 247, 87, purse, 0x8Au);
     }
     combat->sheet_open = 0u;
+    if (combat->pack_open != 0u) {
+        unsigned int i;
+
+        /* Nested sheet: restore the stashed viewport (B1
+           sub_092C2), then repaint the held panes. */
+        pack_backdrop_blit(combat, 8, 8, 224u, 136u);
+        for (i = 1u; i <= 4u; i++) {
+            if ((combat->pack_open & (0x4000u >> (i - 1u))) != 0u) {
+                pack_paint_member(combat, i);
+            }
+        }
+    } else {
+        /* The caller erases the panel with a stale viewport
+           repaint (B1's fn_10E6A tail); the side panel keeps the
+           stale page, the compass row stays untouched. */
+        int no_compass = room->no_compass;
+
+        room->no_compass = 1;
+        yt2_room_render_stale(room, combat->surface);
+        room->no_compass = no_compass;
+    }
     combat->member_page = 1;
     if (present != NULL) {
         present(context);
@@ -3597,6 +3704,770 @@ static int combat_sheet_click(yt2_combat *combat, int x, int y, int right,
     }
     if (member >= 1u && member <= 4u) {
         return combat_sheet_open(combat, member, present, context);
+    }
+    return YT2_STATUS_OK;
+}
+
+/* Pack member panes (DGROUP:0x630A, viewport quarters). */
+static const combat_box pack_panes[] = {
+    {8, 63, 8, 143, 1},
+    {64, 119, 8, 143, 2},
+    {120, 175, 8, 143, 3},
+    {176, 231, 8, 143, 4},
+};
+
+/* Pack icon cells (DGROUP:0x60F4, pane-relative): 1-8 pack, 9 dead,
+   10-15 equipment, 16-21 effects. */
+/* Pane origins (v_5056/505A per picked member). */
+static const int pack_origins[4][2] = {
+    {8, 8}, {64, 8}, {120, 8}, {176, 8}
+};
+
+/* One group-8 item icon (sub_16CB7, transparent 0xFF). */
+static void pack_icon(yt2_combat *combat, int x, int y, unsigned int pic)
+{
+    const yt2_picture_group *group;
+    const uint8_t *data;
+
+    group = yt2_pictures_group(combat->pictures, 8u);
+    data = yt2_picture_data(combat->pictures, 8u, pic);
+    if (group == NULL || data == NULL) {
+        return;
+    }
+    yt2_surface_blit_transparent(combat->surface, x, y, data,
+                                 group->width, group->height, 0xFFu);
+}
+
+/* One group-N icon for effects/portraits. */
+static void pack_pic(yt2_combat *combat, int x, int y, unsigned int group_id,
+                     unsigned int pic, int transparent)
+{
+    const yt2_picture_group *group;
+    const uint8_t *data;
+
+    group = yt2_pictures_group(combat->pictures, group_id);
+    data = yt2_picture_data(combat->pictures, group_id, pic);
+    if (group == NULL || data == NULL) {
+        return;
+    }
+    if (transparent) {
+        yt2_surface_blit_transparent(combat->surface, x, y, data,
+                                     group->width, group->height, 0xFFu);
+    } else {
+        yt2_surface_blit(combat->surface, x, y, data, group->width,
+                         group->height);
+    }
+}
+
+/*
+ * fn_1658F: one member pane (portrait, worn equipment, pack, effect
+ * icons) at the pane origin. Container branches (0x17C/0x1A2/0x1C8)
+ * and the +0x14A icons ride with unported containers; equipment
+ * 4-5 paint unconditionally (B1 gates them on the container bit,
+ * same pixels when empty).
+ */
+static void combat_paint_pane(yt2_combat *combat,
+                              const yt2_character *member, int ox, int oy)
+{
+    static const unsigned int equip_xy[6][2] = {
+        {0, 64}, {40, 64}, {0, 103}, {40, 103}, {4, 95}, {44, 95}
+    };
+    static const unsigned int effect_xy[5][2] = {
+        {12, 49}, {12, 72}, {12, 93}, {10, 104}, {12, 86}
+    };
+    const uint8_t *def;
+    const uint8_t *row;
+    unsigned int i;
+
+    /* Portrait (group 6, index pic, opaque). */
+    pack_pic(combat, ox, oy, 6u, member->portrait_index, 0);
+    /* Worn equipment (group 8). A staged cell-11 bag paints its
+       open variant (icon+1) over cell 11 instead (B1 sub_16D00);
+       the bag itself stays hidden by the grid redirect. */
+    for (i = 0u; i < YT2_EQUIPMENT_SLOTS; i++) {
+        uint16_t icon;
+
+        if (i == 1u && (member->flags & COMBAT_STAGE_CELL11) != 0u) {
+            if (member->stage[2].id == 0u ||
+                combat_item(combat, member->stage[2].id, &def,
+                            &row) != YT2_STATUS_OK) {
+                continue;
+            }
+            pack_icon(combat, ox + (int)equip_xy[i][0],
+                      oy + (int)equip_xy[i][1],
+                      (unsigned int)(chest_def_icon(def) + 1u));
+            continue;
+        }
+        if (member->equipment[i].id == 0u) {
+            continue;
+        }
+        if (combat_item(combat, member->equipment[i].id, &def, &row) !=
+            YT2_STATUS_OK) {
+            continue;
+        }
+        /* Cells 14/15 paint with v_5060 bit 0x8000 set, so flag
+           0x400 selects the def+4 variant icon (B1 sub_16CB7). */
+        icon = chest_def_icon(def);
+        if (i >= 4u && (chest_def_flag(def) & 0x400u) != 0u) {
+            icon = combat_read16(def + 4);
+        }
+        pack_icon(combat, ox + (int)equip_xy[i][0],
+                  oy + (int)equip_xy[i][1], icon);
+    }
+    /* Sex icon over slot 3 when flagged. */
+    if ((member->flags & 0x20u) != 0u) {
+        pack_icon(combat, ox + 40, oy + 103,
+                  member->sex == YT2_SEX_MALE ? 0x0Cu : 0x0Du);
+    }
+    /* Grid (group 8): staged container cells when a bag is open
+       (17C > 1A2 > 1C8 by nonzero id), else the pack. Cell 9
+       shows the open pack bag's variant icon (B1 sub_16D2B). */
+    {
+        const yt2_item *grid = member->pack;
+        unsigned int s;
+
+        for (s = 0u; s < YT2_CONTAINER_SLOTS; s++) {
+            if (member->stage[s].id == 0u) {
+                continue;
+            }
+            grid = member->stage[s].cells;
+            /* Cell-11 bags indicate at cell 11, not cell 9. */
+            if (s == 2u &&
+                (member->flags & COMBAT_STAGE_CELL11) != 0u) {
+                break;
+            }
+            if (combat_item(combat, member->stage[s].id, &def,
+                            &row) == YT2_STATUS_OK) {
+                pack_icon(combat, ox + 38, oy + 36,
+                          (unsigned int)(chest_def_icon(def) + 1u));
+            }
+            break;
+        }
+        for (i = 0u; i < YT2_PACK_SLOTS; i++) {
+            if (grid[i].id == 0u) {
+                continue;
+            }
+            if (combat_item(combat, grid[i].id, &def, &row) !=
+                YT2_STATUS_OK) {
+                continue;
+            }
+            pack_icon(combat, ox + yt2_paperdoll_cells[i].x0,
+                      oy + yt2_paperdoll_cells[i].y0,
+                      chest_def_icon(def));
+        }
+    }
+    /* Effects (group 7): B1 resolves through fn_02262's row gate
+       (flags 0xE00/0xC000/0x100 pick the row, anything else paints
+       nothing); the pic is row+4, +1 unless male. */
+    for (i = 0u; i < YT2_EFFECT_SLOTS; i++) {
+        const yt2_picture_group *group;
+        const uint8_t *data;
+        unsigned int pic;
+
+        if (member->effects[i] == 0u) {
+            continue;
+        }
+        if (combat_item(combat, member->effects[i], &def, &row) !=
+            YT2_STATUS_OK) {
+            continue;
+        }
+        if (row == NULL || (chest_def_flag(def) & 0xE700u) == 0u) {
+            continue;
+        }
+        pic = chest_read16(row + 4u);
+        if (member->sex != YT2_SEX_MALE) {
+            pic++;
+        }
+        group = yt2_pictures_group(combat->pictures, 7u);
+        data = yt2_picture_data(combat->pictures, 7u, pic);
+        if (group == NULL || data == NULL) {
+            continue;
+        }
+        yt2_surface_blit_transparent(combat->surface,
+                                     ox + (int)effect_xy[i][0],
+                                     oy + (int)effect_xy[i][1], data,
+                                     group->width, group->height, 0xFFu);
+    }
+}
+
+/* sub_091F9: paint one picked member's pane. */
+static void pack_paint_member(yt2_combat *combat, unsigned int member)
+{
+    yt2_party *party = combat->room->party;
+    unsigned int slot;
+
+    if (member == 0u || member > 4u) {
+        return;
+    }
+    slot = party->assigned[member - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return;
+    }
+    combat_paint_pane(combat, &party->roster[slot - 1u],
+                      pack_origins[member - 1u][0],
+                      pack_origins[member - 1u][1]);
+}
+
+/* sub_092F2: stash the pack-entry viewport (x8-231/y8-143). */
+static void pack_backdrop_snap(yt2_combat *combat)
+{
+    unsigned int y;
+
+    for (y = 0u; y < 136u; y++) {
+        memcpy(combat->pack_backdrop[y],
+               combat->surface->pixels + (8u + y) * combat->surface->stride +
+                   8u,
+               224u);
+    }
+    combat->pack_backdrop_valid = 1;
+}
+
+/* sub_091AF/sub_092C2: restore a viewport rect from the stash. */
+static void pack_backdrop_blit(yt2_combat *combat, int x0, int y0,
+                               unsigned int w, unsigned int h)
+{
+    unsigned int y;
+
+    if (!combat->pack_backdrop_valid) {
+        return;
+    }
+    for (y = 0u; y < h; y++) {
+        memcpy(combat->surface->pixels +
+                   (unsigned int)(y0 + (int)y) * combat->surface->stride +
+                   (unsigned int)x0,
+               combat->pack_backdrop[y0 - 8 + (int)y] + (x0 - 8), w);
+    }
+}
+
+/*
+ * Pack UI open (fn_08668/fn_085CA + fn_08763 entry): the pool stages
+ * into the shared grid, panes paint per picked member, the pack
+ * pane paints. Single-member opens (right-press) paint just them.
+ */
+static int combat_pack_open(yt2_combat *combat, unsigned int member,
+                            yt2_room_present_fn present, void *context)
+{
+    yt2_room *room;
+    unsigned int i;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    room = combat->room;
+    if (combat->pack_open != 0u) {
+        return YT2_STATUS_OK;
+    }
+    if (member != 0u) {
+        unsigned int slot;
+
+        if (member > 4u) {
+            return YT2_STATUS_OK;
+        }
+        slot = room->party->assigned[member - 1u];
+        if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+            return YT2_STATUS_OK;
+        }
+        combat_sfx(combat, 1u);
+        combat->pack_open = 0x4000u >> (member - 1u);
+        combat->pack_current = member;
+    } else {
+        combat->pack_open = 0u;
+        combat->pack_current = 0u;
+        for (i = 1u; i <= 4u; i++) {
+            unsigned int slot = room->party->assigned[i - 1u];
+
+            if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+                continue;
+            }
+            combat->pack_open |= 0x4000u >> (i - 1u);
+        }
+        if (combat->pack_open == 0u) {
+            return YT2_STATUS_OK;
+        }
+        /* fn_08668 plays SFX 1 for the all-panes open. */
+        combat_sfx(combat, 1u);
+    }
+    for (i = 0u; i < YT2_POOL_SLOTS; i++) {
+        combat->quick_access[i].id = room->party->pool[i].id;
+        combat->quick_access[i].count = room->party->pool[i].count;
+    }
+    /* fn_1755C forces quick access exclusive (stash the panel bits). */
+    combat->panel_saved_pack =
+        (uint16_t)(room->party->explore_flags & 0x7000u);
+    combat->panel_saved_pack_valid = 1;
+    room->party->explore_flags =
+        (uint16_t)((room->party->explore_flags & 0x9FFFu) | 0x1000u);
+    /* fn_06EA4 side panel prep, gated on v_505E bit 0x100 like B1
+       (explore P wipes like B1 s11, formal P like loc_068C3);
+       the chest P (B1 loc_07475) never wipes, loot stays. */
+    if (!combat->chest_open && !combat->chest_prompt &&
+        (room->f505e & 0x100u) != 0u) {
+        if ((room->f5064 & 0x1000u) != 0u) {
+            chest_fill(combat, 240, 86, 73, 109);
+            room->f5062 &= (uint16_t)~0x1000u;
+        } else {
+            chest_side_panel_clear(combat, 1);
+        }
+        room->f505e &= (uint16_t)~0x100u;
+    }
+    quick_access_paint(combat);
+    /* First pane from zero stashes the viewport (B1 sub_092F2);
+       toggle-off and nested sheet close restore from it. */
+    pack_backdrop_snap(combat);
+    for (i = 1u; i <= 4u; i++) {
+        if ((combat->pack_open & (0x4000u >> (i - 1u))) != 0u) {
+            pack_paint_member(combat, i);
+        }
+    }
+    /* B1's pack never paints the member border (v_50C0 is the
+       sheet's); s11's borderless strip proves it. */
+    combat->member_page = 1;
+    if (present != NULL) {
+        present(context);
+    }
+    return YT2_STATUS_OK;
+}
+
+/* loc_08BE2: close the pack UI (pool stages back, full repaint). */
+static void pack_flush_member(yt2_combat *combat, unsigned int member)
+{
+    yt2_party *party = combat->room->party;
+    unsigned int assigned = party->assigned[member - 1u];
+    yt2_character *staged;
+
+    if (assigned == 0u || assigned > YT2_ROSTER_SLOTS) {
+        return;
+    }
+    staged = &party->roster[assigned - 1u];
+    for (unsigned int s = 0u; s < YT2_CONTAINER_SLOTS; s++) {
+        yt2_paperdoll_store_flush(&combat->paperdoll, &staged->stage[s]);
+    }
+    staged->flags = (uint16_t)(staged->flags & ~0xF000u);
+}
+
+static int combat_pack_close(yt2_combat *combat, unsigned int member,
+                             yt2_room_present_fn present, void *context)
+{
+    unsigned int i;
+
+    if (combat == NULL || combat->room == NULL ||
+        combat->room->party == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    if (combat->pack_open == 0u) {
+        return YT2_STATUS_OK;
+    }
+    combat_sfx(combat, 1u);
+    for (i = 0u; i < YT2_POOL_SLOTS; i++) {
+        combat->room->party->pool[i].id = combat->quick_access[i].id;
+        combat->room->party->pool[i].count = combat->quick_access[i].count;
+    }
+    /* The carried item stays carried (B1 never drops the cursor
+       here); explore drops land with the ground-spawn slice. */
+    combat->pack_open = 0u;
+    combat->pack_current = 0u;
+    combat->chest_side_panel_lines = 0u;
+    /* P/rhold close flushes every member (B1 sub_09032);
+       last-pane toggle flushes just it (B1 sub_091AF). */
+    if (member == 0u) {
+        for (i = 1u; i <= 4u; i++) {
+            pack_flush_member(combat, i);
+        }
+    } else {
+        pack_flush_member(combat, member);
+    }
+    if (combat->panel_saved_pack_valid) {
+        combat->room->party->explore_flags = (uint16_t)(
+            (combat->room->party->explore_flags & 0x8FFFu) |
+            combat->panel_saved_pack);
+        combat->panel_saved_pack_valid = 0;
+    }
+    /* sub_09032's fn_06EA4 consumes the pending side panel, then the
+       explore tail repaints with the compass (WEST over the
+       blank row, like B1 s12). */
+    chest_side_panel_clear(combat, 1);
+    combat->room->f505e &= (uint16_t)~0x100u;
+    combat->chest_compass_fresh = 1u;
+    /* The close presents itself; a trailing repaint would wipe
+       the compass row (its fresh bit is spent). */
+    combat->member_page = 1;
+    return yt2_combat_repaint(combat, present, context);
+}
+
+/* sub_093D4: member pane hit (sets the current member). */
+static int pack_pane_hit(yt2_combat *combat, int x, int y)
+{
+    unsigned int hit = chest_hit(pack_panes, 4u, x, y);
+
+    if (hit == 0u) {
+        return 0;
+    }
+    if ((combat->pack_open & (0x4000u >> (hit - 1u))) == 0u) {
+        return 0;
+    }
+    if (combat->room->party->assigned[hit - 1u] == 0u) {
+        return 0;
+    }
+    combat->pack_current = hit;
+    return 1;
+}
+
+/*
+ * fn_0AACC/fn_0ACF5: apply or remove an item's bonus list (four
+ * stat-offset/value pairs at the def+2 list, 0-terminated; adds
+ * cap at 999, removes floor at 0), then rederive capacity/bases
+ * and recompute the party means. Writes raw save bytes like B1
+ * (flushed first) and reparses the slot.
+ */
+static void combat_item_bonus_apply(yt2_combat *combat, unsigned int slot,
+                                    unsigned int id, int plus)
+{
+    yt2_party *party = combat->room->party;
+    const uint8_t *def;
+    const uint8_t *row;
+    const uint8_t *adds;
+    uint8_t *block;
+    uint8_t *slot_bytes;
+    unsigned int i;
+
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS ||
+        combat_item(combat, id, &def, &row) != YT2_STATUS_OK) {
+        return;
+    }
+    adds = yt2_item_adds(combat->items, def);
+    
+    if (adds == NULL) {
+        return;
+    }
+    if (combat->save == NULL || combat->save->bytes == NULL) {
+        return;
+    }
+    block = combat->save->bytes + YT2_SAVE_PARTY_OFFSET;
+    if (yt2_party_write(block, YT2_SAVE_PARTY_SIZE, party) !=
+        YT2_STATUS_OK) {
+        return;
+    }
+    slot_bytes = block + 0x1F4u + (slot - 1u) * 0x1F4u;
+    for (i = 0u; i < 4u; i++) {
+        uint16_t off = combat_read16(adds + i * 4u);
+        uint16_t value = combat_read16(adds + i * 4u + 2u);
+        uint16_t cur;
+
+        if (off == 0u) {
+            break;
+        }
+        if (off + 1u >= 0x1F4u) {
+            continue;
+        }
+        cur = combat_read16(slot_bytes + off);
+        if (plus) {
+            if (off >= 0x32u && cur == 0u) {
+                continue;
+            }
+            cur = (uint16_t)(cur + value);
+            if (cur > 999u) {
+                cur = 999u;
+            }
+        } else if (cur > value) {
+            cur = (uint16_t)(cur - value);
+        } else {
+            cur = 0u;
+        }
+        combat_write16(slot_bytes + off, cur);
+    }
+    yt2_party_parse_character(slot_bytes, &party->roster[slot - 1u]);
+    combat_rederive(&party->roster[slot - 1u]);
+    /* fn_0ABEC: party means plus the map/quick access panel flip. */
+    yt2_room_update_skill_flags(party);
+    if ((party->explore_flags & 0x4000u) != 0u &&
+        (party->explore_flags & 0x8000u) == 0u) {
+        party->explore_flags &= (uint16_t)~0x8000u;
+        party->explore_flags |= 0x1000u;
+        combat->room->f505e |= 0x0400u;
+    }
+}
+
+/* Paperdoll bonus hook: the shared verbs apply roster-slot bonuses here. */
+static void combat_paperdoll_bonus(void *bonus_ctx, unsigned int slot,
+                              unsigned int id, int plus)
+{
+    combat_item_bonus_apply((yt2_combat *)bonus_ctx, slot, id, plus);
+}
+
+/* fn_11F83: the carried/taken item name paints 3 white fields. */
+static void combat_item_name_side_panel(yt2_combat *combat, unsigned int id)
+{
+    char fields[3][14];
+    unsigned int i;
+
+    /* Gated wipe first, then the bit stays set like B1. */
+    if ((combat->room->f505e & 0x100u) != 0u) {
+        chest_side_panel_clear(combat, 1);
+        combat->room->f505e &= (uint16_t)~0x100u;
+    }
+    combat->room->f505e |= 0x100u;
+    if (id != 0u) {
+        for (i = 0u; i < 3u; i++) {
+            if (yt2_item_name_field(combat->items, id - 1u, i, fields[i],
+                                    sizeof(fields[i])) != YT2_STATUS_OK) {
+                return;
+            }
+            yt2_text_draw(combat->surface, 240, 96 + (int)i * 6, fields[i],
+                          0x0Fu);
+        }
+    }
+    /* fn_076AC's purse paints only on f5060 bit 0x80 (dormant). */
+}
+
+/* New parties reset the allocator (B1 v_95FD 2 / v_95FF 0). */
+void yt2_combat_new_party(yt2_combat *combat)
+{
+    if (combat == NULL) {
+        return;
+    }
+    yt2_paperdoll_new_party(&combat->paperdoll);
+}
+
+/*
+ * fn_16925: right-press on a member paperdoll. The shared verb stages
+ * containers and reports examined hits; vanilla stays silent on
+ * those (not even a name), enhanced paints the name+stats receipt.
+ */
+static void pack_examine(yt2_combat *combat, unsigned int member, int x,
+                         int y, yt2_room_present_fn present, void *context)
+{
+    yt2_party *party = combat->room->party;
+    unsigned int slot;
+    yt2_character *character;
+    unsigned int id;
+    unsigned int examined = 0u;
+    const uint8_t *def;
+    const uint8_t *row;
+    char stats[24];
+    char weight[24];
+    int outcome;
+
+    if (member == 0u || member > 4u) {
+        return;
+    }
+    slot = party->assigned[member - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return;
+    }
+    character = &party->roster[slot - 1u];
+    id = yt2_paperdoll_hit(pack_origins[member - 1u][0],
+                      pack_origins[member - 1u][1], x, y);
+    combat->paperdoll.cursor = combat->chest_cursor;
+    combat->paperdoll.carried = combat->chest_carried;
+    combat->paperdoll.carried_count = combat->chest_carried_count;
+    combat->paperdoll.carried_weight = combat->chest_carried_weight;
+    outcome = yt2_paperdoll_right(&combat->paperdoll, character, slot, id,
+                             &examined);
+    combat->chest_cursor = combat->paperdoll.cursor;
+    combat->chest_carried = combat->paperdoll.carried;
+    combat->chest_carried_count = combat->paperdoll.carried_count;
+    combat->chest_carried_weight = combat->paperdoll.carried_weight;
+    if (outcome == YT2_PAPERDOLL_CHANGED) {
+        pack_paint_member(combat, member);
+        combat->member_page = 1;
+        if (present != NULL) {
+            present(context);
+        }
+        return;
+    }
+    if (outcome != YT2_PAPERDOLL_EXAMINED || examined == 0u) {
+        return;
+    }
+    /* fn_19B42 use modal (potions, scrolls, lore gear),
+       deferred; silent in vanilla. */
+    if (!yt2_boot_enhanced()) {
+        return;
+    }
+    /* Enhanced receipt: fn_11F83 paints the 3-field name first. */
+    if (combat_item(combat, examined, &def, &row) != YT2_STATUS_OK) {
+        return;
+    }
+    combat_item_name_side_panel(combat, examined);
+    if (row != NULL) {
+        snprintf(stats, sizeof(stats), "DMG %u",
+                 (unsigned int)combat_read16(row));
+    } else {
+        snprintf(stats, sizeof(stats), "DMG -");
+    }
+    yt2_text_draw(combat->surface, 240, 114, stats, 0x8Au);
+    snprintf(weight, sizeof(weight), "WT %u",
+             (unsigned int)chest_def_weight(def));
+    yt2_text_draw(combat->surface, 240, 120, weight, 0x8Au);
+    combat->member_page = 1;
+    if (present != NULL) {
+        present(context);
+    }
+}
+
+/*
+ * fn_1672C: left-press on a member paperdoll. The shared verb moves the
+ * item; the pane repaints (B1 fn_1658F) and the side panel takes the
+ * carried name (B1 fn_11F83 tail). Returns 1 on success (B1
+ * v_50CC 0), 0 on a miss (v_50CC 1).
+ */
+static int pack_pane_click(yt2_combat *combat, unsigned int member, int x,
+                           int y)
+{
+    yt2_party *party = combat->room->party;
+    unsigned int slot;
+    yt2_character *character;
+    unsigned int id;
+    int outcome;
+
+    if (member == 0u || member > 4u) {
+        return 0;
+    }
+    slot = party->assigned[member - 1u];
+    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
+        return 0;
+    }
+    character = &party->roster[slot - 1u];
+    id = yt2_paperdoll_hit(pack_origins[member - 1u][0],
+                      pack_origins[member - 1u][1], x, y);
+    if (id == 0u || id == 9u) {
+        return 0;
+    }
+    combat->paperdoll.cursor = combat->chest_cursor;
+    combat->paperdoll.carried = combat->chest_carried;
+    combat->paperdoll.carried_count = combat->chest_carried_count;
+    combat->paperdoll.carried_weight = combat->chest_carried_weight;
+    outcome = yt2_paperdoll_left(&combat->paperdoll, character, slot, id);
+    combat->chest_cursor = combat->paperdoll.cursor;
+    combat->chest_carried = combat->paperdoll.carried;
+    combat->chest_carried_count = combat->paperdoll.carried_count;
+    combat->chest_carried_weight = combat->paperdoll.carried_weight;
+    if (outcome != YT2_PAPERDOLL_CHANGED) {
+        return 0;
+    }
+    /* Every placement repaints the pane (B1 fn_1658F runs inside
+       sub_16D74/16D8B/16DB0 and the loc_168B9 insert arm); the
+       strip and the carried name follow. */
+    pack_paint_member(combat, member);
+    combat_item_name_side_panel(combat, combat->chest_carried);
+    return 1;
+}
+
+static int combat_pack_click(yt2_combat *combat, int x, int y, int right,
+                             yt2_room_present_fn present, void *context)
+{
+    unsigned int hit;
+
+    if (right) {
+        /* loc_08AED: a right-press on a strip portrait toggles
+           that member's pane (SFX 1); unpicking the last pane
+           closes. Paperdolls examine (below); chapter examines ride
+           with fn_1789B. */
+        unsigned int member;
+        unsigned int bit;
+
+        hit = chest_hit(chest_regions, 6u, x, y);
+        if (hit == 1u) {
+            /* fn_16925: plain gear silent, readables/sockets
+               deferred-silent in vanilla; enhanced shows the
+               name+stats receipt instead. */
+            if (pack_pane_hit(combat, x, y)) {
+                pack_examine(combat, combat->pack_current, x, y,
+                             present, context);
+            }
+            return YT2_STATUS_OK;
+        }
+        if (hit != 6u ||
+            !yt2_room_portrait_hit(x, y, &member)) {
+            return YT2_STATUS_OK;
+        }
+        if (combat->room->party->assigned[member - 1u] == 0u) {
+            return YT2_STATUS_OK;
+        }
+        bit = 0x4000u >> (member - 1u);
+        if ((combat->pack_open & bit) == 0u) {
+            combat->pack_open |= bit;
+            combat_sfx(combat, 1u);
+            pack_paint_member(combat, member);
+            combat->member_page = 1;
+            if (present != NULL) {
+                present(context);
+            }
+            return YT2_STATUS_OK;
+        }
+        if ((combat->pack_open & (unsigned int)~bit) == 0u) {
+            /* Unpicking the last pane closes (pack_close
+               clears the bits itself). */
+            return combat_pack_close(combat, member, present,
+                                     context);
+        }
+        combat->pack_open &= (unsigned int)~bit;
+        combat_sfx(combat, 1u);
+        /* Toggle-off flushes that member's staging, then the
+           pane restores from the stash (B1 sub_091AF). */
+        pack_flush_member(combat, member);
+        pack_backdrop_blit(combat, pack_origins[member - 1u][0],
+                           pack_origins[member - 1u][1], 56u, 136u);
+        combat->member_page = 1;
+        if (present != NULL) {
+            present(context);
+        }
+        return YT2_STATUS_OK;
+    }
+    hit = chest_hit(chest_regions, 6u, x, y);
+    if (hit == 2u) {
+        unsigned int cell = chest_hit(quick_access_cells, 9u, x, y);
+
+        /* Quick access grid (fn_176EC over the staged pool). */
+        if (cell != 0u) {
+            quick_access_click(combat, cell);
+            quick_access_paint(combat);
+            combat->member_page = 1;
+            if (present != NULL) {
+                present(context);
+            }
+        }
+        return YT2_STATUS_OK;
+    }
+    if (hit == 6u) {
+        unsigned int member;
+        unsigned int cell;
+
+        /* Carried clicks run fn_08D3F (portrait drops, cells buzz). */
+        if (combat->chest_cursor != 0u) {
+            if (yt2_room_portrait_hit(x, y, &member)) {
+                chest_portrait_drop(combat, member);
+                pack_paint_member(combat, member);
+                combat->member_page = 1;
+                if (present != NULL) {
+                    present(context);
+                }
+            } else if (yt2_room_strip_hit(x, y, &member, &cell)) {
+                combat_sfx(combat, 3u);
+            }
+            return YT2_STATUS_OK;
+        }
+        /* Status cells inspect (fn_16044). */
+        if (yt2_room_strip_hit(x, y, &member, &cell)) {
+            return combat_member_page(combat, member,
+                                      cell <= 2u ? 0u : cell - 2u,
+                                      present, context, 0);
+        }
+        return YT2_STATUS_OK;
+    }
+    if (hit == 1u) {
+        /* Member pane: pickup/drop/swap/equip, then the strip
+           repaint and the item name (B1 loc_087F3 tail). */
+        if (pack_pane_hit(combat, x, y) &&
+            pack_pane_click(combat, combat->pack_current, x, y)) {
+            yt2_room_paint_portraits(combat->room->party,
+                                     combat->pictures, combat->surface);
+            combat->member_page = 1;
+            if (present != NULL) {
+                present(context);
+            }
+        }
+        return YT2_STATUS_OK;
     }
     return YT2_STATUS_OK;
 }
@@ -4556,15 +5427,23 @@ static void quick_access_click(yt2_combat *combat, unsigned int cell)
         yt2_chest_slot *slot = &combat->quick_access[cell - 4u];
 
         if (combat->chest_cursor == 0u) {
+            const uint8_t *def;
+            const uint8_t *row;
+
             if (slot->id == 0u) {
+                return;
+            }
+            if (combat_item(combat, slot->id, &def, &row) !=
+                YT2_STATUS_OK) {
                 return;
             }
             combat->chest_carried = slot->id;
             combat->chest_carried_count = slot->count;
-            combat->chest_carried_weight = 0u;
             slot->id = 0u;
             slot->count = 0u;
-            combat->chest_cursor = 0x0Bu;
+            /* B1 sub_1782C takes the item's own icon and weight. */
+            combat->chest_cursor = chest_def_icon(def);
+            combat->chest_carried_weight = chest_def_weight(def);
             /* loc_17858 stages the name WorkSeg-side (quiescently
                invisible: the next action clears or overwrites it),
                but the sticky set is observable at the next clear. */
@@ -4733,77 +5612,7 @@ static void combat_rederive(yt2_character *member)
 /* fn_0B3D2: recompute current/max combat stats from bases+equipment. */
 static void combat_recompute(yt2_combat *combat, yt2_character *member)
 {
-    const uint8_t *def;
-    const uint8_t *row;
-
-    member->current.combat.projectile_accuracy = member->base[0];
-    member->current.combat.projectile_damage = member->base[1];
-    member->current.combat.battle_accuracy = member->base[2];
-    member->current.combat.battle_damage = member->base[3];
-    member->current.combat.absorption = member->base[4];
-    member->maximum.combat.projectile_accuracy = member->max_base[0];
-    member->maximum.combat.projectile_damage = member->max_base[1];
-    member->maximum.combat.battle_accuracy = member->max_base[2];
-    member->maximum.combat.battle_damage = member->max_base[3];
-    member->maximum.combat.absorption = member->max_base[4];
-    if (member->equipment[0].id != 0u &&
-        combat_item(combat, member->equipment[0].id, &def,
-                    &row) == YT2_STATUS_OK &&
-        row != NULL) {
-        member->current.combat.projectile_accuracy +=
-            member->current.skills.projectile;
-        member->maximum.combat.projectile_accuracy +=
-            member->maximum.skills.projectile;
-        member->current.combat.projectile_damage += chest_read16(row + 0);
-        member->maximum.combat.projectile_damage += chest_read16(row + 0);
-    }
-    member->flags &= (uint16_t)~0x20u;
-    if (member->equipment[2].id != 0u &&
-        combat_item(combat, member->equipment[2].id, &def,
-                    &row) == YT2_STATUS_OK &&
-        row != NULL) {
-        uint16_t sub = chest_read16(row + 2);
-
-        if ((sub & 0x4000u) != 0u) {
-            member->current.combat.battle_accuracy +=
-                member->current.skills.slashing;
-            member->maximum.combat.battle_accuracy +=
-                member->maximum.skills.slashing;
-        } else if ((sub & 0x2000u) != 0u) {
-            member->current.combat.battle_accuracy +=
-                member->current.skills.bashing;
-            member->maximum.combat.battle_accuracy +=
-                member->maximum.skills.bashing;
-        } else if ((sub & 0x1000u) != 0u) {
-            member->current.combat.battle_accuracy +=
-                member->current.skills.polearm;
-            member->maximum.combat.battle_accuracy +=
-                member->maximum.skills.polearm;
-        }
-        member->current.combat.battle_damage += chest_read16(row + 0);
-        member->maximum.combat.battle_damage += chest_read16(row + 0);
-        if ((sub & 1u) != 0u) {
-            member->flags |= 0x20u;
-        }
-    }
-    for (unsigned int i = 3u; i < YT2_EQUIPMENT_SLOTS; i++) {
-        if (member->equipment[i].id != 0u &&
-            combat_item(combat, member->equipment[i].id, &def,
-                        &row) == YT2_STATUS_OK &&
-            row != NULL) {
-            member->current.combat.absorption += chest_read16(row + 0);
-            member->maximum.combat.absorption += chest_read16(row + 0);
-        }
-    }
-    for (unsigned int i = 0u; i < YT2_EFFECT_SLOTS; i++) {
-        if (member->effects[i] != 0u &&
-            combat_item(combat, member->effects[i], &def,
-                        &row) == YT2_STATUS_OK &&
-            row != NULL) {
-            member->current.combat.absorption += chest_read16(row + 0);
-            member->maximum.combat.absorption += chest_read16(row + 0);
-        }
-    }
+    yt2_paperdoll_recompute(&combat->paperdoll, member);
 }
 
 /* fn_08D3F: portrait drop (equip slots, weight check, pack insert). */
@@ -5020,10 +5829,40 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
         }
         return YT2_STATUS_OK;
     }
+    if (combat->pack_open != 0u) {
+        /* The pack UI owns input (B1 fn_08763); P closes, ESC
+           buzzes a carried cursor, the verb keys re-poll with
+           the deferred slices. */
+        if (ascii == 'P') {
+            return combat_pack_close(combat, 0u, present, context);
+        }
+        if (ascii >= '1' && ascii <= '4') {
+            /* Member stats over the pack (B1 loc_08C81). */
+            return combat_member_page(combat,
+                                      (unsigned int)(ascii - '1') + 1u, 4u,
+                                      present, context, 1);
+        }
+        if (ascii == 0x1Bu && combat->chest_cursor != 0u) {
+            combat_sfx(combat, 3u);
+        }
+        return YT2_STATUS_OK;
+    }
     if ((room->f5064 & 0x1000u) != 0u) {
         /* The modal owns input (B1's fn_073E3 loop replaces the
-           formal loop); rounds wait. */
-        if (combat->chest_open || combat->chest_prompt) {
+           formal loop); rounds wait. Packs and stats paint
+           through (B1 loc_07475/loc_07489). */
+        if (combat->chest_prompt) {
+            return YT2_STATUS_OK;
+        }
+        if (combat->chest_open) {
+            if (ascii == 'P') {
+                return combat_pack_open(combat, 0u, present, context);
+            }
+            if (ascii >= '1' && ascii <= '4') {
+                return combat_member_page(
+                    combat, (unsigned int)(ascii - '1') + 1u, 4u,
+                    present, context, 1);
+            }
             return YT2_STATUS_OK;
         }
         if (ascii >= '1' && ascii <= '4') {
@@ -5031,7 +5870,11 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
                queue and its pick roll are untouched, no repaint. */
             return combat_member_page(combat,
                                       (unsigned int)(ascii - '1') + 1u, 4u,
-                                      present, context);
+                                      present, context, 1);
+        }
+        if (ascii == 'P') {
+            /* Pack UI (loc_068C3). */
+            return combat_pack_open(combat, 0u, present, context);
         }
         combat_formal_key(combat, ascii, present, context);
         if (combat->queue_count == 0u &&
@@ -5116,13 +5959,21 @@ int yt2_combat_key(yt2_combat *combat, unsigned int ascii,
             return YT2_STATUS_OK;
         }
     } else if (ascii >= '1' && ascii <= '4') {
-        /* Member stats (fn_16044 key path); the modal owns input. */
-        if (combat->chest_open || combat->chest_prompt) {
+        /* Member stats (fn_16044 key path, B1 loc_07489 over
+           the open chest; the prompt ignores them). */
+        if (combat->chest_prompt) {
             return YT2_STATUS_OK;
         }
         status = combat_member_page(combat,
                                     (unsigned int)(ascii - '1') + 1u, 4u,
-                                    present, context);
+                                    present, context, 1);
+    } else if (ascii == 'P') {
+        /* Pack UI (loc_0061C, B1 loc_07475 over the open
+           chest; the prompt ignores it). */
+        if (combat->chest_prompt) {
+            return YT2_STATUS_OK;
+        }
+        status = combat_pack_open(combat, 0u, present, context);
     } else {
         return YT2_STATUS_ERROR;
     }
@@ -5269,7 +6120,7 @@ static int combat_formal_click(yt2_combat *combat, int x, int y, int right,
         if (yt2_room_strip_hit(x, y, &member, &cell)) {
             combat_member_page(combat, member,
                                cell <= 2u ? 0u : cell - 2u,
-                               present, context);
+                               present, context, 0);
         }
         return YT2_STATUS_OK;
     }
@@ -5394,7 +6245,12 @@ static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
 
     if (right) {
         int paint = 0;
+        unsigned int member;
 
+        /* Right-press portrait opens that member's pack (fn_085CA). */
+        if (hit == 6u && yt2_room_portrait_hit(x, y, &member)) {
+            return combat_pack_open(combat, member, present, context);
+        }
         if (hit != 1u) {
             return YT2_STATUS_ERROR;
         }
@@ -5498,7 +6354,7 @@ static int chest_explore_click(yt2_combat *combat, int x, int y, int right,
         }
         return combat_member_page(combat, member,
                                   cell <= 2u ? 0u : cell - 2u,
-                                  present, context);
+                                  present, context, 0);
     }
     return YT2_STATUS_ERROR;
 }
@@ -5514,6 +6370,9 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
     combat->member_page = 0;
     if (combat->sheet_open != 0u) {
         return combat_sheet_click(combat, x, y, right, present, context);
+    }
+    if (combat->pack_open != 0u) {
+        return combat_pack_click(combat, x, y, right, present, context);
     }
     if ((combat->room->f5064 & 0x1000u) != 0u && !combat->chest_open &&
         !combat->chest_prompt) {
@@ -5539,12 +6398,22 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
         return chest_explore_click(combat, x, y, right, present,
                                    context);
     }
-    /* Modal right-clicks have B1 handlers (loc_07586/loc_07682);
-       ungrounded, ignored for now. */
-    if (right) {
-        return YT2_STATUS_ERROR;
-    }
     hit = chest_hit(chest_regions, 6u, x, y);
+    if (right) {
+        /* B1 loc_07586: viewport closes like SPACE, strip
+           portraits pick single pack panes (fn_085CA);
+           chapter examines (deferred), the rest spins. */
+        unsigned int member;
+
+        if (hit == 1u) {
+            chest_close(combat);
+            return yt2_combat_repaint(combat, present, context);
+        }
+        if (hit == 6u && yt2_room_portrait_hit(x, y, &member)) {
+            return combat_pack_open(combat, member, present, context);
+        }
+        return YT2_STATUS_OK;
+    }
     if (hit == 5u) {
         unsigned int cell = chest_hit(chest_loot_cells, 8u, x, y);
 
@@ -5589,7 +6458,7 @@ int yt2_combat_click(yt2_combat *combat, int x, int y, int right,
             if (yt2_room_strip_hit(x, y, &member, &cell)) {
                 return combat_member_page(combat, member,
                                           cell <= 2u ? 0u : cell - 2u,
-                                          present, context);
+                                          present, context, 0);
             }
         }
         return YT2_STATUS_OK;
@@ -5603,19 +6472,28 @@ void yt2_combat_sheet_retain(yt2_combat *combat)
 {
     yt2_room *room;
     unsigned int slot;
+    unsigned int i;
 
     if (combat == NULL || combat->room == NULL ||
-        combat->room->party == NULL || combat->sheet_open == 0u ||
-        combat->sheet_open > 4u) {
+        combat->room->party == NULL) {
         return;
     }
     room = combat->room;
-    slot = room->party->assigned[combat->sheet_open - 1u];
-    if (slot == 0u || slot > YT2_ROSTER_SLOTS) {
-        return;
+    if (combat->sheet_open != 0u && combat->sheet_open <= 4u) {
+        slot = room->party->assigned[combat->sheet_open - 1u];
+        if (slot != 0u && slot <= YT2_ROSTER_SLOTS) {
+            combat_paint_sheet(combat, &room->party->roster[slot - 1u],
+                               slot);
+            combat_paint_highlight_at(combat, combat->sheet_open - 1u);
+        }
     }
-    combat_paint_sheet(combat, &room->party->roster[slot - 1u], slot);
-    combat_paint_highlight_at(combat, combat->sheet_open - 1u);
+    if (combat->pack_open != 0u) {
+        for (i = 1u; i <= 4u; i++) {
+            if ((combat->pack_open & (0x4000u >> (i - 1u))) != 0u) {
+                pack_paint_member(combat, i);
+            }
+        }
+    }
 }
 
 int yt2_combat_hold(yt2_combat *combat, int x, int y,
@@ -5647,7 +6525,12 @@ int yt2_combat_hold(yt2_combat *combat, int x, int y,
         return YT2_STATUS_OK;
     }
     if ((combat->room->party->explore_flags & 0x1000u) != 0u) {
-        /* Pack-open holds use pack items (fn_1760E, pack UI). */
+        /* Pack-open holds over portraits open the sheet (B1
+           loc_0889D via fn_09619); item holds ride with the
+           deferred slices. */
+        if (yt2_room_portrait_hit(x, y, &member)) {
+            return combat_sheet_open(combat, member, present, context);
+        }
         return YT2_STATUS_OK;
     }
     /* Stat sheet (fn_09619 via loc_0033F). */
@@ -5655,6 +6538,28 @@ int yt2_combat_hold(yt2_combat *combat, int x, int y,
         return combat_sheet_open(combat, member, present, context);
     }
     return YT2_STATUS_OK;
+}
+
+int yt2_combat_rhold(yt2_combat *combat, int x, int y,
+                     yt2_room_present_fn present, void *context)
+{
+    if (combat == NULL || combat->room == NULL) {
+        return YT2_STATUS_ERROR;
+    }
+    combat->member_page = 0;
+    if (x < 0 || x > 232 || y < 144 || y > 199) {
+        return YT2_STATUS_OK;
+    }
+    if (combat->sheet_open != 0u || combat->chest_prompt) {
+        /* The sheet and the opener prompt re-poll holds. */
+        return YT2_STATUS_OK;
+    }
+    if (combat->pack_open != 0u) {
+        return combat_pack_close(combat, 0u, present, context);
+    }
+    /* Strip holds open all panes (B1 loc_0061C in explore,
+       loc_07682 over the chest). */
+    return combat_pack_open(combat, 0u, present, context);
 }
 
 unsigned int yt2_combat_sfx_count(const yt2_combat *combat)

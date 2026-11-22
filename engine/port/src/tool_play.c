@@ -129,12 +129,23 @@ typedef struct play_state {
     unsigned int tick;
     unsigned int last_press_tick;
     int have_last_press;
-    /* Hold latch (B1's 6-tick press): a left release 6+ ticks after
-       its press on the same portrait opens the stat sheet. */
+    /* Press latch (B1's 6-tick poll): a release inside 6 ticks
+       clicks at the press position; past 6 ticks it holds
+       there instead (a held portrait opens the stat sheet).
+       Exactly one fires per press. */
     unsigned int hold_tick;
     int hold_x;
     int hold_y;
     int have_hold;
+    int hold_fired;
+    /* Right press latch: same exclusivity; a held strip press
+       opens or closes the pack UI. */
+    unsigned int hold_ticks;
+    unsigned int rhold_tick;
+    int rhold_x;
+    int rhold_y;
+    int have_rhold;
+    int rhold_fired;
     /* Stale press the original re-fires on the tick after a double-click. */
     int phantom_pending;
     unsigned int phantom_tick;
@@ -1245,8 +1256,10 @@ static int session_present(play_state *state, yt2_folder_out *out,
         shown = yt2_create_cursor_shown(&state->create);
     }
     if (state->session_mode == 3 && state->have_combat &&
-        state->combat.chest_open && state->combat.chest_cursor != 0u) {
-        /* Carried item icon (fn_SetMouseCursor). */
+        state->combat.chest_carried != 0u) {
+        /* Carried item icon (fn_SetMouseCursor shows it in any
+           mode-3 UI: pack, chest, sheet, explore). Iconless
+           items (potions) draw pic 0, invisible like B1. */
         cursor = state->combat.chest_cursor;
     }
     if (!state->have_frame) {
@@ -1447,18 +1460,20 @@ static void session_key(play_state *state, const yt2_input_event *event,
         /* Main-loop dispatch (tbl_KeyDispatch/tbl_ScanDispatch): arrows
            move, D opens the in-game menu, R opens the game menu (unported),
            everything else is silent (loc_00817 ignores ESC/Q/junk). */
-        state->have_hold = 0;
-        if (state->have_combat && state->combat.sheet_open != 0u) {
-            /* The sheet owns input (B1 loc_096C0): ESC/C close,
-               F-keys switch; arrows, SPACE, verbs and the menu
-               re-poll. Clicks route through session_click. */
+        if (state->have_combat && (state->combat.sheet_open != 0u ||
+                                   state->combat.pack_open != 0u)) {
+            /* The sheet/pack UI owns input (B1 loc_096C0/fn_08763):
+               ESC/C/P and F-keys route through; arrows, SPACE,
+               verbs and the menu re-poll. Clicks route through
+               session_click. */
             if (state->map_open) {
                 play_map_close(state);
                 session_drain_sfx(state);
                 return;
             }
             ascii = session_ascii(event);
-            if ((ascii == 0x1Bu || ascii == 'C') && event->down == 1) {
+            if ((ascii == 0x1Bu || ascii == 'C' || ascii == 'P') &&
+                event->down == 1) {
                 if (yt2_combat_key(&state->combat, ascii,
                                    explore_present,
                                    state) == YT2_STATUS_OK) {
@@ -1554,7 +1569,7 @@ static void session_key(play_state *state, const yt2_input_event *event,
                  (state->room.f5064 & 0x1000u) != 0u);
             return;
         }
-        if ((ascii == 'S' || ascii == 'A' ||
+        if ((ascii == 'S' || ascii == 'A' || ascii == 'P' ||
              (ascii >= '1' && ascii <= '4')) &&
             state->have_combat) {
             if (yt2_combat_key(&state->combat, ascii, explore_present,
@@ -1595,7 +1610,7 @@ static void session_key(play_state *state, const yt2_input_event *event,
             return;
         }
         if (ascii == 'R' ||
-            ascii == 'P' || ascii == 'S' ||
+            ascii == 'S' ||
             ascii == 'T' || ascii == 'W' || ascii == 'C' ||
             ascii == 'A' || ascii == 'K' || ascii == 'V' ||
             ascii == ' ') {
@@ -1712,8 +1727,18 @@ static void session_click(play_state *state, int x, int y, int right,
                 session_drain_sfx(state);
                 return;
             }
-            if (yt2_combat_repaint(&state->combat, explore_present,
-                                   state) == YT2_STATUS_OK) {
+            /* B1 repaints nothing on a repoll: under the sheet
+               or pack every acting click presents internally
+               (member_page rides above) while repolls must leave
+               the surface alone (a gather here would wipe the
+               sheet/pack off the screen). */
+            if (state->combat.sheet_open == 0u &&
+                state->combat.pack_open == 0u) {
+                if (yt2_combat_repaint(&state->combat, explore_present,
+                                       state) == YT2_STATUS_OK) {
+                    explore_flush_save(state);
+                }
+            } else {
                 explore_flush_save(state);
             }
             *dirty = 1;
@@ -1838,6 +1863,9 @@ static int play_title_reset(play_state *state)
         return YT2_STATUS_ERROR;
     }
     printf("play: new party\n");
+    if (state->have_combat) {
+        yt2_combat_new_party(&state->combat);
+    }
     return YT2_STATUS_OK;
 }
 
@@ -1878,6 +1906,12 @@ static int run_session(play_state *state, yt2_folder_out *out,
     state->session_out = out;
     state->session_presenter = presenter;
     state->session_presented = presented;
+    /* B1's poll classifies past 6 BIOS ticks (~330 ms wall);
+       scale the latch window to this session's tick. */
+    state->hold_ticks = (330u + options->tick_ms - 1u) / options->tick_ms;
+    if (state->hold_ticks == 0u) {
+        state->hold_ticks = 1u;
+    }
     if (session_present(state, out, presenter, 1) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot present the session\n");
         return YT2_STATUS_ERROR;
@@ -1956,54 +1990,69 @@ static int run_session(play_state *state, yt2_folder_out *out,
                 moved = 1;
                 break;
             case YT2_INPUT_EVENT_MOUSE_BUTTON:
-                if (event.down == 0u && event.button == 0u &&
-                    state->have_hold && state->have_combat &&
-                    state->session_mode == 3 && !state->map_open &&
-                    state->tick - state->hold_tick >= 6u) {
-                    unsigned int down_member = 0u;
-                    unsigned int up_member = 0u;
+                /* B1's poll reports each press exactly once (50CC
+                   3/7 XOR 6/0xA): a release inside 6 ticks clicks,
+                   a press held past 6 ticks holds and the release
+                   is silent. Both resolve at the press position
+                   (B1 latches v_MouseLeft/RightX, never the live
+                   cursor). Quick clicks resolve on release (B1's
+                   330 ms poll stall is not replicated). */
+                if (event.down == 0u &&
+                    (event.button == 0u || event.button == 2u)) {
+                    int held =
+                        event.button == 0u ? state->hold_fired :
+                                             state->rhold_fired;
+                    int armed =
+                        event.button == 0u ? state->have_hold :
+                                             state->have_rhold;
+                    int px = event.button == 0u ? state->hold_x :
+                                                       state->rhold_x;
+                    int py = event.button == 0u ? state->hold_y :
+                                                       state->rhold_y;
 
-                    /* Left-hold (B1's 50CC 6): same portrait at
-                       press and release opens the stat sheet. */
-                    state->have_hold = 0;
-                    if (yt2_room_portrait_hit(state->hold_x,
-                                              state->hold_y,
-                                              &down_member) &&
-                        yt2_room_portrait_hit(state->cursor_x,
-                                              state->cursor_y,
-                                              &up_member) &&
-                        down_member == up_member &&
-                        yt2_combat_hold(&state->combat, state->cursor_x,
-                                        state->cursor_y, explore_present,
-                                        state) == YT2_STATUS_OK) {
-                        explore_flush_save(state);
-                        session_drain_sfx(state);
+                    if (event.button == 0u) {
+                        state->have_hold = 0;
+                        state->hold_fired = 0;
+                    } else {
+                        state->have_rhold = 0;
+                        state->rhold_fired = 0;
+                    }
+                    if (armed && !held) {
+                        const char *before = session_stage_name(state);
+                        int dirty = 0;
+
+                        session_click(state, px, py, event.button == 2u,
+                                      &dirty);
+                        if (dirty &&
+                            session_present(state, out, presenter, 0) ==
+                                YT2_STATUS_OK) {
+                            (*presented)++;
+                        }
+                        if (session_stage_name(state) != before) {
+                            printf(
+                                "play: %s %s\n",
+                                state->session_mode == 1 ? "create" :
+                                state->session_mode == 4 ? "ingamemenu" :
+                                                           "roster",
+                                session_stage_name(state));
+                        }
                     }
                     break;
                 }
                 if (event.down == 1u &&
                     (event.button == 0u || event.button == 2u)) {
-                    const char *before = session_stage_name(state);
-                    int dirty = 0;
-
                     if (event.button == 0u) {
                         state->have_hold = 1;
+                        state->hold_fired = 0;
                         state->hold_tick = state->tick;
                         state->hold_x = state->cursor_x;
                         state->hold_y = state->cursor_y;
-                    }
-                    session_click(state, state->cursor_x, state->cursor_y,
-                                  event.button == 2u, &dirty);
-                    if (dirty &&
-                        session_present(state, out, presenter, 0) ==
-                            YT2_STATUS_OK) {
-                        (*presented)++;
-                    }
-                    if (session_stage_name(state) != before) {
-                        printf("play: %s %s\n",
-                               state->session_mode == 1 ? "create" :
-                               state->session_mode == 4 ? "ingamemenu" : "roster",
-                               session_stage_name(state));
+                    } else {
+                        state->have_rhold = 1;
+                        state->rhold_fired = 0;
+                        state->rhold_tick = state->tick;
+                        state->rhold_x = state->cursor_x;
+                        state->rhold_y = state->cursor_y;
                     }
                 }
                 break;
@@ -2020,6 +2069,34 @@ static int run_session(play_state *state, yt2_folder_out *out,
         if (poll < 0) {
             fprintf(stderr, "yt2p-play: input failure\n");
             return YT2_STATUS_ERROR;
+        }
+        /* A press held 6+ ticks resolves as a hold at the
+           press position (B1 latches v_MouseLeft/RightX);
+           other modes swallow it like B1's re-poll. The release
+           then stays silent. */
+        if (state->have_hold && !state->hold_fired &&
+            state->tick - state->hold_tick >= state->hold_ticks) {
+            state->hold_fired = 1;
+            if (state->have_combat && state->session_mode == 3 &&
+                !state->map_open &&
+                yt2_combat_hold(&state->combat, state->hold_x,
+                                state->hold_y, explore_present,
+                                state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+                session_drain_sfx(state);
+            }
+        }
+        if (state->have_rhold && !state->rhold_fired &&
+            state->tick - state->rhold_tick >= state->hold_ticks) {
+            state->rhold_fired = 1;
+            if (state->have_combat && state->session_mode == 3 &&
+                !state->map_open &&
+                yt2_combat_rhold(&state->combat, state->rhold_x,
+                                 state->rhold_y, explore_present,
+                                 state) == YT2_STATUS_OK) {
+                explore_flush_save(state);
+                session_drain_sfx(state);
+            }
         }
         if (moved && session_present(state, out, presenter, 0) ==
             YT2_STATUS_OK) {
@@ -2136,39 +2213,52 @@ static int run_session(play_state *state, yt2_folder_out *out,
         if (state->session_mode == 3) {
             int idle_explore;
             int idle_formal;
+            int modal_frozen;
 
-            /* Map modal (fn_123E9 WaitKey): frozen (no ticks,
-               repaints, or presents); input still polls above and
-               presents on open/legend/close. */
-            if (state->map_open) {
-                continue;
-            }
-            /* Chest prompt/modal (B1's fn_073E3/fn_0795E loops own
-               input): frozen like the map; the modal anim-tick
-               runs on arrow input, never on the wall clock. */
-            if (state->have_combat &&
-                (state->combat.chest_open ||
-                 state->combat.chest_prompt)) {
-                continue;
-            }
-            /* The room ticks its own clock/sky/rotation countdowns.
-               Idle explore re-renders stale (B1's per-poll fn_10E6A:
-               sprites advance under the palette); formal and modal
-               idle present the palette over the settled frame. */
+            /* B1's INT 1Ch tick (fn_TickISR) advances the
+               clock/sky/rotation countdowns asynchronously, under
+               the map/chest/sheet/pack loops too (the palette
+               border animates over open modals); only repaints
+               freeze (modals never gather). Tick always; render
+               only when settled. Input still polls above; the
+               chest modal anim-tick runs on arrow input. */
             if (yt2_room_tick(&state->room) != YT2_STATUS_OK) {
                 fprintf(stderr, "yt2p-play: room tick failed\n");
                 return YT2_STATUS_ERROR;
             }
-            idle_explore = (state->room.f5064 & 0x1000u) == 0u &&
-                           (!state->have_combat ||
-                            (!state->combat.chest_open &&
-                             !state->combat.chest_prompt));
-            idle_formal =
-                state->have_combat &&
-                (state->room.f5064 & 0x1000u) != 0u &&
-                !state->combat.chest_open && !state->combat.chest_prompt &&
-                state->room.rotation_phase % 3u == 0u;
-            if (yt2_room_tick_dirty(&state->room)) {
+            modal_frozen =
+                state->map_open ||
+                (state->have_combat &&
+                 (state->combat.chest_open ||
+                  state->combat.chest_prompt ||
+                  state->combat.sheet_open != 0u ||
+                  state->combat.pack_open != 0u));
+            /* The room ticks its own clock/sky/rotation countdowns.
+               Idle explore re-renders stale (B1's per-poll fn_10E6A:
+               sprites advance under the palette); formal and modal
+               idle present the palette over the settled frame. */
+            idle_explore = !modal_frozen &&
+                           (state->room.f5064 & 0x1000u) == 0u;
+            idle_formal = !modal_frozen && state->have_combat &&
+                          (state->room.f5064 & 0x1000u) != 0u &&
+                          state->room.rotation_phase % 3u == 0u;
+            /* Ticks advance every modal's clock (B1's ISR), but
+               the prompt, map, and bare chest modal hold their
+               frame (the modal animates on arrow input); the
+               sheet/pack borders animate, even over the chest. */
+            {
+                int modal_hold =
+                    state->map_open ||
+                    (state->have_combat &&
+                     (state->combat.chest_prompt ||
+                      (state->combat.chest_open &&
+                       state->combat.sheet_open == 0u &&
+                       state->combat.pack_open == 0u)));
+                if (!yt2_room_tick_dirty(&state->room) || modal_hold) {
+                    continue;
+                }
+            }
+            {
                 /* B1 animates ranged ~5 ticks, engaged ~15 (idle
                    observation); the /3 divider matches formal. */
                 if (idle_explore || idle_formal) {
@@ -2380,6 +2470,9 @@ int main(int argc, char **argv)
             state.have_save = 1;
             state.ingamemenu_scanned = yt2_ingamemenu_scan_slots(state.ingamemenu_slots, argv[1]);
             printf("play: new party\n");
+            if (state.have_combat) {
+                yt2_combat_new_party(&state.combat);
+            }
             if (boot_to_title) {
                 printf("play: intro skipped\n");
             } else {
@@ -2437,7 +2530,7 @@ int main(int argc, char **argv)
                 uint16_t seed = (uint16_t)yt2_pit_now();
 
                 printf("play: create start\n");
-                if (yt2_create_begin(&state.create, &state.save.party,
+                if (yt2_create_begin(&state.create, &state.save,
                                      &state.items, &state.pictures,
                                      &state.surface,
                                      seed) != YT2_STATUS_OK) {

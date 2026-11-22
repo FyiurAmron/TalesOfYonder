@@ -4,9 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "yt2/paperdoll.h"
 #include "yt2/items.h"
 #include "yt2/party.h"
 #include "yt2/pictures.h"
+#include "yt2/savefile.h"
 #include "yt2/status.h"
 #include "yt2/surface.h"
 #include "yt2/world.h"
@@ -71,6 +73,9 @@ typedef struct yt2_create {
     unsigned int sfx_count;
     unsigned int sfx[YT2_CREATE_SFX_LOG];
     int dirty;                    /* KEEP/wipe happened: caller must persist */
+    /* Shared paperdoll-verb context (fn_1672C/16925/0B3D2/16532): bound
+       to the save's store region and allocator at begin. */
+    yt2_paperdoll_ctx paperdoll;
 } yt2_create;
 
 /*
@@ -87,7 +92,7 @@ int yt2_create_alloc_slot(const yt2_party *party);
  * and title and opens the class screen.  The time word seeds the RNG on
  * the first roll; pass 0x1234 for M5-gate parity, a clock reading live.
  */
-int yt2_create_begin(yt2_create *create, yt2_party *party,
+int yt2_create_begin(yt2_create *create, yt2_save *save,
                      const yt2_items *items, const yt2_pictures *pictures,
                      yt2_surface *surface, uint16_t time_word);
 

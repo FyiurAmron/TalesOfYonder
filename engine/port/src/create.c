@@ -93,7 +93,7 @@ static const create_region option_table[] = {
     { 8, 107, 185, 190, 17 }
 };
 
-/* DS:606Eh: items screen (list, doll, NAME, QUIT). */
+/* DS:606Eh: items screen (list, paperdoll, NAME, QUIT). */
 static const create_region items_table[] = {
     { 7, 108, 41, 175, 1 }, { 116, 169, 60, 195, 2 },
     { 8, 107, 176, 181, 16 }, { 8, 107, 185, 190, 17 }
@@ -107,18 +107,8 @@ static const create_region take_table[] = {
     { 8, 107, 185, 190, 17 }
 };
 
-/* DS:60F4h: doll cells relative to (v_5056, v_505A). */
-static const create_region doll_table[] = {
-    { 2, 17, 2, 17, 1 }, { 20, 35, 2, 17, 2 }, { 38, 53, 2, 17, 3 },
-    { 2, 17, 19, 34, 4 }, { 20, 35, 19, 34, 5 }, { 38, 53, 19, 34, 6 },
-    { 2, 17, 36, 51, 7 }, { 20, 35, 36, 51, 8 }, { 38, 53, 36, 51, 9 },
-    { 0, 15, 64, 79, 10 }, { 40, 55, 64, 79, 11 },
-    { 0, 15, 103, 118, 12 }, { 40, 55, 103, 118, 13 },
-    { 4, 11, 95, 102, 14 }
-};
-
-#define DOLL_ORIGIN_X 116
-#define DOLL_ORIGIN_Y 60
+#define PAPERDOLL_ORIGIN_X 116
+#define PAPERDOLL_ORIGIN_Y 60
 
 uint16_t yt2_create_rand(uint16_t *seed, uint16_t time_word, uint16_t max)
 {
@@ -207,26 +197,6 @@ static const uint8_t *item_record(const yt2_create *create, unsigned int id)
 static uint16_t record_u16(const uint8_t *record, unsigned int offset)
 {
     return yt2_read_u16(record + offset);
-}
-
-/* Damage/absorption word and mode word for an item, or 0/0 with no row. */
-static void item_params(const yt2_create *create, unsigned int id,
-                        uint16_t *damage, uint16_t *mode)
-{
-    const uint8_t *record = item_record(create, id);
-    const uint8_t *row;
-
-    *damage = 0u;
-    *mode = 0u;
-    if (record == NULL) {
-        return;
-    }
-    row = yt2_item_param_row(create->items, record);
-    if (row == NULL) {
-        return;
-    }
-    *damage = yt2_read_u16(row);
-    *mode = yt2_read_u16(row + 2u);
 }
 
 /* sub_15605: the six attributes plus hit points, magic points, capacity. */
@@ -429,102 +399,26 @@ static void derive_skills(yt2_character *character)
 
 void yt2_create_apply_equipment(yt2_create *create, yt2_character *character)
 {
-    yt2_stats *current = &character->current;
-    yt2_stats *max = &character->maximum;
-    uint16_t id;
-    uint16_t damage;
-    uint16_t mode;
-    unsigned int slot;
-
     /*
-     * The hidden base values (+32h/+72h pairs) are zero for every
-     * creation flow: fresh slots come zeroed and nothing sets them
-     * before KEEP, so the copy step is a reset to zero.  (The live
-     * model will own them once gameplay mutates them.)
+     * fn_0B3D2, shared with the in-game panes: fresh slots come
+     * zeroed (base[]/max_base[] stay zero through creation, so
+     * the copy step resets to zero) and the fixed take list has
+     * no bonus lists (the paperdoll bonus hook no-ops).
      */
-    current->combat.projectile_accuracy = 0u;
-    max->combat.projectile_accuracy = 0u;
-    current->combat.battle_accuracy = 0u;
-    max->combat.battle_accuracy = 0u;
-    current->combat.projectile_damage = 0u;
-    max->combat.projectile_damage = 0u;
-    current->combat.battle_damage = 0u;
-    max->combat.battle_damage = 0u;
-    current->combat.absorption = 0u;
-    max->combat.absorption = 0u;
-
-    id = character->equipment[0].id;
-    if (id != 0u) {
-        item_params(create, id, &damage, &mode);
-        current->combat.projectile_accuracy =
-            (uint16_t)(current->combat.projectile_accuracy +
-                       current->skills.projectile);
-        max->combat.projectile_accuracy =
-            (uint16_t)(max->combat.projectile_accuracy +
-                       max->skills.projectile);
-        current->combat.projectile_damage =
-            (uint16_t)(current->combat.projectile_damage + damage);
-        max->combat.projectile_damage =
-            (uint16_t)(max->combat.projectile_damage + damage);
+    if (create == NULL || character == NULL) {
+        return;
     }
-
-    character->flags = (uint16_t)(character->flags & ~0x20u);
-    id = character->equipment[2].id;
-    if (id != 0u) {
-        const uint8_t *record = item_record(create, id);
-        uint16_t skill = 0u;
-        uint16_t max_skill = 0u;
-
-        item_params(create, id, &damage, &mode);
-        if (record != NULL) {
-            if ((record_u16(record, 12u) & 0x4000u) != 0u) {
-                skill = current->skills.slashing;
-                max_skill = max->skills.slashing;
-            } else if ((record_u16(record, 12u) & 0x2000u) != 0u) {
-                skill = current->skills.bashing;
-                max_skill = max->skills.bashing;
-            } else if ((record_u16(record, 12u) & 0x1000u) != 0u) {
-                skill = current->skills.polearm;
-                max_skill = max->skills.polearm;
-            }
-        }
-        current->combat.battle_accuracy =
-            (uint16_t)(current->combat.battle_accuracy + skill);
-        max->combat.battle_accuracy =
-            (uint16_t)(max->combat.battle_accuracy + max_skill);
-        current->combat.battle_damage =
-            (uint16_t)(current->combat.battle_damage + damage);
-        max->combat.battle_damage =
-            (uint16_t)(max->combat.battle_damage + damage);
-        if ((mode & 1u) != 0u) {
-            character->flags = (uint16_t)(character->flags | 0x20u);
-        }
-    }
-
-    for (slot = 3; slot < YT2_EQUIPMENT_SLOTS; slot++) {
-        id = character->equipment[slot].id;
-        if (id == 0u) {
-            continue;
-        }
-        item_params(create, id, &damage, &mode);
-        current->combat.absorption =
-            (uint16_t)(current->combat.absorption + damage);
-        max->combat.absorption = (uint16_t)(max->combat.absorption + damage);
-    }
-    for (slot = 0; slot < YT2_EFFECT_SLOTS; slot++) {
-        id = character->effects[slot];
-        if (id == 0u) {
-            continue;
-        }
-        item_params(create, id, &damage, &mode);
-        current->combat.absorption =
-            (uint16_t)(current->combat.absorption + damage);
-        max->combat.absorption = (uint16_t)(max->combat.absorption + damage);
-    }
+    yt2_paperdoll_recompute(&create->paperdoll, character);
 }
 
 void yt2_create_roll(yt2_create *create, yt2_character *character)
 {
+    /* sub_15605 zeroes the hidden ACC bases (+32h/+72h/+34h/+74h)
+       on every roll; the other three pairs stay alloc-zeroed. */
+    character->base[0] = 0u;
+    character->base[2] = 0u;
+    character->max_base[0] = 0u;
+    character->max_base[2] = 0u;
     roll_attributes(create, character);
     derive_skills(character);
     yt2_create_apply_equipment(create, character);
@@ -745,7 +639,7 @@ static void paint_quit(yt2_create *create)
     }
 }
 
-/* Right panel: portrait, doll, equipment (fn_1658F creation subset). */
+/* Right panel: portrait, paperdoll, equipment (fn_1658F creation subset). */
 
 static void paint_equipped_slot(yt2_create *create, unsigned int id, int x,
                                 int y, int equipped_view)
@@ -767,38 +661,111 @@ static void paint_equipped_slot(yt2_create *create, unsigned int id, int x,
     blit_pic(create, 8u, pic, x, y, 1);
 }
 
-static void paint_doll(yt2_create *create, const yt2_character *character)
+/* An open bag's variant icon (def icon+1, B1 sub_16D00/16D2B). */
+static void paint_open_variant(yt2_create *create, unsigned int id, int x,
+                               int y)
+{
+    const uint8_t *record;
+
+    if (id == 0u) {
+        return;
+    }
+    record = item_record(create, id);
+    if (record == NULL) {
+        return;
+    }
+    blit_pic(create, 8u, (unsigned int)record_u16(record, 8u) + 1u, x, y,
+             1);
+}
+
+static void paint_paperdoll(yt2_create *create, const yt2_character *character)
 {
     static const int pack_cells[8][2] = {
         { 2, 2 }, { 20, 2 }, { 38, 2 }, { 2, 19 },
         { 20, 19 }, { 38, 19 }, { 2, 36 }, { 20, 36 }
     };
+    static const int effect_xy[5][2] = {
+        { 12, 49 }, { 12, 72 }, { 12, 93 }, { 10, 104 }, { 12, 86 }
+    };
     unsigned int slot;
 
-    blit_pic(create, 6u, character->portrait_index, DOLL_ORIGIN_X,
-             DOLL_ORIGIN_Y, 0);
-    paint_equipped_slot(create, character->equipment[0].id, DOLL_ORIGIN_X,
-                        DOLL_ORIGIN_Y + 64, 0);
-    /* +15Ch bit 0x1000 never sets during creation: the +13E triple. */
-    paint_equipped_slot(create, character->equipment[1].id, DOLL_ORIGIN_X + 40,
-                        DOLL_ORIGIN_Y + 64, 0);
-    paint_equipped_slot(create, character->equipment[2].id, DOLL_ORIGIN_X,
-                        DOLL_ORIGIN_Y + 103, 0);
-    paint_equipped_slot(create, character->equipment[3].id, DOLL_ORIGIN_X + 40,
-                        DOLL_ORIGIN_Y + 103, 0);
+    blit_pic(create, 6u, character->portrait_index, PAPERDOLL_ORIGIN_X,
+             PAPERDOLL_ORIGIN_Y, 0);
+    paint_equipped_slot(create, character->equipment[0].id, PAPERDOLL_ORIGIN_X,
+                        PAPERDOLL_ORIGIN_Y + 64, 0);
+    if ((character->flags & 0x1000u) != 0u) {
+        /* A staged cell-11 bag paints its open variant over cell
+           11 instead (B1 sub_16D00); the bag itself stays hidden
+           by the grid redirect. */
+        paint_open_variant(create, character->stage[2].id,
+                           PAPERDOLL_ORIGIN_X + 40, PAPERDOLL_ORIGIN_Y + 64);
+    } else {
+        paint_equipped_slot(create, character->equipment[1].id,
+                            PAPERDOLL_ORIGIN_X + 40, PAPERDOLL_ORIGIN_Y + 64, 0);
+    }
+    paint_equipped_slot(create, character->equipment[2].id, PAPERDOLL_ORIGIN_X,
+                        PAPERDOLL_ORIGIN_Y + 103, 0);
+    paint_equipped_slot(create, character->equipment[3].id, PAPERDOLL_ORIGIN_X + 40,
+                        PAPERDOLL_ORIGIN_Y + 103, 0);
+    paint_equipped_slot(create, character->equipment[4].id, PAPERDOLL_ORIGIN_X + 4,
+                        PAPERDOLL_ORIGIN_Y + 95, 1);
+    paint_equipped_slot(create, character->equipment[5].id, PAPERDOLL_ORIGIN_X + 44,
+                        PAPERDOLL_ORIGIN_Y + 95, 1);
     if ((character->flags & 0x20u) != 0u) {
         blit_pic(create, 8u, character->sex == YT2_SEX_MALE ? 12u : 13u,
-                 DOLL_ORIGIN_X + 40, DOLL_ORIGIN_Y + 103, 1);
+                 PAPERDOLL_ORIGIN_X + 40, PAPERDOLL_ORIGIN_Y + 103, 1);
     }
-    for (slot = 0; slot < YT2_PACK_SLOTS; slot++) {
-        paint_equipped_slot(create, character->pack[slot].id,
-                            DOLL_ORIGIN_X + pack_cells[slot][0],
-                            DOLL_ORIGIN_Y + pack_cells[slot][1], 0);
+    /* Grid: staged container cells when a bag is open, else the
+       pack. Cell 9 shows the open pack bag's variant icon. */
+    {
+        const yt2_item *grid = character->pack;
+
+        for (slot = 0; slot < YT2_CONTAINER_SLOTS; slot++) {
+            if (character->stage[slot].id == 0u) {
+                continue;
+            }
+            grid = character->stage[slot].cells;
+            /* Cell-11 bags indicate at cell 11, not cell 9. */
+            if (slot == 2u && (character->flags & 0x1000u) != 0u) {
+                break;
+            }
+            paint_open_variant(create, character->stage[slot].id,
+                               PAPERDOLL_ORIGIN_X + 38, PAPERDOLL_ORIGIN_Y + 36);
+            break;
+        }
+        for (slot = 0; slot < YT2_PACK_SLOTS; slot++) {
+            paint_equipped_slot(create, grid[slot].id,
+                                PAPERDOLL_ORIGIN_X + pack_cells[slot][0],
+                                PAPERDOLL_ORIGIN_Y + pack_cells[slot][1], 0);
+        }
     }
-    paint_equipped_slot(create, character->equipment[4].id, DOLL_ORIGIN_X + 4,
-                        DOLL_ORIGIN_Y + 95, 1);
-    paint_equipped_slot(create, character->equipment[5].id, DOLL_ORIGIN_X + 44,
-                        DOLL_ORIGIN_Y + 95, 1);
+    /* Effects (group 7): B1 resolves through fn_02262's row gate
+       (flags 0xE00/0xC000/0x100 pick the row, anything else paints
+       nothing); the pic is row+4, +1 unless male. */
+    for (slot = 0; slot < YT2_EFFECT_SLOTS; slot++) {
+        const uint8_t *record;
+        const uint8_t *row;
+        unsigned int pic;
+
+        if (character->effects[slot] == 0u) {
+            continue;
+        }
+        record = item_record(create, character->effects[slot]);
+        if (record == NULL) {
+            continue;
+        }
+        row = yt2_item_param_row(create->items, record);
+        if (row == NULL || (record_u16(record, 12u) & 0xE700u) == 0u) {
+            continue;
+        }
+        pic = yt2_read_u16(row + 4u);
+        if (character->sex != YT2_SEX_MALE) {
+            pic++;
+        }
+        blit_pic(create, 7u, pic,
+                 PAPERDOLL_ORIGIN_X + effect_xy[slot][0],
+                 PAPERDOLL_ORIGIN_Y + effect_xy[slot][1], 1);
+    }
 }
 
 /* Right panel stats (sub_15046); highlight[i] marks the row's slot. */
@@ -900,14 +867,14 @@ static void paint_class_level(yt2_create *create,
     paint_number(create, 256, 38, character->level, character->level);
 }
 
-/* Full right panel (sub_157E2): portrait, doll, stats, name. */
+/* Full right panel (sub_157E2): portrait, paperdoll, stats, name. */
 static void paint_right_panel(yt2_create *create,
                               const yt2_character *character,
                               const uint16_t *highlight)
 {
     const char *rating;
 
-    paint_doll(create, character);
+    paint_paperdoll(create, character);
     blit_pic(create, 7u, character->portrait_pic, 116, 19, 0);
     paint_stat_rows(create, character, highlight);
     paint_combat_rows(create, character);
@@ -1460,179 +1427,42 @@ static int items_list_click(yt2_create *create, int x, int y)
     return YT2_STATUS_OK;
 }
 
-/* sub_16E64 slot address for a doll-cell id (pack/equipment only). */
-static yt2_item *doll_slot(yt2_create *create, int id)
+
+static void repaint_paperdoll(yt2_create *create)
 {
     yt2_character *character = &create->party->roster[create->slot];
 
-    if (id >= 1 && id <= 8) {
-        return &character->pack[id - 1];
-    }
-    if (id >= 10 && id <= 15) {
-        return &character->equipment[(unsigned int)id - 10u];
-    }
-    return NULL;
-}
-
-static int is_equipment_cell(int id)
-{
-    return id >= 10 && id != 11;
-}
-
-/* sub_16F85 drop validation for a doll-cell id. */
-static int drop_valid(yt2_create *create, int id, unsigned int item)
-{
-    const uint8_t *record = item_record(create, item);
-    yt2_character *character = &create->party->roster[create->slot];
-    uint16_t flags;
-    uint16_t damage;
-    uint16_t mode;
-
-    if (record == NULL) {
-        return 0;
-    }
-    flags = record_u16(record, 12u);
-    if (id >= 1 && id <= 8) {
-        return 1;
-    }
-    switch (id) {
-    case 10:
-        return (flags & 0x8000u) != 0u;
-    case 11:
-        if (character->equipment[1].id != 0u) {
-            return 1;
-        }
-        return (flags & 0x2000u) != 0u;
-    case 12:
-        if ((flags & 0x4000u) == 0u) {
-            return 0;
-        }
-        item_params(create, item, &damage, &mode);
-        if ((mode & 1u) != 0u && character->equipment[3].id != 0u) {
-            return 0;
-        }
-        return 1;
-    case 13:
-        if ((flags & 0x800u) == 0u) {
-            return 0;
-        }
-        return (character->flags & 0x20u) == 0u;
-    case 14:
-    case 15:
-        return (flags & 0x400u) != 0u;
-    default:
-        return 0;
-    }
-}
-
-static void repaint_doll(yt2_create *create)
-{
-    yt2_character *character = &create->party->roster[create->slot];
-
-    paint_doll(create, character);
+    paint_paperdoll(create, character);
     paint_combat_rows(create, character);
 }
 
-/* Doll click (fn_1672C): pickup from a slot or drop onto it. */
-static int items_doll_click(yt2_create *create, int x, int y)
+/* Paperdoll click (fn_1672C): the shared verb moves the item; the paperdoll
+   and combat rows repaint (B1 fn_1658F + sub_14FC3). */
+static int items_paperdoll_click(yt2_create *create, int x, int y)
 {
     yt2_character *character = &create->party->roster[create->slot];
-    int id = hit_test(doll_table,
-                      sizeof(doll_table) / sizeof(doll_table[0]),
-                      x - DOLL_ORIGIN_X, y - DOLL_ORIGIN_Y);
-    yt2_item *slot;
+    unsigned int id = yt2_paperdoll_hit(PAPERDOLL_ORIGIN_X, PAPERDOLL_ORIGIN_Y, x, y);
+    int outcome;
 
-    if (id == 0 || id == 9) {
+    if (id == 0u || id == 9u) {
         return YT2_STATUS_ERROR;
     }
-    slot = doll_slot(create, id);
-    if (slot == NULL) {
-        return YT2_STATUS_ERROR;
-    }
-    if (create->cursor == YT2_CREATE_CURSOR_ARROW) {
-        if (slot->id == 0u) {
-            repaint_doll(create);
-            return YT2_STATUS_OK;
-        }
-        if (id == 11 && (character->flags & 0x1000u) != 0u) {
-            log_sfx(create, 3u);
-            return YT2_STATUS_OK;
-        }
-        create->carried_id = slot->id;
-        create->carried_count = slot->count;
-        slot->id = 0u;
-        slot->count = 0u;
-        create->cursor = item_icon(create, create->carried_id);
-        /* Containers never open during creation: weight is the record's. */
-        create->carried_weight = item_weight(create, create->carried_id);
-        character->carried_weight =
-            (uint16_t)(character->carried_weight - create->carried_weight);
-        if (is_equipment_cell(id)) {
-            yt2_create_apply_equipment(create, character);
-        }
-        repaint_doll(create);
+    create->paperdoll.cursor = (uint16_t)create->cursor;
+    create->paperdoll.carried = create->carried_id;
+    create->paperdoll.carried_count = create->carried_count;
+    create->paperdoll.carried_weight = create->carried_weight;
+    outcome = yt2_paperdoll_left(&create->paperdoll, character, create->slot + 1u,
+                            id);
+    create->cursor = create->paperdoll.cursor;
+    create->carried_id = create->paperdoll.carried;
+    create->carried_count = create->paperdoll.carried_count;
+    create->carried_weight = create->paperdoll.carried_weight;
+    if (outcome != YT2_PAPERDOLL_CHANGED) {
         return YT2_STATUS_OK;
     }
-    if (!drop_valid(create, id, create->carried_id)) {
-        log_sfx(create, 3u);
-        return YT2_STATUS_OK;
-    }
-    if (slot->id == 0u) {
-        if ((unsigned int)character->carried_weight +
-                create->carried_weight >
-            character->current.combat.carry_capacity) {
-            log_sfx(create, 3u);
-            return YT2_STATUS_OK;
-        }
-        log_sfx(create, 6u);
-        slot->id = create->carried_id;
-        slot->count = create->carried_count;
-        character->carried_weight =
-            (uint16_t)(character->carried_weight + create->carried_weight);
-        clear_carried(create);
-        if (is_equipment_cell(id)) {
-            yt2_create_apply_equipment(create, character);
-        }
-        repaint_doll(create);
-        paint_items(create);
-        return YT2_STATUS_OK;
-    }
-    {
-        const uint8_t *existing = item_record(create, slot->id);
-        uint16_t old_weight = item_weight(create, slot->id);
-        uint16_t swap_id;
-        uint16_t swap_count;
-
-        if (existing != NULL && (record_u16(existing, 12u) & 0x2000u) != 0u) {
-            /* Container nesting buzzes: the count bits never match. */
-            log_sfx(create, 3u);
-            return YT2_STATUS_OK;
-        }
-        if ((unsigned int)character->carried_weight + create->carried_weight -
-                old_weight >
-            character->current.combat.carry_capacity) {
-            log_sfx(create, 3u);
-            return YT2_STATUS_OK;
-        }
-        log_sfx(create, 6u);
-        swap_id = slot->id;
-        swap_count = slot->count;
-        slot->id = create->carried_id;
-        slot->count = create->carried_count;
-        create->carried_id = swap_id;
-        create->carried_count = swap_count;
-        create->carried_weight = old_weight;
-        create->cursor = item_icon(create, swap_id);
-        character->carried_weight =
-            (uint16_t)(character->carried_weight - old_weight +
-                       item_weight(create, slot->id));
-        if (is_equipment_cell(id)) {
-            yt2_create_apply_equipment(create, character);
-        }
-        repaint_doll(create);
-        paint_items(create);
-        return YT2_STATUS_OK;
-    }
+    repaint_paperdoll(create);
+    paint_items(create);
+    return YT2_STATUS_OK;
 }
 
 static int items_key(yt2_create *create, unsigned int ascii)
@@ -1666,7 +1496,7 @@ static int items_click(yt2_create *create, int x, int y)
         return items_list_click(create, x, y);
     }
     if (id == 2) {
-        return items_doll_click(create, x, y);
+        return items_paperdoll_click(create, x, y);
     }
     if (id == 16 && !create->repick) {
         clear_carried(create);
@@ -1835,28 +1665,53 @@ static int preview_click(yt2_create *create, int x, int y)
     }
 }
 
-int yt2_create_begin(yt2_create *create, yt2_party *party,
+/* Paperdoll bonus hook: the fixed sub_01DFC take list carries no bonus
+   lists (all eight adds offsets are zero), so B1's fn_0ACF5/0B30D
+   is a no-op throughout creation (asserted by the unit gate). */
+static void create_paperdoll_bonus(void *bonus_ctx, unsigned int slot,
+                              unsigned int id, int plus)
+{
+    (void)bonus_ctx;
+    (void)slot;
+    (void)id;
+    (void)plus;
+}
+
+int yt2_create_begin(yt2_create *create, yt2_save *save,
                      const yt2_items *items, const yt2_pictures *pictures,
                      yt2_surface *surface, uint16_t time_word)
 {
     int slot;
+    uint8_t *store_base = NULL;
+    size_t store_size = 0u;
 
-    if (create == NULL || party == NULL || items == NULL ||
+    if (create == NULL || save == NULL || items == NULL ||
         pictures == NULL || surface == NULL) {
         return YT2_STATUS_ERROR;
     }
-    slot = yt2_create_alloc_slot(party);
+    slot = yt2_create_alloc_slot(&save->party);
     if (slot < 0) {
         return YT2_STATUS_ERROR;
     }
     memset(create, 0, sizeof(*create));
-    create->party = party;
+    /* sub_146D9: the fresh slot's whole record zeroes at alloc. */
+    memset(&save->party.roster[slot], 0,
+           sizeof(save->party.roster[slot]));
+    create->party = &save->party;
     create->items = items;
     create->pictures = pictures;
     create->surface = surface;
     create->slot = (unsigned int)slot;
     create->time_word = time_word;
     create->cursor = YT2_CREATE_CURSOR_ARROW;
+    if (save->bytes != NULL && save->size > YT2_SAVE_STORE_OFFSET) {
+        store_base = save->bytes + YT2_SAVE_STORE_OFFSET;
+        store_size = save->size - YT2_SAVE_STORE_OFFSET;
+    }
+    yt2_paperdoll_init(&create->paperdoll, create->items, store_base, store_size,
+                  &save->store_bump, &save->store_free, create->sfx,
+                  &create->sfx_count, YT2_CREATE_SFX_LOG,
+                  create_paperdoll_bonus, create);
     /* The work buffer borders are black from boot; the background repaint
      * covers everything else, so start cleared. */
     yt2_surface_clear(surface, 0u);
@@ -1924,10 +1779,46 @@ int yt2_create_click(yt2_create *create, int x, int y)
 
 int yt2_create_right_click(yt2_create *create, int x, int y)
 {
-    (void)create;
-    (void)x;
-    (void)y;
-    /* fn_16925 in creation: v_50CC 1/2 both loop without painting. */
+    yt2_character *character;
+    unsigned int id;
+    unsigned int examined = 0u;
+    int hit;
+    int outcome;
+
+    if (create == NULL || yt2_create_done(create)) {
+        return YT2_STATUS_ERROR;
+    }
+    /* fn_16925 runs only on the items stage (sub_148C4's loop);
+       every other stage ignores the right button. */
+    if (create->stage != YT2_CREATE_STAGE_ITEMS) {
+        return YT2_STATUS_OK;
+    }
+    /* The 0x606E dispatch only reaches the paperdoll on id 2. */
+    hit = hit_test(items_table, sizeof(items_table) / sizeof(items_table[0]),
+                   x, y);
+    if (hit != 2) {
+        return YT2_STATUS_OK;
+    }
+    character = &create->party->roster[create->slot];
+    id = yt2_paperdoll_hit(PAPERDOLL_ORIGIN_X, PAPERDOLL_ORIGIN_Y, x, y);
+    create->paperdoll.cursor = (uint16_t)create->cursor;
+    create->paperdoll.carried = create->carried_id;
+    create->paperdoll.carried_count = create->carried_count;
+    create->paperdoll.carried_weight = create->carried_weight;
+    outcome = yt2_paperdoll_right(&create->paperdoll, character, create->slot + 1u,
+                             id, &examined);
+    (void)examined;
+    create->cursor = create->paperdoll.cursor;
+    create->carried_id = create->paperdoll.carried;
+    create->carried_count = create->paperdoll.carried_count;
+    create->carried_weight = create->paperdoll.carried_weight;
+    if (outcome == YT2_PAPERDOLL_CHANGED) {
+        /* A container opened or closed (B1 fn_1658F + present). */
+        repaint_paperdoll(create);
+        paint_items(create);
+    }
+    /* B1 presents after 50CC 0/2 alike and loops silent on 1;
+       the caller presents on OK either way (unchanged pixels). */
     return YT2_STATUS_OK;
 }
 
