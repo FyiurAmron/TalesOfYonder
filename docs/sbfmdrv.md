@@ -11,8 +11,8 @@ Status: byte-perfect disassembly, full stream decode, and black-box trace done.
 | black-box | `engine/asm/sbfmdrv/test/` (`TEST.COM`, DOSBox-X SB16 profiles, `run.sh`) |
 
 The driver is a COM TSR (Creative Sound Blaster FM Driver 1.34) that installs a
-resident `INT` API on a free vector in `80h..BFh`, hooks `INT 08h` and
-`INT 09h`, and implements an FM/OPL music engine.  The game locates it by the
+resident `INT` API on a free vector in `80h..BFh`, hooks `INT 08h` and `INT
+09h`, and implements an FM/OPL music engine. The game locates it by the
 `"FMDRV"` signature at resident offset `103h`.
 
 ## 1. Resident map
@@ -91,7 +91,7 @@ resident `INT` API on a free vector in `80h..BFh`, hooks `INT 08h` and
 
 ### 2.1 Entry, banner, command line
 
-`0100h` jumps to `1975h`.  The installer prints the banner (`14E1h`), parses the
+`0100h` jumps to `1975h`. The installer prints the banner (`14E1h`), parses the
 environment (`1C00h`), then the command line (`193Bh`):
 
 - no switch -> `AX = 1` -> install path `1B15h`;
@@ -100,13 +100,13 @@ environment (`1C00h`), then the command line (`193Bh`):
 
 ### 2.2 BLASTER environment (`1C00h`)
 
-`sub_1C00` gets the PSP (`INT 21h AH=62h`), walks the environment for
-`BLASTER` (case-insensitive), uppercases the value in place, then parses only
-the `A` field:
+`sub_1C00` gets the PSP (`INT 21h AH=62h`), walks the environment for `BLASTER`
+(case-insensitive), uppercases the value in place, then parses only the `A`
+field:
 
 - find `A`, parse the following hex value (`1C8Fh`);
-- accept `0200h..0280h` that are 16-byte aligned and have bit 4 clear:
-  `0220h`, `0240h`, `0260h`, `0280h`;
+- accept `0200h..0280h` that are 16-byte aligned and have bit 4 clear: `0220h`,
+  `0240h`, `0260h`, `0280h`;
 - store it in `0114h`; `I`/`D`/`T` fields are ignored (the driver is FM only).
 
 Missing or invalid BLASTER prints an error (message at `1777h`) and the
@@ -114,18 +114,18 @@ installer exits without installing.
 
 ### 2.3 Sound Blaster / FM detection
 
-- `sub_1907` resets the DSP (write `D3h` to base+`0Ch`, pulse base+`6`, wait
-  for `AAh` at base+`0Ah`/`0Eh`).
+- `sub_1907` resets the DSP (write `D3h` to base+`0Ch`, pulse base+`6`, wait for
+  `AAh` at base+`0Ah`/`0Eh`).
 - `sub_1A09` then writes `E0h`, `55h` and expects to read `AAh` (DSP identify
-  check), writes `E4h`, `1Bh`, runs the timer calibration below, and runs the
-  FM detect.
+  check), writes `E4h`, `1Bh`, runs the timer calibration below, and runs the FM
+  detect.
 - `sub_17EC` is the standard FM presence test using OPL timer/status registers
-  (`0100h`, `0460h`, `0480h`, `02FFh`, `0421h`, `0460h`, `0480h` through the
-  OPL write helper `0A78h`).
+  (`0100h`, `0460h`, `0480h`, `02FFh`, `0421h`, `0460h`, `0480h` through the OPL
+  write helper `0A78h`).
 - `sub_182F` calibrates the OPL delay loops: it saves the old `INT 08h`,
   installs the local EOI stub at `1826h`, masks IRQ0, measures loop counts
-  between timer ticks, computes `013Dh`/`013Fh`, restores the PIC mask and
-  `INT 08h`, then switches `0114h` from the DSP base to the FM base (`+8`).
+  between timer ticks, computes `013Dh`/`013Fh`, restores the PIC mask and `INT
+  08h`, then switches `0114h` from the DSP base to the FM base (`+8`).
 
 ### 2.4 Installer checksum
 
@@ -141,10 +141,10 @@ At the end of `sub_182F` the installer sums `11A7h` (4519) bytes starting at
     mov [0100h], ax
 
 With the reference image the sum is exactly `00h`, so the resident word at
-`0100h` becomes `00F1h`: `AL` is the last byte read (`14E0h = F1h`) and
-`AH = 0`.  The `AH` byte (`0101h = 0`) is an integrity flag used by the music
-start code (see 4.4).  Modifying the summed region changes `AH` and silently
-disables music start.
+`0100h` becomes `00F1h`: `AL` is the last byte read (`14E0h = F1h`) and `AH =
+0`. The `AH` byte (`0101h = 0`) is an integrity flag used by the music start
+code (see 4.4). Modifying the summed region changes `AH` and silently disables
+music start.
 
 ### 2.5 Vector install and resident hooks
 
@@ -164,36 +164,36 @@ disables music start.
 
 - `sub_19DD` scans `80h..BFh` for the `"FMDRV"` signature and returns the
   resident segment;
-- the caller stores that segment at its own `0100h` and `sub_1A58` walks the
-  MCB chain to check that the resident block is the last one (error `0005h`
+- the caller stores that segment at its own `0100h` and `sub_1A58` walks the MCB
+  chain to check that the resident block is the last one (error `0005h`
   otherwise);
 - the resident API is called through the `1B88h` gate (`int NN; ret`) with
-  commands -1/-2 (read saved vectors), 8/9 (reset/stop), and the saved
-  `INT 08h`/`INT 09h` vectors are restored;
+  commands -1/-2 (read saved vectors), 8/9 (reset/stop), and the saved `INT
+  08h`/`INT 09h` vectors are restored;
 - `INT 21h AH=49h` frees the resident block; `Driver removed.` (`1718h`) is
   printed.
 
-A black-box run that installs and immediately runs `/U` reports `NO DRIVER`
-from the test program, confirming the vector and memory are released.
+A black-box run that installs and immediately runs `/U` reports `NO DRIVER` from
+the test program, confirming the vector and memory are released.
 
 The refusal is tested too (`test/run.sh uninstall-late`): `LATE.COM` is a
-9-paragraph TSR that hooks `INT 60h` and answers with `0A55Ah`, loaded after
-the driver so the MCB chain has another block in between.  `/U` then prints
+9-paragraph TSR that hooks `INT 60h` and answers with `0A55Ah`, loaded after the
+driver so the MCB chain has another block in between. `/U` then prints
 
     SBFMDRV: Error 0005: Other program exist after SBFMDRV.
 
-and the test proves the refusal left everything alone: `INT 08h` still points
-at `driver:1226h`, `INT 09h` at `driver:12B2h`, the API vector at
-`driver:12E6h`, and `INT 60h` still answers.  Refusing is the safe behaviour:
-restoring the saved `INT 08h`/`09h` vectors would cut a later program out of
-the chain, and the driver cannot know whether that program hooked them.
+and the test proves the refusal left everything alone: `INT 08h` still points at
+`driver:1226h`, `INT 09h` at `driver:12B2h`, the API vector at `driver:12E6h`,
+and `INT 60h` still answers. Refusing is the safe behaviour: restoring the saved
+`INT 08h`/`09h` vectors would cut a later program out of the chain, and the
+driver cannot know whether that program hooked them.
 
 ## 3. Resident INT API
 
 ### 3.1 Calling convention
 
 The API entry is `CS:12E6h` (`sub_ApiDispatch`), installed on a free vector
-`80h..BFh`.  Call it with `int NN`:
+`80h..BFh`. Call it with `int NN`:
 
 - `BX` = command (`0..0Fh`, or `-1..-5`);
 - `AX`, `CX`, `DX`, `ES`, `DI` = command arguments;
@@ -201,9 +201,9 @@ The API entry is `CS:12E6h` (`sub_ApiDispatch`), installed on a free vector
   handler's `DX` into the saved-DX slot at `[bp+6]`, so the final `pop dx`
   returns it).
 
-The dispatcher saves `DS/ES/AX/BX/CX/DX/DI/SI/BP`, points `DS`/`ES` at `CS`,
-and uses `02F5h` as a re-entrancy guard.  A nested call returns `FFF8h`.
-Unknown commands return `FFFFh` (the saved-AX slot is preset to `FFFFh`).
+The dispatcher saves `DS/ES/AX/BX/CX/DX/DI/SI/BP`, points `DS`/`ES` at `CS`, and
+uses `02F5h` as a re-entrancy guard. A nested call returns `FFF8h`. Unknown
+commands return `FFFFh` (the saved-AX slot is preset to `FFFFh`).
 
 ### 3.2 Command table (`0372h`)
 
@@ -242,10 +242,10 @@ Unknown commands return `FFFFh` (the saved-AX slot is preset to `FFFFh`).
 
 The game passes a loaded music block to the API:
 
-- command 2: `AX` = word at block+`06h` (instrument table offset),
-  `DX` = block segment, `CX` = word at block+`24h` (instrument count);
-- command 4: `AX` = `1234DCh / word at block+0Ch` (PIT divisor for
-  `word[+0Ch]` ticks per second: `60h` -> `308Ch` -> 96 Hz), `DX` = `12h`;
+- command 2: `AX` = word at block+`06h` (instrument table offset), `DX` = block
+  segment, `CX` = word at block+`24h` (instrument count);
+- command 4: `AX` = `1234DCh / word at block+0Ch` (PIT divisor for `word[+0Ch]`
+  ticks per second: `60h` -> `308Ch` -> 96 Hz), `DX` = `12h`;
 - command 6: `AX` = word at block+`08h` (stream offset), `DX` = block segment.
 
 Every shipped record starts with the same header (little-endian words):
@@ -266,72 +266,72 @@ Every shipped record starts with the same header (little-endian words):
 The instrument table is an array of 16-byte FM patch records (4.4): bytes 0..10
 are the OPL register data of a standard AdLib patch (AM/VIB/EGT/KSR/MULT,
 KSL/TL, AD, SR, waveform, FB/connection) and bytes 11..15 are zero in every
-shipped record.  The stream follows the table and is a MIDI-like event
-sequence (4.2).  The driver's built-in default table is at `CS:0159h`
-(16 records); command 2 replaces the table pointer and count
-(`0121h/0123h`, `02F1h`), command 8 restores the defaults (count `10h`,
-`CS:0159h`) and reloads every voice with `sub_AF2`.
+shipped record. The stream follows the table and is a MIDI-like event sequence
+(4.2). The driver's built-in default table is at `CS:0159h` (16 records);
+command 2 replaces the table pointer and count (`0121h/0123h`, `02F1h`), command
+8 restores the defaults (count `10h`, `CS:0159h`) and reloads every voice with
+`sub_AF2`.
 
 #### Record directory and loading
 
 `fn_180F9` (the `WORLD.DAT` type-0 locator) takes `BX` = music id and computes
-the record position from two DGROUP tables: dword file offsets at
-`DS:0CED3h` and word sizes at `DS:0CF27h`, both indexed by `id-1`.  The game
-allocates a 64 KiB music buffer from the largest word its scan reads out of
-`0CF27h` (the scan runs `[v_515E] = 15h` = 21 entries, past the end of the
-19-record table) and reads `size[id]` bytes from `offset[id]` into it.
+the record position from two DGROUP tables: dword file offsets at `DS:0CED3h`
+and word sizes at `DS:0CF27h`, both indexed by `id-1`. The game allocates a 64
+KiB music buffer from the largest word its scan reads out of `0CF27h` (the scan
+runs `[v_515E] = 15h` = 21 entries, past the end of the 19-record table) and
+reads `size[id]` bytes from `offset[id]` into it.
 
 Facts verified against the shipped `WORLD.DAT` (`1B68F4h` bytes):
 
 - the file contains 21 `"CTMF"` blocks; records 1..19 are the last 19, in file
-  order (`offset[id]` = block `id+2`).  The two blocks before them are not
+  order (`offset[id]` = block `id+2`). The two blocks before them are not
   reached as music ids: the earlier one (`84BC7h`) is addressed by the `0CE3Fh`
-  record table (`v_0CC2` index 12) and by `fn_1803B` with size `6E0h`, the
-  later one (`860B4h`) has no locator at all;
-- every song is self-delimiting: it ends with the `FF 2Fh` stop.  No shipped
+  record table (`v_0CC2` index 12) and by `fn_1803B` with size `6E0h`, the later
+  one (`860B4h`) has no locator at all;
+- every song is self-delimiting: it ends with the `FF 2Fh` stop. No shipped
   stream uses `FC` or a relative jump; those forms are exercised only
   synthetically (`test.asm`);
 - the size table is **not** the block length: for ids 1..17 `size[id]` is the
   song length of record `id+2`, and entries 18/19 are the distance from record
   18's block to the end of the region (`F88Bh` = 63627) and an unrelated word.
-  Ids 2, 4, 7, 8, 12, 14, 15 and 19 therefore load a window that cuts their
-  song short; the driver reads on past the window into the reused buffer's
-  stale tail (the game ignores the failed read).  The songs the game itself
-  requests are 1, 3, 8 (map `26Dh`), `12h`, the dynamic map field, and `14h`
-  (`fn_0171C`) -- the last is outside the 19-entry table, so that load cannot
-  succeed (`offset[20]` = `0B0514EDh`);
-- `engine/asm/sbfmdrv/test/music.py` finds the tables by content and extracts a record,
-  either as the game's window or (`--song`) exactly up to the stop marker.
+  Ids 2, 4, 7, 8, 12, 14, 15 and 19 therefore load a window that cuts their song
+  short; the driver reads on past the window into the reused buffer's stale tail
+  (the game ignores the failed read). The songs the game itself requests are 1,
+  3, 8 (map `26Dh`), `12h`, the dynamic map field, and `14h` (`fn_0171C`) -- the
+  last is outside the 19-entry table, so that load cannot succeed (`offset[20]`
+  = `0B0514EDh`);
+- `engine/asm/sbfmdrv/test/music.py` finds the tables by content and extracts a
+  record, either as the game's window or (`--song`) exactly up to the stop
+  marker.
 
 
 ### 4.2 Stream event format
 
 `sub_E24` runs from the timer ISR (4.3) and reads the stream through the
-paragraph-normalized far pointer at `0125h/0127h`: the offset is kept in
-`0..15` and the segment is advanced by `offset >> 4` at the start of each call,
-so the carry out of 16-bit offset arithmetic folds into the segment.
-`sub_C9F` advances the pointer by a 32-bit byte count (used by the relative
-jumps).
+paragraph-normalized far pointer at `0125h/0127h`: the offset is kept in `0..15`
+and the segment is advanced by `offset >> 4` at the start of each call, so the
+carry out of 16-bit offset arithmetic folds into the segment. `sub_C9F` advances
+the pointer by a 32-bit byte count (used by the relative jumps).
 
 Grammar:
 
     stream := VLQ initial_delay event*
     event  := [status] payload... VLQ delay
 
-- A status byte has bit 7 set: bits 4-6 minus 8 select main command `0..7`,
-  bits 0-3 are the channel/sub-command (`014Dh`).  The payload follows the
-  status byte immediately.
+- A status byte has bit 7 set: bits 4-6 minus 8 select main command `0..7`, bits
+  0-3 are the channel/sub-command (`014Dh`). The payload follows the status byte
+  immediately.
 - A data byte with bit 7 clear reuses the previous status and channel (MIDI
   running status); its payload starts at that byte.
-- After each event the sequencer reads a VLQ delay in **timer ticks**.  A zero
+- After each event the sequencer reads a VLQ delay in **timer ticks**. A zero
   delay makes it process the next event immediately (same invocation); a
-  non-zero delay is stored as the 32-bit countdown `0131h/0133h = value - 1`
-  and the sequencer returns.  The ISR decrements that countdown every timer
-  tick and invokes the sequencer when it underflows.
+  non-zero delay is stored as the 32-bit countdown `0131h/0133h = value - 1` and
+  the sequencer returns. The ISR decrements that countdown every timer tick and
+  invokes the sequencer when it underflows.
 
 VLQ (`sub_C5E`): 7 data bits per byte, bit 7 = another group follows, **most
-significant group first**, up to 32 bits.  Examples: `01h` = 1, `81h 00h` =
-`80h`, `88h 00h` = `400h`.  The routine also contains the one-shot integrity
+significant group first**, up to 32 bits. Examples: `01h` = 1, `81h 00h` =
+`80h`, `88h 00h` = `400h`. The routine also contains the one-shot integrity
 check (4.5).
 
 Control events (`Fn`) and jumps:
@@ -345,12 +345,12 @@ Control events (`Fn`) and jumps:
 
 Every non-stop event -- jumps included -- is followed by the delay VLQ read, so
 a **jump target is a delay byte**: the sequencer reads the delay there, waits,
-and continues at the byte after it.  `sub_C9F` applies the offset to the
-position just after the offset VLQ: `add [MusicPos], AX` (the carry adds
-`1000h` paragraphs, i.e. 64 KiB) plus `(DX & 0FFh) << 12` from the high word.
-For offsets within +-64 KiB that is exactly the two's complement byte distance
-(a small backward offset moves the pointer back that many bytes), which the
-crafted streams in `test.asm` confirm (6.3).
+and continues at the byte after it. `sub_C9F` applies the offset to the position
+just after the offset VLQ: `add [MusicPos], AX` (the carry adds `1000h`
+paragraphs, i.e. 64 KiB) plus `(DX & 0FFh) << 12` from the high word. For
+offsets within +-64 KiB that is exactly the two's complement byte distance (a
+small backward offset moves the pointer back that many bytes), which the crafted
+streams in `test.asm` confirm (6.3).
 
 API command `0Bh` stores a far pointer as the callback; the F0 handler calls it
 with `DS` = the driver's segment and expects every register back (see `cb_hook`
@@ -377,13 +377,12 @@ Event table (`n` = channel `0..F` from `014Dh`):
 
 Notes:
 
-- `sub_1161` is two `inc si` followed by `ret` (2-byte payload); `sub_1162`
-  is one `inc si` (1-byte payload); `sub_1163` is a bare `ret`.
+- `sub_1161` is two `inc si` followed by `ret` (2-byte payload); `sub_1162` is
+  one `inc si` (1-byte payload); `sub_1163` is a bare `ret`.
 - The relative jumps (signed 32-bit) implement loops; `F0` additionally calls
-  the API command B callback.  `FF 2Fh` is the end marker used by the game.
-- Running status is part of the format: e.g. two note-ons in a row are
-  `90 note vel delay note vel delay ...` with the second event starting at its
-  note byte.
+  the API command B callback. `FF 2Fh` is the end marker used by the game.
+- Running status is part of the format: e.g. two note-ons in a row are `90 note
+  vel delay note vel delay ...` with the second event starting at its note byte.
 
 ### 4.3 Timer, state machine and timing
 
@@ -393,53 +392,53 @@ Notes:
 - volume fade: when `[02C7h] != [02C8h]`, decrements `[02C9h]`, and every
   `[02CBh]` ticks calls `sub_14AD`, which moves `[02C7h]` toward `[02C8h]` by
   `[02CDh]` and rescales `[0285h]` from `[0290h]`;
-- decrements the 32-bit delay countdown `0131h/0133h` (`sub`/`sbb`; the
-  borrow is the underflow test); on underflow it switches to a private stack
-  (`SS = CS`, `SP = 1545h`, saved at `0155h/0157h`), clears IF and calls
-  `sub_E24`.  Command 6 stores the stream's initial VLQ delay as-is, so the
-  first invocation comes one tick after the start; an event delay `d` is stored
-  as `d - 1`, so the next group follows after exactly `d` ticks (confirmed on
-  the register timeline: every key-on of a real song lands within one tick of
-  the cumulative-delay model, see 6.1);
+- decrements the 32-bit delay countdown `0131h/0133h` (`sub`/`sbb`; the borrow
+  is the underflow test); on underflow it switches to a private stack (`SS =
+  CS`, `SP = 1545h`, saved at `0155h/0157h`), clears IF and calls `sub_E24`.
+  Command 6 stores the stream's initial VLQ delay as-is, so the first invocation
+  comes one tick after the start; an event delay `d` is stored as `d - 1`, so
+  the next group follows after exactly `d` ticks (confirmed on the register
+  timeline: every key-on of a real song lands within one tick of the
+  cumulative-delay model, see 6.1);
 - chains the saved old `INT 08h` (`0119h/011Bh`) and sends the PIC EOI.
 
 `[0151h]` counts **sequencer invocations**, not PIT ticks (one invocation can
-consume several zero-delay events).  The PIT divisor `[0143h]` defaults to
+consume several zero-delay events). The PIT divisor `[0143h]` defaults to
 `48D3h` (~64 Hz); `[0145h]` is the last programmed divisor; `[0141h]` is the
-BIOS-tick reload in PIT counts (API command 3; ~`FFFFh`).  The ISR accumulates
+BIOS-tick reload in PIT counts (API command 3; ~`FFFFh`). The ISR accumulates
 `[0145h]` and chains the BIOS handler when the sum reaches `[0141h]`, keeping
 the visible BIOS tick at 18.2 Hz.
 
-States: `0` idle, `1` playing, `2` paused.  API commands 6/7/8 start/stop/
-reset; 9 and A pause/resume.  Start sets the status byte to `FFh`; stop
-(`sub_1376`) restores the BIOS PIT divisor, silences all voices and sets the
-status byte to 0.
+States: `0` idle, `1` playing, `2` paused. API commands 6/7/8 start/stop/ reset;
+9 and A pause/resume. Start sets the status byte to `FFh`; stop (`sub_1376`)
+restores the BIOS PIT divisor, silences all voices and sets the status byte to
+0.
 
-Repeat: API command F swaps `[0117h]` with AX.  When a stop command (`FC` or
-`FF 2F`) runs inside the sequencer and `[0117h] != 0`, the sequencer restarts
-from `012Dh/012Fh` (a copy of the start pointer passed to command 6) and
-decrements `[0117h]` unless it is `-1` (infinite).  This is the track-level
-repeat, independent of the stream's own relative jumps.
+Repeat: API command F swaps `[0117h]` with AX. When a stop command (`FC` or `FF
+2F`) runs inside the sequencer and `[0117h] != 0`, the sequencer restarts from
+`012Dh/012Fh` (a copy of the start pointer passed to command 6) and decrements
+`[0117h]` unless it is `-1` (infinite). This is the track-level repeat,
+independent of the stream's own relative jumps.
 
-`sub_12B2` is the `INT 09h` hook: if the BIOS keyboard flags show
-Ctrl+Alt+Del (`INT 16h AH=2`, `flags & 0Ch == 0Ch`) it calls `sub_AA1` to
-silence the voices, then chains the saved `INT 09h`.
+`sub_12B2` is the `INT 09h` hook: if the BIOS keyboard flags show Ctrl+Alt+Del
+(`INT 16h AH=2`, `flags & 0Ch == 0Ch`) it calls `sub_AA1` to silence the voices,
+then chains the saved `INT 09h`.
 
 ### 4.4 Voices, instrument records, pitch
 
-Voice state `0259h+i`: `0..F` = active channel, `80h|channel` = released,
-`FFh` = free.  Command 6 sets the first 9 states to `FFh` (the arrays hold 11
-entries; the engine uses 9 melodic / 6 rhythm voices).  `026Fh+i` stores the
-current note (searched by note-off), `0264h+i` the note-map byte, `029Bh+2i`
-the frequency word, `02B1h+2i` the tick stamp used for oldest-voice stealing.
+Voice state `0259h+i`: `0..F` = active channel, `80h|channel` = released, `FFh`
+= free. Command 6 sets the first 9 states to `FFh` (the arrays hold 11 entries;
+the engine uses 9 melodic / 6 rhythm voices). `026Fh+i` stores the current note
+(searched by note-off), `0264h+i` the note-map byte, `029Bh+2i` the frequency
+word, `02B1h+2i` the tick stamp used for oldest-voice stealing.
 
 Allocation `sub_CBE`: released voice of the same channel -> free `FFh` voice ->
 any released voice -> oldest active voice (keyed off first).
 
 Note mapping: `039Ch + note` (128 bytes) gives `(octave << 4) | semitone`;
-`041Ch` is one octave of 12 x 64 words of F-numbers.  The per-channel bend
+`041Ch` is one octave of 12 x 64 words of F-numbers. The per-channel bend
 `030Ah+2n` shifts the semitone index; crossing the octave adds/subtracts 4 from
-the block nibble.  `0A1Ch` is the 32-word velocity -> attenuation curve.
+the block nibble. `0A1Ch` is the 32-word velocity -> attenuation curve.
 
 Instrument record (16-byte stride, melodic path of `sub_B66`):
 
@@ -464,12 +463,12 @@ rhythm instruments use on OPL channels 6..8.
 
 The percussion path (`9n` with `n >= 0Bh` in rhythm mode, `sub_FD5`) keeps
 note/frequency in the shared tables of "voice" slot `n-5` (6..10): note at
-`026Fh+slot`, frequency word at `029Bh+2*slot`.  A hit writes four registers:
+`026Fh+slot`, frequency word at `029Bh+2*slot`. A hit writes four registers:
 
 - `40h + level` with `(3Fh - (velocityTable[(velocity+4)>>3] + 0285h+slot)) OR
   027Ah+slot`: the drum KSL/TL (the melodic volume formula with the shared slot
   tables; the table index rounds -- `(velocity+4)>>3`, which is why CY and HH
-  share a TL at velocity `40h`/`3Ch`).  `level` is `02E2h..02E6h` =
+  share a TL at velocity `40h`/`3Ch`). `level` is `02E2h..02E6h` =
   `10h,14h,12h,15h,11h` for channels `0Bh..0Fh`, plus 3 for the bass drum, so
   the TL registers are `53h,54h,52h,55h,51h` (BD, SD, TT, CY, HH) -- the
   standard rhythm slots (`53h` = channel 6 carrier, `51h`/`54h` = channel 7
@@ -477,19 +476,19 @@ note/frequency in the shared tables of "voice" slot `n-5` (6..10): note at
 - `A0h`/`B0h` + `{6,7,8,8,7}` (`02ECh..02F0h`) with the stored frequency word's
   low and high byte -- **the `B0h` write carries no key-on bit** (rhythm mode
   keys the drums from `BDh`);
-- `BDh` with `[02F7h]` after ORing the drum's bit, which is what actually
-  starts the sound.
+- `BDh` with `[02F7h]` after ORing the drum's bit, which is what actually starts
+  the sound.
 
 A percussion note-off (`8n`/`9n` with velocity 0) only clears the bit in
-`[02F7h]` and rewrites `BDh`.  `test.asm`'s percussion stream is replayed
-against a DRO capture in 6.2, which confirms every value above.
+`[02F7h]` and rewrites `BDh`. `test.asm`'s percussion stream is replayed against
+a DRO capture in 6.2, which confirms every value above.
 
 The rhythm bit masks at `02E7h..02EBh` are `10h,08h,04h,02h,01h` for channels
-`0Bh..0Fh` (bass drum, snare, tom, top cymbal, hi-hat in `BDh`); the note-on
-ORs the bit into `[02F7h]` and rewrites `BDh`, the note-off clears it.  `Bn 67h`
-value 0 selects melodic (9 voices, `[02F7h]=C0h`), non-zero percussion
-(6 voices, `[02F7h]=E0h`).  `sub_AA1` (stop/silence) masks `[02F7h]` with `E0h`
-and rewrites `BDh`, so a stop clears every drum bit.
+`0Bh..0Fh` (bass drum, snare, tom, top cymbal, hi-hat in `BDh`); the note-on ORs
+the bit into `[02F7h]` and rewrites `BDh`, the note-off clears it. `Bn 67h`
+value 0 selects melodic (9 voices, `[02F7h]=C0h`), non-zero percussion (6
+voices, `[02F7h]=E0h`). `sub_AA1` (stop/silence) masks `[02F7h]` with `E0h` and
+rewrites `BDh`, so a stop clears every drum bit.
 
 ### 4.5 Integrity check / self-modifying music start
 
@@ -503,30 +502,29 @@ skip:
     mov byte ptr [here], 0C3h   ; make this check run only once (RET)
 
 `0DF3h` is the immediate byte of `mov byte ptr [02F2h], 0` in the command 6
-handler (`0DEFh`); patching it turns the instruction into
-`mov byte ptr [02F2h], 1`, which is what actually starts the sequencer.  The
-black-box test observes `[0DF3h]` going `00h -> 01h` on the first command 6 and
-the music state going `0 -> 1`.  If the image is modified (checksum `AH != 0`)
-or the check is defeated, command 6 loads the stream but the state stays 0 and
-the sequencer never runs.
+handler (`0DEFh`); patching it turns the instruction into `mov byte ptr [02F2h],
+1`, which is what actually starts the sequencer. The black-box test observes
+`[0DF3h]` going `00h -> 01h` on the first command 6 and the music state going `0
+-> 1`. If the image is modified (checksum `AH != 0`) or the check is defeated,
+command 6 loads the stream but the state stays 0 and the sequencer never runs.
 
 ## 5. OPL / DSP hardware layer
 
 - `sub_A78(AH=register, AL=value)` writes an OPL register pair: address to
   `[0114h]`, then data to `[0114h]+1`, with CLI and calibrated delays
   `[013Dh]/[013Fh]`.
-- The seam's AUDIO capture patches the five-byte `sub_0A78` prologue
-  (`pushf; cli; push ax; push dx; push cx`, `0A78h..0A7Ch`) with a far jump
-  to its own hook, logs `(PIT stamp, AH, AL)` and then executes the displaced
-  bytes and resumes at `0A7Dh`.  The hook runs in the driver's timer ISR, so it
-  only copies into a double-buffered log; the game-side present pass turns the
-  log into `opl_batch_timed` messages (docs/stream.md).  The integrity check of 4.5
-  reads `[0101h]` once and does not hash the image, so it does not detect the
-  patch.  `fn_SoundShutdown` sends command 7 (stop) before the game exits, so
-  the resident driver stops calling the patched routine before SWREG's
-  segment is freed.
-- `sub_17CE` polls the FM status port with a mask; `sub_17EC` is the FM
-  presence test.
+- The seam's AUDIO capture patches the five-byte `sub_0A78` prologue (`pushf;
+  cli; push ax; push dx; push cx`, `0A78h..0A7Ch`) with a far jump to its own
+  hook, logs `(PIT stamp, AH, AL)` and then executes the displaced bytes and
+  resumes at `0A7Dh`. The hook runs in the driver's timer ISR, so it only copies
+  into a double-buffered log; the game-side present pass turns the log into
+  `opl_batch_timed` messages (docs/stream.md). The integrity check of 4.5 reads
+  `[0101h]` once and does not hash the image, so it does not detect the patch.
+  `fn_SoundShutdown` sends command 7 (stop) before the game exits, so the
+  resident driver stops calling the patched routine before SWREG's segment is
+  freed.
+- `sub_17CE` polls the FM status port with a mask; `sub_17EC` is the FM presence
+  test.
 - `sub_1907` resets the DSP, `sub_18C4` reads a DSP data byte (base+`0Ah`,
   status base+`0Eh`), `sub_18E5` writes a DSP command (base+`0Ch`).
 - `sub_1A09` is the DSP/FM detection sequence used by the installer.
@@ -536,10 +534,10 @@ working after `0114h` is advanced to the FM base (`+8`).
 
 ## 6. Black-box results
 
-Harness: `engine/asm/sbfmdrv/test/test.asm` (raw COM) scans `80h..BFh` for the `"FMDRV"`
-signature, patches a local `int` stub, calls the API, and writes `RESULT.TXT`;
-`engine/asm/sbfmdrv/test/run.sh [api|uninstall]` runs it under DOSBox-X with the SB16
-profile (`A220 I7 D1 H5 T6`).
+Harness: `engine/asm/sbfmdrv/test/test.asm` (raw COM) scans `80h..BFh` for the
+`"FMDRV"` signature, patches a local `int` stub, calls the API, and writes
+`RESULT.TXT`; `engine/asm/sbfmdrv/test/run.sh [api|uninstall]` runs it under
+DOSBox-X with the SB16 profile (`A220 I7 D1 H5 T6`).
 
 The API run has two parts: the command sweep, then a crafted 41-byte stream
 exercised both through the real timer ISR and through a deterministic
@@ -578,10 +576,10 @@ state/note):
     S000B T000B P0029 X0000 A00FF B003C C00FF D0040
 
 The position deltas are exactly the event sizes above (4,3,4,3,4,4,4,4,4,3,3
-bytes; the first line additionally includes the 1-byte initial delay).  Status
-changes on the `B0 66` event and clears on the stop.  Voice 0 takes note 60 and
+bytes; the first line additionally includes the 1-byte initial delay). Status
+changes on the `B0 66` event and clears on the stop. Voice 0 takes note 60 and
 is released (`80h`) by the `80` event; voice 1 takes note 64 and is released by
-the second `80`.  The `B0 67` event reloads the defaults, which sets both voice
+the second `80`. The `B0 67` event reloads the defaults, which sets both voice
 states back to `FFh` (notes and frequencies are kept).
 
 Timer run (same stream, command 6 + real `INT 08h`):
@@ -602,18 +600,18 @@ Timer run (same stream, command 6 + real `INT 08h`):
     ST8=0000 BS8=0000       reset
     DONE
 
-The snapshot is consistent with the normalized pointer: the stop event begins
-at stream+`26h` = `0A98h+26h = 0ABEh`; normalizing that address relative to
-the test's segment `096Ah` gives segment `0A15h`, offset `000Eh`.
+The snapshot is consistent with the normalized pointer: the stop event begins at
+stream+`26h` = `0A98h+26h = 0ABEh`; normalizing that address relative to the
+test's segment `096Ah` gives segment `0A15h`, offset `000Eh`.
 
 `[0151h]` is the **sequencer-invocation** counter: it reaches 4 after the four
-fast events and 11 when the stop is consumed; the 96-tick delay after the
-second note-on runs on the PIT but does not increment it.  This also corrects
-the earlier first-round note "position advanced": in that run the wait loop was
-shorter than one PIT tick at `48D3h`, the sequencer never ran, and `CDB
-AX=073D` was the initial command 6 snapshot (stream offset after the first
-VLQ), not progress.  The present run proves the timer path: the tick counter,
-the voice states/frequencies and the self-stop all change as decoded.
+fast events and 11 when the stop is consumed; the 96-tick delay after the second
+note-on runs on the PIT but does not increment it. This also corrects the
+earlier first-round note "position advanced": in that run the wait loop was
+shorter than one PIT tick at `48D3h`, the sequencer never ran, and `CDB AX=073D`
+was the initial command 6 snapshot (stream offset after the first VLQ), not
+progress. The present run proves the timer path: the tick counter, the voice
+states/frequencies and the self-stop all change as decoded.
 
 The remaining command results are unchanged:
 
@@ -642,19 +640,19 @@ confirming the installer removal path frees the vector.
 
 ### 6.1 Real `WORLD.DAT` block
 
-`engine/asm/sbfmdrv/test/music.py` extracts a record into `MUSIC.BLK`; `engine/asm/sbfmdrv/test/music.asm`
-(MUSIC.COM) loads it, finds the resident driver, starts the block with
-commands 2 (instrument table at block+`06h`, count from block+`24h`), 4
-(`1234DCh / word[+0Ch]`, `DX` = `12h`) and 6 (stream at block+`08h`, `DX` =
-block segment), then single-steps the resident sequencer through the whole
-song and logs `S<step> P<position> X<status>` per invocation.  The step loop
-masks IRQ0 in the PIC: DOS re-enables interrupts inside `INT 21h`, and with
-the timer live the resident ISR ran the sequencer behind the log (visible as
-`[0151h]` delta 225 against 222 logged steps before the fix).
+`engine/asm/sbfmdrv/test/music.py` extracts a record into `MUSIC.BLK`;
+`engine/asm/sbfmdrv/test/music.asm` (MUSIC.COM) loads it, finds the resident
+driver, starts the block with commands 2 (instrument table at block+`06h`, count
+from block+`24h`), 4 (`1234DCh / word[+0Ch]`, `DX` = `12h`) and 6 (stream at
+block+`08h`, `DX` = block segment), then single-steps the resident sequencer
+through the whole song and logs `S<step> P<position> X<status>` per invocation.
+The step loop masks IRQ0 in the PIC: DOS re-enables interrupts inside `INT 21h`,
+and with the timer live the resident ISR ran the sequencer behind the log
+(visible as `[0151h]` delta 225 against 222 logged steps before the fix).
 
 `music.py check` re-walks the same block statically (4.2 grammar, one driver
 invocation per group: events run until the first non-zero delay) and compares
-every position and status byte.  Results from `run.sh music`:
+every position and status byte. Results from `run.sh music`:
 
 | track | block slice | events | groups | stop | log |
 | --- | --- | --- | --- | --- | --- |
@@ -662,21 +660,21 @@ every position and status byte.  Results from `run.sh music`:
 | 18 | game window, 63627 B | 2041 | 1436 | `FF 2F` | `T=N=059C`, 1436/1436 groups match |
 | 8 | `--song`, 5019 B | 1214 | 926 | `FF 2F` | `T=N=039E`, 926/926 groups match |
 
-`T` = `[0151h]` delta (sequencer invocations) must equal `N` = logged steps;
-any mismatch means a foreign invocation slipped in.  The three songs cover
+`T` = `[0151h]` delta (sequencer invocations) must equal `N` = logged steps; any
+mismatch means a foreign invocation slipped in. The three songs cover
 note-on/note-off streams (161/161, 1016/1016, 398/398 pairs), program changes,
 the opening `Bn 67h` rhythm-select controller (melodic mode `00h` in every
 shipped song) and the ignored `An`/`Dn`/`En` slots (track 8 uses 408 `En`
-events).  Every shipped song carries exactly one `Fn` event (the final
-`FF 2Fh`), so `FC` and the relative jumps are exercised only by the crafted
-stream in `test.asm`.  Positions and status match the static walk exactly, so
-the decoded grammar, the delay/group model and the event payload sizes are
-confirmed on real data.
+events). Every shipped song carries exactly one `Fn` event (the final `FF 2Fh`),
+so `FC` and the relative jumps are exercised only by the crafted stream in
+`test.asm`. Positions and status match the static walk exactly, so the decoded
+grammar, the delay/group model and the event payload sizes are confirmed on real
+data.
 
-Playback run (`MUSIC_PLAY=1`; `MUSIC_CAP=1` also records).  `MUSIC.COM`'s
-command tail selects this mode: instead of stepping, the harness leaves IRQ0
-live and waits for the driver's own timer ISR, then logs the final state, the
-`[0151h]` delta and the elapsed BIOS ticks:
+Playback run (`MUSIC_PLAY=1`; `MUSIC_CAP=1` also records). `MUSIC.COM`'s command
+tail selects this mode: instead of stepping, the harness leaves IRQ0 live and
+waits for the driver's own timer ISR, then logs the final state, the `[0151h]`
+delta and the elapsed BIOS ticks:
 
     C6 AX=0000 DX=096A          start track 1 (game window, 3842 B)
     PLAY ST=0000 T=00E1 C=00D5  stopped; 225 invocations; 213 BIOS ticks
@@ -684,25 +682,25 @@ live and waits for the driver's own timer ISR, then logs the final state, the
 
 `E1h` = 225 is exactly the static walk's group count (the same number the step
 trace produced), and 213 BIOS ticks at 18.2 Hz = 11.70 s against the decoded
-song duration of 1119 tempo ticks at 96 Hz = 11.66 s (0.4% off).  The timer
-path therefore consumes the same groups with the same total delay as the
-static model, on the real ISR.
+song duration of 1119 tempo ticks at 96 Hz = 11.66 s (0.4% off). The timer path
+therefore consumes the same groups with the same total delay as the static
+model, on the real ISR.
 
-`MUSIC_CAP=wav|dro|both` wraps the run in DOSBox-X's `DX-CAPTURE` (`/A`, `/O`
-or both).  `--wav` reports the recording (track 1: 14.68 s of 48 kHz stereo,
-peak 41.8% FS, signal in 25 of 29 half-second windows).  `--dro` checks the OPL
+`MUSIC_CAP=wav|dro|both` wraps the run in DOSBox-X's `DX-CAPTURE` (`/A`, `/O` or
+both). `--wav` reports the recording (track 1: 14.68 s of 48 kHz stereo, peak
+41.8% FS, signal in 25 of 29 half-second windows). `--dro` checks the OPL
 register log instead: 808 writes, **161 key-ons and 161 key-offs -- exactly the
 walk's note-on/note-off counts** -- spanning 11 656 ms (= 1119 ticks at 96 Hz),
 with every key-on time relative to the first within one tick (10.1 ms) of the
-decoded timeline.  The captures regenerate from the same command, so the port's
+decoded timeline. The captures regenerate from the same command, so the port's
 OPL layer can be diffed against them.
 
 ### 6.2 Percussion trace
 
-The API run ends with a crafted percussion stream (13 events, one step each:
-`B0 67h 01h` -> five drum hits -> five releases -> `B0 67h 00h` -> `FF 2Fh`)
-and logs the `BDh` shadow `[02F7h]` (`R`), the voice count `[014Bh]` (`C`) and
-the rhythm flag `[02F8h]` (`M`) after every step (IRQ0 masked while stepping):
+The API run ends with a crafted percussion stream (13 events, one step each: `B0
+67h 01h` -> five drum hits -> five releases -> `B0 67h 00h` -> `FF 2Fh`) and
+logs the `BDh` shadow `[02F7h]` (`R`), the voice count `[014Bh]` (`C`) and the
+rhythm flag `[02F8h]` (`M`) after every step (IRQ0 masked while stepping):
 
     S0001 P0005 RE0 C06 M01     B0 67 01  percussion: 6 voices, BDh = E0h
     S0002 P0009 RF0 C06 M01     9B 30 64  bass drum  -> bit 10h
@@ -724,14 +722,14 @@ the rhythm flag `[02F8h]` (`M`) after every step (IRQ0 masked while stepping):
 The drum notes stay in their slots after the releases (a percussion note-off
 only clears the `BDh` bit, as decoded); the `DRUMS` line also prints the five
 frequency words (`W6=0D57 W7=09B0 W8=09E5 W9=0957 WA=0663`), which are the
-payloads the `A0h`/`B0h` writes carry.  Every position, mask bit, voice count
-and mode change matches the decoded percussion path.
+payloads the `A0h`/`B0h` writes carry. Every position, mask bit, voice count and
+mode change matches the decoded percussion path.
 
 `API_CAP=dro` (wrapping TEST.COM in `DX-CAPTURE /O`) records the run's OPL
-writes, and `engine/asm/sbfmdrv/test/perc.py DRO RESULT.TXT` replays the percussion section
-against them.  From `BDh = E0h` (rhythm on) to `BDh = C0h` (rhythm off) the
-capture holds exactly 26 writes -- TL, `A0h`, `B0h` and `BDh` per hit, `BDh`
-per release -- and every value matches:
+writes, and `engine/asm/sbfmdrv/test/perc.py DRO RESULT.TXT` replays the
+percussion section against them. From `BDh = E0h` (rhythm on) to `BDh = C0h`
+(rhythm off) the capture holds exactly 26 writes -- TL, `A0h`, `B0h` and `BDh`
+per hit, `BDh` per release -- and every value matches:
 
     1694 BD=E0        rhythm on
     1695 53=39 A6=57 B6=0D BD=F0    bass drum (TL 3Fh-6, word W6=0D57)
@@ -744,10 +742,10 @@ per release -- and every value matches:
 
 The cymbal's `B0h = 09h` is absent because DOSBox-X's DRO writer keeps a
 last-value cache per register and drops writes that do not change one (the tom
-wrote that value a hit earlier); the replay applies the same filter.  The TL
+wrote that value a hit earlier); the replay applies the same filter. The TL
 values come from the reference velocity table at CS:0A1Ch, indexed
-`(velocity+4)>>3` -- that is what pins the volume curve and the register
-levels down.
+`(velocity+4)>>3` -- that is what pins the volume curve and the register levels
+down.
 
 ### 6.3 Jump, callback and FC traces
 
@@ -771,8 +769,8 @@ events and API command `0Bh`:
     F0ST0000
     F0CB N0001                  the callback ran exactly once
 
-Both traps in `stream_jmp`/`stream_f0` would be reached without the jump, so
-the positions prove the offsets; `stream_loop`'s constant `P0005` proves the
+Both traps in `stream_jmp`/`stream_f0` would be reached without the jump, so the
+positions prove the offsets; `stream_loop`'s constant `P0005` proves the
 backward offset arithmetic (a fall-through would reach the trap); `FC` stops
 without consuming a delay byte; and the F0 callback counter shows the command
 `0Bh` hook firing exactly once.
@@ -793,8 +791,8 @@ without consuming a delay byte; and the F0 callback counter shows the command
     LATE OK                     INT 60h still answers 0A55Ah
 
 The same run without `LATE.COM` (`test/run.sh uninstall`) removes the driver:
-`TEST.COM` then reports `NO DRIVER`.  Both runs use the reference
-`SBFMDRV.COM`, so the MCB walk is the shipped one.
+`TEST.COM` then reports `NO DRIVER`. Both runs use the reference `SBFMDRV.COM`,
+so the MCB walk is the shipped one.
 
 
 ## 7. The game's far entry (`v_SoundEntry`)
@@ -808,50 +806,50 @@ The game has two sound paths:
   driver's tables.
 
 SBFMDRV 1.34 has no far-call dispatcher: the only entry points are the
-installer, the resident `INT` API (`12E6h`), the timer ISR (`1226h`), the
-`INT 09h` hook (`12B2h`) and the installer's `int NN; ret` gate (`1B88h`),
-which is a near stub, not a far entry.
+installer, the resident `INT` API (`12E6h`), the timer ISR (`1226h`), the `INT
+09h` hook (`12B2h`) and the installer's `int NN; ret` gate (`1B88h`), which is a
+near stub, not a far entry.
 
-`v_SoundEntry` is a dword of zeroes at `DS:F7AEh`.  The MZ relocation table
-does **not** cover it (checked against the file offset mapping calibrated with
-the `LOGO.PCX` data and a known relocated `dw S1DEA` site), and no game code
-writes it.  The game nevertheless reaches the far call on the normal path:
-patching the first call site (`file 1C908h`, `call [0F7AEh]`) in a staged copy
-to a diagnostic marker prints `FAR-CALL`, while the environment-failure markers
-(`SOUND-MISSING`/`BLASTER-MISSING`) stay silent.  The unmodified game then runs
-to the title/intro, so the zero far call does not terminate it under
-DOSBox-X -- but the call is **not** a valid driver interface:
+`v_SoundEntry` is a dword of zeroes at `DS:F7AEh`. The MZ relocation table does
+**not** cover it (checked against the file offset mapping calibrated with the
+`LOGO.PCX` data and a known relocated `dw S1DEA` site), and no game code writes
+it. The game nevertheless reaches the far call on the normal path: patching the
+first call site (`file 1C908h`, `call [0F7AEh]`) in a staged copy to a
+diagnostic marker prints `FAR-CALL`, while the environment-failure markers
+(`SOUND-MISSING`/`BLASTER-MISSING`) stay silent. The unmodified game then runs
+to the title/intro, so the zero far call does not terminate it under DOSBox-X --
+but the call is **not** a valid driver interface:
 
-- a `call far 0000:0000` does not dispatch through the INT 0 vector; it
-  executes the IVT bytes (four bytes at physical 0) as code.  A clean probe
-  shows `INT 0 = F000:CA60` and the zero call never returns.
-- therefore the far path is a vestigial/other-driver API.  SBFMDRV 1.34
+- a `call far 0000:0000` does not dispatch through the INT 0 vector; it executes
+  the IVT bytes (four bytes at physical 0) as code. A clean probe shows `INT 0 =
+  F000:CA60` and the zero call never returns.
+- therefore the far path is a vestigial/other-driver API. SBFMDRV 1.34
   implements only the resident INT API; the driver has no base-port/IRQ/
   detect/enable/SFX far commands.
-- the port should treat the far calls as no-ops (or route the game's sound
-  layer directly to the resident API); do not emulate `v_SoundEntry`.
+- the port should treat the far calls as no-ops (or route the game's sound layer
+  directly to the resident API); do not emulate `v_SoundEntry`.
 
-The music path via the int API is functional (section 6).  The seam does
-**not** emulate the far entry: it hooks `fn_PlaySFX` itself, sends the effect
-id, WORLD.DAT offset and PIT stamp, and the client renders the VOC record
-directly (docs/client.md).  The C port does the same from the emitted hook at
+The music path via the int API is functional (section 6). The seam does **not**
+emulate the far entry: it hooks `fn_PlaySFX` itself, sends the effect id,
+WORLD.DAT offset and PIT stamp, and the client renders the VOC record directly
+(docs/client.md). The C port does the same from the emitted hook at
 `fn_PlaySFX`'s first `TEST` (`yt2_sound_sample`), which is what makes the
-authored effects audible when the resident driver is on.  The reference build
+authored effects audible when the resident driver is on. The reference build
 keeps the zero far entry and the effect-3 PC-speaker fallback.
 
 ## 8. Open items
 
-- The game-level run is covered at the audio level (`tools/dosbox/audio.sh`: audible
-  output, `267` note-ons all on the tick grid, melodic mode only).  The 80
-  digitized effects are VOC records in WORLD.DAT; SBFMDRV 1.34 cannot play
+- The game-level run is covered at the audio level (`tools/dosbox/audio.sh`:
+  audible output, `267` note-ons all on the tick grid, melodic mode only). The
+  80 digitized effects are VOC records in WORLD.DAT; SBFMDRV 1.34 cannot play
   them (no far entry), so the seam reports `fn_PlaySFX` calls and the client
-  renders the records directly.  The DRO still shows FM writes only, as it
+  renders the records directly. The DRO still shows FM writes only, as it
   should: the driver is music-only.
 - The shipped songs never use jumps or `FC`, so those paths (6.3) are verified
   by crafted streams only; the same goes for percussion on real data.
-- The installer's error codes/messages at `14E1h..1777h` (documented as
-  strings; individual error numbers can be mapped if needed).
+- The installer's error codes/messages at `14E1h..1777h` (documented as strings;
+  individual error numbers can be mapped if needed).
 - The game's `fn_0171C` requests music id `14h`, which is past the 19-entry
-  table; kept as an observed quirk (the load fails and the driver keeps
-  playing whatever the buffer holds).
+  table; kept as an observed quirk (the load fails and the driver keeps playing
+  whatever the buffer holds).
 

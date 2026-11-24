@@ -1,6 +1,7 @@
 # Repository layout
 
-The tree mirrors what a thing is, and `build/` mirrors the source tree it came from.
+The tree mirrors what a thing is, and `build/` mirrors the source tree it came
+from.
 
     engine/                      the engine (the port itself)
       asm/                       stage 1: the disassembly, byte-exact
@@ -49,16 +50,20 @@ The tree mirrors what a thing is, and `build/` mirrors the source tree it came f
 
 Rules:
 
-- Nothing is written outside `build/` (except the sources). If a tool produces it, it belongs under
-  `build/` and is gitignored.
-- A run directory is named by kind and timestamp, and the script prints its path at the end, so a
-  result always has a home and can be compared with the next run.
-- Build outputs keep the source tree's shape (`engine/asm/swreg/` -> `build/swreg/`), so a path in a
-  log usually maps back to the script that made it.
-- Scratch and throwaway scripts go to `build/tmp/`; manual assembler invocations target it too.
-- The Windows bundle is produced by `tools/publish-win.sh` (pinned SDL3, both the archive and the
-  DLL sha256-checked) from the *current* `build/swreg/file` build; it and the Linux bundle share the
-  same layout — `client/` with the binary and SDL3, `server/` with the profile and game files, and
+- Nothing is written outside `build/` (except the sources). If a tool produces
+  it, it belongs under `build/` and is gitignored.
+- A run directory is named by kind and timestamp, and the script prints its path
+  at the end, so a result always has a home and can be compared with the next
+  run.
+- Build outputs keep the source tree's shape (`engine/asm/swreg/` ->
+  `build/swreg/`), so a path in a log usually maps back to the script that made
+  it.
+- Scratch and throwaway scripts go to `build/tmp/`; manual assembler invocations
+  target it too.
+- The Windows bundle is produced by `tools/publish-win.sh` (pinned SDL3, both
+  the archive and the DLL sha256-checked) from the *current* `build/swreg/file`
+  build; it and the Linux bundle share the same layout — `client/` with the
+  binary and SDL3, `server/` with the profile and game files, and
   `client-start`, `server-start`, `play` and `smoke-test` launchers in the root.
 
 ## Where a change goes
@@ -81,6 +86,6 @@ Rules:
 | the protocol spec | `docs/protocol.md` (frozen v0; the source of truth for what crosses the boundary) |
 | the on-disk data layout | `docs/structures.md` (B1 save/party layout; B2 live models are in `engine/port/include/yt2/`) |
 
-Both `engine/asm/swreg/src/swreg.asm` and `engine/asm/sbfmdrv/src/sbfmdrv.asm` are gated
-byte-exactly; `swreg.asm` additionally pins its non-seam text (`swreg.pin`). See
-`docs/disassembly.md` and `CONTRIBUTING.md`.
+Both `engine/asm/swreg/src/swreg.asm` and `engine/asm/sbfmdrv/src/sbfmdrv.asm`
+are gated byte-exactly; `swreg.asm` additionally pins its non-seam text
+(`swreg.pin`). See `docs/disassembly.md` and `CONTRIBUTING.md`.

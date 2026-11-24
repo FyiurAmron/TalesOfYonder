@@ -1,21 +1,25 @@
 # YT2 — Yendorian Tales Book I, Chapter 2, recreated
 
-A staged recreation of the 1996 DOS game `SWREG.EXE` (SW Games / Spectrum Pacific Publishing) for
-modern systems. The rule is byte-exactness: the recreation starts from a disassembly that rebuilds
-the original executable bit for bit, then passes through three deliberate stages — a quick
-pseudo-port as the executable spec, a real hand-written C port, and finally the forward-looking
+A staged recreation of the 1996 DOS game `SWREG.EXE` (SW Games / Spectrum
+Pacific Publishing) for modern systems. The rule is byte-exactness: the
+recreation starts from a disassembly that rebuilds the original executable bit
+for bit, then passes through three deliberate stages — a quick pseudo-port as
+the executable spec, a real hand-written C port, and finally the forward-looking
 C# port — on top of a documented engine ↔ client protocol (`docs/protocol.md`).
 
-**Status.** M7, the B1 pseudo-port, is done: the disassembly is annotated, byte-exact and pinned;
-the C11 tree in `engine/c/` is a 100% C transcription of the annotated asm (instruction-level
-emitted C over a 16-bit guest model, with a segment:offset dispatcher) and runs the original to
-the title, through the scripted M5 gameplay slice, the save/load panel and the sound path. It
-speaks the frozen v0 protocol over the shared folder link (`OUTPUT.BIN`/`INPUT.BIN`), builds as
-64-bit Linux binaries and Windows x64 PE32+ images, and is the differential oracle. **It is a
-milestone, not the C deliverable.** The next milestone, M8/B2, is the real C port: a minimal,
-hand-written, idiomatic C engine with typed game state and no asm, guest CPU/memory or emulation
-glue in the product path. The C# port (M10) starts from B2. The C# client (`client/`) remains the
-SDL3 development host; `docs/progress.md` is the live log and `docs/roadmap.md` has the stages.
+**Status.** M7, the B1 pseudo-port, is done: the disassembly is annotated,
+byte-exact and pinned; the C11 tree in `engine/c/` is a 100% C transcription of
+the annotated asm (instruction-level emitted C over a 16-bit guest model, with a
+segment:offset dispatcher) and runs the original to the title, through the
+scripted M5 gameplay slice, the save/load panel and the sound path. It speaks
+the frozen v0 protocol over the shared folder link (`OUTPUT.BIN`/`INPUT.BIN`),
+builds as 64-bit Linux binaries and Windows x64 PE32+ images, and is the
+differential oracle. **It is a milestone, not the C deliverable.** The next
+milestone, M8/B2, is the real C port: a minimal, hand-written, idiomatic C
+engine with typed game state and no asm, guest CPU/memory or emulation glue in
+the product path. The C# port (M10) starts from B2. The C# client (`client/`)
+remains the SDL3 development host; `docs/progress.md` is the live log and
+`docs/roadmap.md` has the stages.
 
 ## Quick start
 
@@ -33,8 +37,8 @@ Without the bundle (same engine build, client from the tree):
     dotnet run --project client -c Release -- \
         --follow build/swreg/file/OUTPUT.BIN --input build/swreg/file/INPUT.BIN
 
-The old COM1/nullmodem link (`--variant serial`, `client/server.sh`, `--tcp`) is obsolete and kept
-for fun; `docs/client.md` has both.
+The old COM1/nullmodem link (`--variant serial`, `client/server.sh`, `--tcp`) is
+obsolete and kept for fun; `docs/client.md` has both.
 
 Recordings and gates:
 
@@ -84,11 +88,13 @@ Windows bundle (self-contained, no .NET install on the target):
 
 ## Requirements
 
-`uasm` ≥ 2.53 (2.57 tested), Python 3 with `capstone` (and `Pillow` for snapshots and replays),
-DOSBox-X, the .NET SDK, and `Xvfb` for headless runs. Details in `CONTRIBUTING.md` §Environment setup.
+`uasm` ≥ 2.53 (2.57 tested), Python 3 with `capstone` (and `Pillow` for
+snapshots and replays), DOSBox-X, the .NET SDK, and `Xvfb` for headless runs.
+Details in `CONTRIBUTING.md` §Environment setup.
 
 ## Provenance
 
-`_ref/orig-bin/YT2/` holds the original 1996 distribution, kept for preservation and reverse engineering (`YT3/` holds the sequel\u2019s reference data);
-it is reference data and is never modified. The game itself is © 1996 SW Games / Spectrum Pacific
-Publishing.
+`_ref/orig-bin/YT2/` holds the original 1996 distribution, kept for preservation
+and reverse engineering (`YT3/` holds the sequel\u2019s reference data); it is
+reference data and is never modified. The game itself is © 1996 SW Games /
+Spectrum Pacific Publishing.

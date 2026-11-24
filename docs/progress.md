@@ -1,1266 +1,1491 @@
 # Progress log
 
-Dated entries for the port, oldest first.  Older entries may cite the
-pre-split section numbers of `docs/porting.md` (the milestones and open
-items now live in `docs/roadmap.md`).
+Dated entries for the port, oldest first. Older entries may cite the pre-split
+section numbers of `docs/porting.md` (the milestones and open items now live in
+`docs/roadmap.md`).
 
 - 2026-10-19 — M0 (partial):
-  - the repository continues the old TalesOfYonder history (`1d30489`); a single "rebirth" bootstrap
-    commit sits on top of it; branch `main` pushed, remote default `main`, `master` removed;
-    contributor/agent rules added (`CONTRIBUTING.md`, `AGENTS.md`);
-  - `_ref/` is the read-only reference (original distribution, frozen disassembly pipeline,
-    vendored mining project); a pre-commit hook (`.githooks/`) refuses commits that change it;
-  - the working disassembly lives directly in `engine/asm/swreg/` (source in `src/`, machinery in `tools/`); MASM
-    stays reference-only; `tools/build.sh` assembles into `build/swreg/oracle/` and stages the
-    minimum game files (from `_ref/orig-bin/YT2/`) so the built game runs as-is;
-  - build outputs routed to `build/` (scratch in `build/tmp/`); `.gitignore` covers `build/`;
-  - UASM 2.57 (linux64 release) at `~/.local/bin/uasm`; `engine/asm/swreg/tools/verify.sh` reproduces
-    `SWREG.EXE` byte-identically into `build/swreg/oracle/` (0 warnings, ~65 s per assembly);
-  - `engine/asm/swreg/tools/verify_asm.py`: per-instruction byte diff vs the reference; tested positive
-    (identical) and negative (localised instruction + data range);
-  - base tree settled: the disassembly sits directly in `engine/asm/swreg/` (no per-target wrapper); files grouped
-    by kind — `engine/asm/swreg/` is `src/` (source) + `tools/` (machinery), all docs live in `docs/`; the repo
-    keeps `_ref/`, `docs/`, `build/` at the top level.
+  - the repository continues the old TalesOfYonder history (`1d30489`); a single
+    "rebirth" bootstrap commit sits on top of it; branch `main` pushed, remote
+    default `main`, `master` removed; contributor/agent rules added
+    (`CONTRIBUTING.md`, `AGENTS.md`);
+  - `_ref/` is the read-only reference (original distribution, frozen
+    disassembly pipeline, vendored mining project); a pre-commit hook
+    (`.githooks/`) refuses commits that change it;
+  - the working disassembly lives directly in `engine/asm/swreg/` (source in
+    `src/`, machinery in `tools/`); MASM stays reference-only; `tools/build.sh`
+    assembles into `build/swreg/oracle/` and stages the minimum game files (from
+    `_ref/orig-bin/YT2/`) so the built game runs as-is;
+  - build outputs routed to `build/` (scratch in `build/tmp/`); `.gitignore`
+    covers `build/`;
+  - UASM 2.57 (linux64 release) at `~/.local/bin/uasm`;
+    `engine/asm/swreg/tools/verify.sh` reproduces `SWREG.EXE` byte-identically
+    into `build/swreg/oracle/` (0 warnings, ~65 s per assembly);
+  - `engine/asm/swreg/tools/verify_asm.py`: per-instruction byte diff vs the
+    reference; tested positive (identical) and negative (localised instruction +
+    data range);
+  - base tree settled: the disassembly sits directly in `engine/asm/swreg/` (no
+    per-target wrapper); files grouped by kind — `engine/asm/swreg/` is `src/`
+    (source) + `tools/` (machinery), all docs live in `docs/`; the repo keeps
+    `_ref/`, `docs/`, `build/` at the top level.
 - 2026-10-19 — M0 oracle (done):
-  - `tools/dosbox/`: the oracle profile (`dosbox-x.conf` — svga_s3/VBE 1.2, EMS+XMS+UMB, SB16+OPL3,
-    16 MB, fixed 30 000 cycles, autosave of save states), the headless runner (`baseline.sh` —
-    Xvfb, `CH2.BAT`, original distribution from `_ref/orig-bin/YT2/`, md5-checked per run) and X11
-    helpers (`keys.py` — XTEST key injection via ctypes; `snap.py` — `XGetImage` window snapshots);
-  - baseline (no input) captured under `build/runs/oracle/<stamp>/`: 3 screen snapshots (title screen,
-    intro), 4 save states (slots 1–4, 15 s interval), DOSBox-X logs, `SWREG.EXE: OK`;
-  - quirk: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts on the game's VESA mode (libpng
-    misuse) — snapshots come from the X window instead; Xvfb falls back to abstract sockets on
-    this host (the `/tmp/.X11-unix` listener errors in `xvfb.log` are benign).
+  - `tools/dosbox/`: the oracle profile (`dosbox-x.conf` — svga_s3/VBE 1.2,
+    EMS+XMS+UMB, SB16+OPL3, 16 MB, fixed 30 000 cycles, autosave of save
+    states), the headless runner (`baseline.sh` — Xvfb, `CH2.BAT`, original
+    distribution from `_ref/orig-bin/YT2/`, md5-checked per run) and X11 helpers
+    (`keys.py` — XTEST key injection via ctypes; `snap.py` — `XGetImage` window
+    snapshots);
+  - baseline (no input) captured under `build/runs/oracle/<stamp>/`: 3 screen
+    snapshots (title screen, intro), 4 save states (slots 1–4, 15 s interval),
+    DOSBox-X logs, `SWREG.EXE: OK`;
+  - quirk: DOSBox-X 2026.01.02's own screenshot (F12+P) aborts on the game's
+    VESA mode (libpng misuse) — snapshots come from the X window instead; Xvfb
+    falls back to abstract sockets on this host (the `/tmp/.X11-unix` listener
+    errors in `xvfb.log` are benign).
 - 2026-10-19 — M1 pilot (EMS manager annotated):
-  - `docs/asm-style.md`: annotation rules — prefixes + PascalCase names, original offsets kept on
-    routine headers and variable definitions, module/routine headers, `; SEAM <family>: ...` tags,
-    workflow and the verify gate;
-  - `engine/asm/swreg/src/swreg.asm`: the EMS / picture-cache module (S0233) annotated — EMS init and close,
-    page-list mapping, cache sizing by available pages, class-table construction, the DOS
-    paragraph allocator; 22 symbols named (`fn_EMSInit`, `v_EMSFrameSeg`, `v_CacheSlots0`...);
-  - structure found: ten picture classes (318x198 down to 8x8) with `size = width*height` and a
-    32-bit PICTURES.VGA offset per class; the cache handle holds the images, one 6-byte
-    {0FFFFh, page, offset} descriptor per slot;
+  - `docs/asm-style.md`: annotation rules — prefixes + PascalCase names,
+    original offsets kept on routine headers and variable definitions,
+    module/routine headers, `; SEAM <family>: ...` tags, workflow and the verify
+    gate;
+  - `engine/asm/swreg/src/swreg.asm`: the EMS / picture-cache module (S0233)
+    annotated — EMS init and close, page-list mapping, cache sizing by available
+    pages, class-table construction, the DOS paragraph allocator; 22 symbols
+    named (`fn_EMSInit`, `v_EMSFrameSeg`, `v_CacheSlots0`...);
+  - structure found: ten picture classes (318x198 down to 8x8) with `size =
+    width*height` and a 32-bit PICTURES.VGA offset per class; the cache handle
+    holds the images, one 6-byte {0FFFFh, page, offset} descriptor per slot;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1 file service and palette (annotated):
-  - DOS file service (S084E, plus the tick delay in S084D): close, open, create, read and write
-    wrappers over one block-seek helper; open mode comes in AL (0 = read, 2 = read/write), a
-    failed wrapper leaves the caller's error code in `v_50CC` for the common error reporter;
-  - four packed file structs in DGROUP — handle, buffer seg/off, block size, block index, 32-bit
-    base offset, ASCIIZ name — described by `FILE_*` EQUs at the top of the file; access is
-    `base + index * block size`, one block per call; bases: 904Bh `CURGAME`, 9061h
-    `PICTURES.VGA`, 907Ch `SAVEGAMEX`, 9093h `WORLD.DAT`;
-  - palette service (S15B7): a pass-based fade engine (modes 0–5) over four 768-byte buffers —
-    4124h live/DAC source, 4424h target (read from data files), 4754h fade-in staging, 4D56h
-    work buffer; `fn_FadeOut`/`fn_FadeIn` wrap modes 0/1 (63 passes x 256 entries); DAC seam
-    via ports 3C8h/3C9h, block set via int 10h AX=1017h, optional retrace wait when `v_5062`
-    bit 800h is set;
+  - DOS file service (S084E, plus the tick delay in S084D): close, open, create,
+    read and write wrappers over one block-seek helper; open mode comes in AL (0
+    = read, 2 = read/write), a failed wrapper leaves the caller's error code in
+    `v_50CC` for the common error reporter;
+  - four packed file structs in DGROUP — handle, buffer seg/off, block size,
+    block index, 32-bit base offset, ASCIIZ name — described by `FILE_*` EQUs at
+    the top of the file; access is `base + index * block size`, one block per
+    call; bases: 904Bh `CURGAME`, 9061h `PICTURES.VGA`, 907Ch `SAVEGAMEX`, 9093h
+    `WORLD.DAT`;
+  - palette service (S15B7): a pass-based fade engine (modes 0–5) over four
+    768-byte buffers — 4124h live/DAC source, 4424h target (read from data
+    files), 4754h fade-in staging, 4D56h work buffer; `fn_FadeOut`/`fn_FadeIn`
+    wrap modes 0/1 (63 passes x 256 entries); DAC seam via ports 3C8h/3C9h,
+    block set via int 10h AX=1017h, optional retrace wait when `v_5062` bit 800h
+    is set;
   - dead code noted: `fn_FileSeekEnd` (0x08506) has no callers in this build;
-  - style guide extended: `v_` anchor labels for unlabeled DGROUP structures/buffers (anchors are
-    documentation only; numeric operands stay numeric) and a single top-of-file EQU block for
-    layouts shared across segments;
+  - style guide extended: `v_` anchor labels for unlabeled DGROUP
+    structures/buffers (anchors are documentation only; numeric operands stay
+    numeric) and a single top-of-file EQU block for layouts shared across
+    segments;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1 video boundary (annotated):
-  - screen model: drawing goes through the segment variable `v_DrawSeg` (A000h = visible screen;
-    the 64 KB `v_WorkSeg` buffer is the offscreen target). The main game has *no* present/blit
-    wrapper — mode 13h writes go straight to video memory (only the palette writer waits for
-    retrace);
-  - mode seams tagged: int 10h AX=13h (cache init, return from the intro, restore) and AX=3
-    (text mode on exit and on the error path); the intro effect uses VBE mode 101h (4F02h) and
-    bank-switches window A with 4F05h (`sub_15F1F`) while decoding LOGO.PCX (`fn_15DC2`);
-  - consequence for M1b: a mode-13h "present" boundary has to be *introduced* for streaming
-    (frame_end after input/draw loop), unlike the palette which already has a funnel;
+  - screen model: drawing goes through the segment variable `v_DrawSeg` (A000h =
+    visible screen; the 64 KB `v_WorkSeg` buffer is the offscreen target). The
+    main game has *no* present/blit wrapper — mode 13h writes go straight to
+    video memory (only the palette writer waits for retrace);
+  - mode seams tagged: int 10h AX=13h (cache init, return from the intro,
+    restore) and AX=3 (text mode on exit and on the error path); the intro
+    effect uses VBE mode 101h (4F02h) and bank-switches window A with 4F05h
+    (`sub_15F1F`) while decoding LOGO.PCX (`fn_15DC2`);
+  - consequence for M1b: a mode-13h "present" boundary has to be *introduced*
+    for streaming (frame_end after input/draw loop), unlike the palette which
+    already has a funnel;
   - names: `v_50B8` -> `v_WorkSeg`, `v_50D2` -> `v_DrawSeg`;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1b video/palette boundary spike (STREAM build + replay client):
-  - all instrumentation is under `IFDEF STREAM` (`-DSTREAM`); the oracle build is untouched:
-    `fn_StreamInit` allocates one 65,024-byte DOS block (64,000-byte shadow + message buffer +
-    writer state) and creates `OUTPUT.BIN`; `fn_StreamPresent` is called from the two input-poll
-    routines (`fn_PollInput`, `fn_WaitKey`), rate-limited to one frame per 2 BIOS ticks, only in mode
-    13h, and emits one 1-line `rect` per changed row plus `frame_end`; palette updates are hooked
-    at `fn_WriteDAC` (`DS:SI`), `sub_SetDACBlock` (`ES:DX`) and `sub_WriteDAC768`;
-  - v0 VIDEO payload layouts pinned in `docs/protocol.md` (type byte + `set_mode`/`palette`/
-    `rect`/`frame_end`/`reset`); the recorder writes a bare message stream (no session header),
-    raw codec, 6-bit DAC values;
-  - tools: `engine/asm/swreg/tools/build.sh --variant file` (variant build + alignment guard), `tools/dosbox/stream.sh`
-    (headless run + replay), `tools/stream/replay.py` (PNG frames + final state), `docs/stream.md`;
-  - gotcha: the 5-byte far-call hooks moved S1DEA's paragraph prefix from 7 to 5, so the game's
-    hard-coded DS offsets (e.g. `EMMXXXX0` at `0CA0h`) no longer matched and the EMS init aborted
-    with "Minimum of 1MB Expanded RAM must be available."; a 2-byte pad at the end of S1DC9
-    restores prefix 7 and the build script now verifies prefix 7 + `EMMXXXX0` delta `0C99h`;
-  - validation: 40 s no-input run -> 846 records (1 `set_mode`, 447 `palette`, 396 `rect`, 2
-    `frame_end`), 479,755-byte recording; the client's SW Games logo frame matches the emulator
-    snapshot from the same run; oracle build re-verified (`SWREG.EXE: OK`, `IDENTICAL`);
-  - limits: VBE intro skipped, no input/audio/session header, palette messages not deduplicated,
-    the stream build is slower than the original.
+  - all instrumentation is under `IFDEF STREAM` (`-DSTREAM`); the oracle build
+    is untouched: `fn_StreamInit` allocates one 65,024-byte DOS block
+    (64,000-byte shadow + message buffer + writer state) and creates
+    `OUTPUT.BIN`; `fn_StreamPresent` is called from the two input-poll routines
+    (`fn_PollInput`, `fn_WaitKey`), rate-limited to one frame per 2 BIOS ticks,
+    only in mode 13h, and emits one 1-line `rect` per changed row plus
+    `frame_end`; palette updates are hooked at `fn_WriteDAC` (`DS:SI`),
+    `sub_SetDACBlock` (`ES:DX`) and `sub_WriteDAC768`;
+  - v0 VIDEO payload layouts pinned in `docs/protocol.md` (type byte +
+    `set_mode`/`palette`/ `rect`/`frame_end`/`reset`); the recorder writes a
+    bare message stream (no session header), raw codec, 6-bit DAC values;
+  - tools: `engine/asm/swreg/tools/build.sh --variant file` (variant build +
+    alignment guard), `tools/dosbox/stream.sh` (headless run + replay),
+    `tools/stream/replay.py` (PNG frames + final state), `docs/stream.md`;
+  - gotcha: the 5-byte far-call hooks moved S1DEA's paragraph prefix from 7 to
+    5, so the game's hard-coded DS offsets (e.g. `EMMXXXX0` at `0CA0h`) no
+    longer matched and the EMS init aborted with "Minimum of 1MB Expanded RAM
+    must be available."; a 2-byte pad at the end of S1DC9 restores prefix 7 and
+    the build script now verifies prefix 7 + `EMMXXXX0` delta `0C99h`;
+  - validation: 40 s no-input run -> 846 records (1 `set_mode`, 447 `palette`,
+    396 `rect`, 2 `frame_end`), 479,755-byte recording; the client's SW Games
+    logo frame matches the emulator snapshot from the same run; oracle build
+    re-verified (`SWREG.EXE: OK`, `IDENTICAL`);
+  - limits: VBE intro skipped, no input/audio/session header, palette messages
+    not deduplicated, the stream build is slower than the original.
 - 2026-10-19 — M1 input: keyboard wrappers (annotated):
-  - `fn_PollInput` (0D0FEh) is the per-frame poll: DOS int 21h 06h, ASCII a-z folded to
-    uppercase, AL=0 reads the extended scancode on a second 06h call; the event code shares
-    `v_50CC` (0 none, 1 ASCII, 2 extended, 3/6 left press/hold, 7/0Ah right press/hold,
-    5/9 releases) and the key/scancode lives in the renamed `v_KeyCode` (0B9Ah);
-  - `fn_WaitKey` (06342h) blocks for a key or a mouse button, services sound via `fn_1888A`,
-    maps left -> 0 and right -> ESC, clears the mouse latches and flushes the DOS typeahead;
-    `sub_FlushKeyboard` (01D7Eh) is the 0Ch helper;
-  - dispatch: `tbl_KeyDispatch` (081Ah, ASCII 20h..7Fh) and `tbl_ScanDispatch` (08DAh,
-    scancodes 3Bh..76h) in `S0000`; the event-code branch is commented;
-  - seam tags: `int 21h` 06h (poll key) and 0Ch (flush typeahead) marked INPUT; the stream
-    hooks in `fn_PollInput`/`fn_WaitKey` keep their old positions;
+  - `fn_PollInput` (0D0FEh) is the per-frame poll: DOS int 21h 06h, ASCII a-z
+    folded to uppercase, AL=0 reads the extended scancode on a second 06h call;
+    the event code shares `v_50CC` (0 none, 1 ASCII, 2 extended, 3/6 left
+    press/hold, 7/0Ah right press/hold, 5/9 releases) and the key/scancode lives
+    in the renamed `v_KeyCode` (0B9Ah);
+  - `fn_WaitKey` (06342h) blocks for a key or a mouse button, services sound via
+    `fn_1888A`, maps left -> 0 and right -> ESC, clears the mouse latches and
+    flushes the DOS typeahead; `sub_FlushKeyboard` (01D7Eh) is the 0Ch helper;
+  - dispatch: `tbl_KeyDispatch` (081Ah, ASCII 20h..7Fh) and `tbl_ScanDispatch`
+    (08DAh, scancodes 3Bh..76h) in `S0000`; the event-code branch is commented;
+  - seam tags: `int 21h` 06h (poll key) and 0Ch (flush typeahead) marked INPUT;
+    the stream hooks in `fn_PollInput`/`fn_WaitKey` keep their old positions;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1 input: mouse wrappers (annotated):
-  - S13A0: `fn_MouseInit` (13AEEh) probes the INT 33h vector, resets the driver, installs
-    `fn_MouseHandler` (AX=000Ch, ES:DX = S13A0:0002, event mask 1Fh) and sets an 8:1
-    mickey/pixel ratio; `fn_HideMouse`/`fn_ShowMouse`/`fn_RedrawMouse` wrap the visible bit;
+  - S13A0: `fn_MouseInit` (13AEEh) probes the INT 33h vector, resets the driver,
+    installs `fn_MouseHandler` (AX=000Ch, ES:DX = S13A0:0002, event mask 1Fh)
+    and sets an 8:1 mickey/pixel ratio;
+    `fn_HideMouse`/`fn_ShowMouse`/`fn_RedrawMouse` wrap the visible bit;
     `fn_SetMouseCursor` (13B8Ah, 60 call sites) loads a 16x16 cursor image from
     PICTURES.VGA through the 9061h file struct into DS:3FE0h;
-  - `fn_MouseHandler` (13A02h) is the user event callback (INT 33h 0Bh motion counters):
-    motion updates the software cursor, button press/release latches the clamped position
-    and sets `v_MouseState` bits; clicks land in `v_MouseLeft*`/`v_MouseRight*`, the release
-    slots are written but never read in this build;
+  - `fn_MouseHandler` (13A02h) is the user event callback (INT 33h 0Bh motion
+    counters): motion updates the software cursor, button press/release latches
+    the clamped position and sets `v_MouseState` bits; clicks land in
+    `v_MouseLeft*`/`v_MouseRight*`, the release slots are written but never read
+    in this build;
   - software cursor: `v_MouseX`/`v_MouseY` (0F10h/40F0h) is the drawn position,
-    `v_MouseNewX`/`v_MouseNewY` (0F1Ch/0F1Eh) the target; the save/restore pair uses the
-    16x16 buffer at DS:0E08h, `sub_MouseDraw` overlays DS:3FE0h with 0FFh transparency and
-    clips the right edge; `fn_MouseMoveBy` clamps to the bounds and applies the 8-pixel
-    hotspot for cursors other than 0/1Dh;
-  - `v_MouseState` (40F6h) bit layout documented (present/visible/save guard/event latches/
-    reentrancy; bits 1000h/0200h unknown); exit paths reset the driver with INT 33h 00h;
-    every INT 33h call and the INT 21h 3533h vector probe carry MOUSE seam tags;
+    `v_MouseNewX`/`v_MouseNewY` (0F1Ch/0F1Eh) the target; the save/restore pair
+    uses the 16x16 buffer at DS:0E08h, `sub_MouseDraw` overlays DS:3FE0h with
+    0FFh transparency and clips the right edge; `fn_MouseMoveBy` clamps to the
+    bounds and applies the 8-pixel hotspot for cursors other than 0/1Dh;
+  - `v_MouseState` (40F6h) bit layout documented (present/visible/save
+    guard/event latches/ reentrancy; bits 1000h/0200h unknown); exit paths reset
+    the driver with INT 33h 00h; every INT 33h call and the INT 21h 3533h vector
+    probe carry MOUSE seam tags;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1 sound: FM service wrappers (annotated):
-  - S187E is the whole sound layer: `sub_SoundParseEnv` (18B83h) reads `SOUND=`/`BLASTER=`
-    from the environment copy at DS:0AFF8h into `v_SoundPort`/`v_SoundIRQ`;
-    `sub_SoundFindDriver` (18A35h) scans vectors 80h..BEh with DOS 35h for the driver's
-    "FMDRV" signature at handler-segment:103h, patches the int number inside `sub_SoundCall`
-    (18B80h, `int 0`) at CS:3A1h to the found vector, installs the status byte pointer
-    (DS:0C2Ch) and allocates the music buffer; `sub_SoundPreInit` (18ACEh) loads the
-    9Ch-paragraph driver block from WORLD.DAT and pre-inits through the far entry
-    `v_SoundEntry` (1 base port, 2 IRQ, 3 detect, 4 enable, 5 status word at DS:0C2Eh);
-  - `fn_PlayMusic`/`fn_MusicService`/`fn_MusicStop` queue tracks (`v_MusicId`; the 20-tick
-    countdown v_50F4 is fed by the tick ISR), `fn_PlaySFX` plays WORLD.DAT effects through the
-    far entry and falls back to `fn_SpeakerBeep` (PIT ch2 + port 61h) for effect 3 when SFX are
-    off; `fn_SoundShutdown` releases the driver and all three buffers; `v_SoundState` (94D5h)
-    bit layout documented (music/SFX present+enabled, 0040h no-signature, error flags);
-  - driver command use documented from the call sites (int path 1/2/4/6/7/8/9, far path
-    1..6/8/9); 0C2Ch/0C2Eh kept numeric: driver-written status words handed over by commands
-    1/5; `v_94D1`/`v_94D3` left numeric (role not established);
-  - open: `v_SoundEntry` (F7AEh) is zero in the image and has no writer in the game, yet the
-    pre-init path runs by default - resolve with the driver black-box study (risk 1);
+  - S187E is the whole sound layer: `sub_SoundParseEnv` (18B83h) reads
+    `SOUND=`/`BLASTER=` from the environment copy at DS:0AFF8h into
+    `v_SoundPort`/`v_SoundIRQ`; `sub_SoundFindDriver` (18A35h) scans vectors
+    80h..BEh with DOS 35h for the driver's "FMDRV" signature at
+    handler-segment:103h, patches the int number inside `sub_SoundCall` (18B80h,
+    `int 0`) at CS:3A1h to the found vector, installs the status byte pointer
+    (DS:0C2Ch) and allocates the music buffer; `sub_SoundPreInit` (18ACEh) loads
+    the 9Ch-paragraph driver block from WORLD.DAT and pre-inits through the far
+    entry `v_SoundEntry` (1 base port, 2 IRQ, 3 detect, 4 enable, 5 status word
+    at DS:0C2Eh);
+  - `fn_PlayMusic`/`fn_MusicService`/`fn_MusicStop` queue tracks (`v_MusicId`;
+    the 20-tick countdown v_50F4 is fed by the tick ISR), `fn_PlaySFX` plays
+    WORLD.DAT effects through the far entry and falls back to `fn_SpeakerBeep`
+    (PIT ch2 + port 61h) for effect 3 when SFX are off; `fn_SoundShutdown`
+    releases the driver and all three buffers; `v_SoundState` (94D5h) bit layout
+    documented (music/SFX present+enabled, 0040h no-signature, error flags);
+  - driver command use documented from the call sites (int path 1/2/4/6/7/8/9,
+    far path 1..6/8/9); 0C2Ch/0C2Eh kept numeric: driver-written status words
+    handed over by commands 1/5; `v_94D1`/`v_94D3` left numeric (role not
+    established);
+  - open: `v_SoundEntry` (F7AEh) is zero in the image and has no writer in the
+    game, yet the pre-init path runs by default - resolve with the driver
+    black-box study (risk 1);
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
 - 2026-10-19 — M1 tick: INT 1Ch wrappers (annotated):
-  - `fn_TickInit` (0FE05h) reloads the four countdowns and points INT 1Ch at S0FBA:019Eh =
-    `fn_TickISR` (0FD3Eh), saving the old vector at CS:0/CS:2 (DOS 351Ch); `fn_TickRestore`
-    (0FE45h) restores it (251Ch) and runs from the error exit;
-  - `fn_TickISR` documented: CS:6 counts ticks and folds them into `v_50F2`, CS:4 is the
-    reentrancy guard (a reentered tick chains straight to the old handler), CS:8 the timeout
-    counter armed by fn_0FE63, CS:0Ah/0Ch the saved SS:SP; the handler switches SS:SP to
-    CS:19Eh, so the 399 filler bytes below the code are its stack, and it dispatches the
-    countdowns v_50E8/v_50EA/v_50EC/v_50EE plus the music service countdown (v_50F4 ->
+  - `fn_TickInit` (0FE05h) reloads the four countdowns and points INT 1Ch at
+    S0FBA:019Eh = `fn_TickISR` (0FD3Eh), saving the old vector at CS:0/CS:2 (DOS
+    351Ch); `fn_TickRestore` (0FE45h) restores it (251Ch) and runs from the
+    error exit;
+  - `fn_TickISR` documented: CS:6 counts ticks and folds them into `v_50F2`,
+    CS:4 is the reentrancy guard (a reentered tick chains straight to the old
+    handler), CS:8 the timeout counter armed by fn_0FE63, CS:0Ah/0Ch the saved
+    SS:SP; the handler switches SS:SP to CS:19Eh, so the 399 filler bytes below
+    the code are its stack, and it dispatches the countdowns
+    v_50E8/v_50EA/v_50EC/v_50EE plus the music service countdown (v_50F4 ->
     v_5064 bit 10h);
-  - direct BIOS tick reads tagged: the six `int 1Ah` waits in the attract/intro player
-    (`fn_11B00`) and the STREAM build's frame pacing; `fn_DelayTicks` (084D4h) keeps its tags;
+  - direct BIOS tick reads tagged: the six `int 1Ah` waits in the attract/intro
+    player (`fn_11B00`) and the STREAM build's frame pacing; `fn_DelayTicks`
+    (084D4h) keeps its tags;
   - byte gate green: `SWREG.EXE: OK`, `IDENTICAL`, 0 warnings.
-- 2026-10-19 — SBFMDRV.COM: byte-perfect disassembly + first analysis/black-box round:
-  - `engine/asm/sbfmdrv/src/sbfmdrv.asm` reassembles to 7211 bytes, MD5 `0f679017d543b0947fc5a33456ba38a7`;
-    `sh engine/asm/sbfmdrv/tools/verify.sh` prints `SBFMDRV.COM: OK` / `IDENTICAL` (0 warnings).  The
-    generator/tooling (`engine/asm/sbfmdrv/tools/generate.py`, `build.sh`, `verify.sh`, `verify.py`) and the
-    12 documented encoding fallbacks are checked in;
-  - installer mapped: entry 100h -> 1975h; BLASTER parser 1C00h (only the A field; 220/240/260/280),
-    DSP reset/detect 1907h/1A09h, FM detect 17ECh, free-vector scan 1A86h (80h..BFh), hooks
-    INT 08h -> 1226h and INT 09h -> 12B2h, resident init 19AFh, `/U` uninstall 1B8Bh (signature
-    scan 19DDh, MCB check 1A58h, `int NN; ret` gate 1B88h);
-  - the installer checksum (182Fh: sum 11A7h bytes from 33Ah, stored at 100h) leaves `[101h]=0`;
-    `sub_0C5E` then patches the immediate at `0DF3h` from 0 to 1, turning command 6's state write
-    from `[02F2h]=0` into `=1` - that self-modification is what actually starts the sequencer;
-  - resident INT API decoded (dispatcher 12E6h, tables 372h/392h): 0 version, 1 status-pointer
-    exchange, 2 instruments, 3 timer reload, 4 PIT divisor, 5 scratch, 6 start stream,
-    7 stop, 8 reset, 9 pause, A resume, B callback, C CS:032Ah, D position, E volume/tempo
-    scaling, F scratch swap; -1 saved-vector slots, -2 CS:0149h, -3 CS:02F5h, -4 write slot,
-    -5 CS:02F2h (music state).  Music state 0 idle / 1 playing / 2 paused; status byte FFh while
-    active;
-  - black-box harness (`engine/asm/sbfmdrv/test/`, DOSBox-X SB16 `A220 I7 D1 H5 T6`): TEST.COM finds vector
-    80h, exchanges the status pointer (default CS:02F6h), exercises all commands, starts a zero
-    stream (state 0 -> 1, status 00 -> FF, `[0DF3h]` 00 -> 01, position advances), checks the
-    second-start `FFFEh`, pause/resume, and stop (state/status -> 0); the install-then-`/U` run
-    reports `NO DRIVER`.  Results and interpretation: `docs/sbfmdrv.md`;
-  - still open: full stream/OPL event decode (tables 33Ah/34Ah/352h), a real WORLD.DAT music
-    block capture, and an audio-captured game run.  The game-side far entry is resolved:
-    `v_SoundEntry` is zero (no relocation, no writer); a staged-game diagnostic shows the normal
-    path reaches the first far call, which calls `0000:0000` (IVT bytes, not the INT 0 handler),
-    and the driver has no far dispatcher - the resident INT API is the only interface.  The port
+- 2026-10-19 — SBFMDRV.COM: byte-perfect disassembly + first analysis/black-box
+  round:
+  - `engine/asm/sbfmdrv/src/sbfmdrv.asm` reassembles to 7211 bytes, MD5
+    `0f679017d543b0947fc5a33456ba38a7`; `sh engine/asm/sbfmdrv/tools/verify.sh`
+    prints `SBFMDRV.COM: OK` / `IDENTICAL` (0 warnings). The generator/tooling
+    (`engine/asm/sbfmdrv/tools/generate.py`, `build.sh`, `verify.sh`,
+    `verify.py`) and the 12 documented encoding fallbacks are checked in;
+  - installer mapped: entry 100h -> 1975h; BLASTER parser 1C00h (only the A
+    field; 220/240/260/280), DSP reset/detect 1907h/1A09h, FM detect 17ECh,
+    free-vector scan 1A86h (80h..BFh), hooks INT 08h -> 1226h and INT 09h ->
+    12B2h, resident init 19AFh, `/U` uninstall 1B8Bh (signature scan 19DDh, MCB
+    check 1A58h, `int NN; ret` gate 1B88h);
+  - the installer checksum (182Fh: sum 11A7h bytes from 33Ah, stored at 100h)
+    leaves `[101h]=0`; `sub_0C5E` then patches the immediate at `0DF3h` from 0
+    to 1, turning command 6's state write from `[02F2h]=0` into `=1` - that
+    self-modification is what actually starts the sequencer;
+  - resident INT API decoded (dispatcher 12E6h, tables 372h/392h): 0 version, 1
+    status-pointer exchange, 2 instruments, 3 timer reload, 4 PIT divisor, 5
+    scratch, 6 start stream, 7 stop, 8 reset, 9 pause, A resume, B callback, C
+    CS:032Ah, D position, E volume/tempo scaling, F scratch swap; -1
+    saved-vector slots, -2 CS:0149h, -3 CS:02F5h, -4 write slot, -5 CS:02F2h
+    (music state). Music state 0 idle / 1 playing / 2 paused; status byte FFh
+    while active;
+  - black-box harness (`engine/asm/sbfmdrv/test/`, DOSBox-X SB16 `A220 I7 D1 H5
+    T6`): TEST.COM finds vector 80h, exchanges the status pointer (default
+    CS:02F6h), exercises all commands, starts a zero stream (state 0 -> 1,
+    status 00 -> FF, `[0DF3h]` 00 -> 01, position advances), checks the
+    second-start `FFFEh`, pause/resume, and stop (state/status -> 0); the
+    install-then-`/U` run reports `NO DRIVER`. Results and interpretation:
+    `docs/sbfmdrv.md`;
+  - still open: full stream/OPL event decode (tables 33Ah/34Ah/352h), a real
+    WORLD.DAT music block capture, and an audio-captured game run. The game-side
+    far entry is resolved: `v_SoundEntry` is zero (no relocation, no writer); a
+    staged-game diagnostic shows the normal path reaches the first far call,
+    which calls `0000:0000` (IVT bytes, not the INT 0 handler), and the driver
+    has no far dispatcher - the resident INT API is the only interface. The port
     should treat the far calls as no-ops.
 - 2026-10-19 — SBFMDRV.COM: music stream format decoded and black-box traced:
-  - the sequencer grammar is a MIDI-like running-status stream,
-    `[status] payload... VLQ delay`: the status high nibble minus 8 selects one of the 8 main
-    handlers and the low nibble is the channel; `8n` note-off, `9n` note-on (velocity 0 = off),
-    `An`/`Dn`/`En` ignored, `Bn` controls `66h..69h` (status byte, rhythm mode, pitch bend), `Cn`
-    program, `Fn` system (`F0` callback + jump, `F7` jump, `FC` stop, `FF 2Fh` stop + jump);
-    the VLQ is big-endian 7-bit groups, the delay is in timer ticks and becomes the 32-bit
-    countdown the ISR decrements (zero = keep processing in the same invocation);
-  - voice engine documented: `0259h` states (active/released/free), allocation order, note map
-    `039Ch`, one-octave F-number table `041Ch`, velocity curve `0A1Ch`, the 16-byte instrument
-    records and their OPL register mapping, per-channel program/bend/gate tables;
-  - `engine/asm/sbfmdrv/test/test.asm` now runs a crafted 41-byte stream through the real timer path and also
-    steps the resident sequencer one event per call (temporary `retf` trampoline in the unused
-    `02F9h` byte, restored immediately).  The trace matches the decode byte-exactly: positions
-    `5,8,0C,0F,13,17,1B,1F,23,26,29`, status `5Ah` set/cleared, voice 0 note `3Ch` and voice 1
-    note `40h` allocated and released (`80h`), F-numbers `1157h`/`11B0h`, self-stop via
-    `FF 2Fh`, and command D returns the normalized stop snapshot (`0A06h:0001h`).  This corrects
-    the first round's "position advanced" note: that wait was shorter than one PIT tick, the
+  - the sequencer grammar is a MIDI-like running-status stream, `[status]
+    payload... VLQ delay`: the status high nibble minus 8 selects one of the 8
+    main handlers and the low nibble is the channel; `8n` note-off, `9n` note-on
+    (velocity 0 = off), `An`/`Dn`/`En` ignored, `Bn` controls `66h..69h` (status
+    byte, rhythm mode, pitch bend), `Cn` program, `Fn` system (`F0` callback +
+    jump, `F7` jump, `FC` stop, `FF 2Fh` stop + jump); the VLQ is big-endian
+    7-bit groups, the delay is in timer ticks and becomes the 32-bit countdown
+    the ISR decrements (zero = keep processing in the same invocation);
+  - voice engine documented: `0259h` states (active/released/free), allocation
+    order, note map `039Ch`, one-octave F-number table `041Ch`, velocity curve
+    `0A1Ch`, the 16-byte instrument records and their OPL register mapping,
+    per-channel program/bend/gate tables;
+  - `engine/asm/sbfmdrv/test/test.asm` now runs a crafted 41-byte stream through
+    the real timer path and also steps the resident sequencer one event per call
+    (temporary `retf` trampoline in the unused `02F9h` byte, restored
+    immediately). The trace matches the decode byte-exactly: positions
+    `5,8,0C,0F,13,17,1B,1F,23,26,29`, status `5Ah` set/cleared, voice 0 note
+    `3Ch` and voice 1 note `40h` allocated and released (`80h`), F-numbers
+    `1157h`/`11B0h`, self-stop via `FF 2Fh`, and command D returns the
+    normalized stop snapshot (`0A06h:0001h`). This corrects the first round's
+    "position advanced" note: that wait was shorter than one PIT tick, the
     sequencer never ran, and `CDB` was the initial command 6 snapshot;
-  - `[0151h]` is the sequencer-invocation counter (not PIT ticks); command 6 copies the start
-    pointer to `012Dh/012Fh`, the track-repeat restart pointer used with command F's count;
-  - docs: `docs/sbfmdrv.md` section 4 rewritten (grammar, event table, timing, voices, patches),
-    section 6 replaced with the new trace; driver sources annotated; byte gate green:
-    `SBFMDRV.COM: OK`, `IDENTICAL`, MD5 `0f679017d543b0947fc5a33456ba38a7`, 0 warnings;
-  - still open: real `WORLD.DAT` music block + OPL register capture, percussion-path black-box,
-    command 2 with a custom instrument table, audio-captured game run.
+  - `[0151h]` is the sequencer-invocation counter (not PIT ticks); command 6
+    copies the start pointer to `012Dh/012Fh`, the track-repeat restart pointer
+    used with command F's count;
+  - docs: `docs/sbfmdrv.md` section 4 rewritten (grammar, event table, timing,
+    voices, patches), section 6 replaced with the new trace; driver sources
+    annotated; byte gate green: `SBFMDRV.COM: OK`, `IDENTICAL`, MD5
+    `0f679017d543b0947fc5a33456ba38a7`, 0 warnings;
+  - still open: real `WORLD.DAT` music block + OPL register capture,
+    percussion-path black-box, command 2 with a custom instrument table,
+    audio-captured game run.
 
-- 2026-10-19 — SBFMDRV.COM: real `WORLD.DAT` music blocks run through the reference driver:
-  - `engine/asm/sbfmdrv/test/music.py` locates the game's record directory in DGROUP by content (dword
-    offsets at `DS:0CED3h`, word sizes at `DS:0CF27h`, indexed by `id-1` from `fn_180F9`),
-    extracts a record, walks its stream with the decoded grammar and cross-checks driver logs;
-  - `engine/asm/sbfmdrv/test/music.asm` (`MUSIC.COM`) loads `MUSIC.BLK`, starts it with commands 2/4/6
-    (tempo `1234DCh / word[+0Ch]`; `60h` -> 96 Hz) and single-steps the sequencer through the
-    whole song, logging `S<step> P<position> X<status>`; `run.sh music` extracts, runs under
-    DOSBox-X and compares (`MUSIC_TRACK`/`MUSIC_SONG` select the record / exact song slice);
-  - the step loop masks IRQ0: DOS re-enables interrupts inside `INT 21h`, and with the timer
-    live the resident ISR ran the sequencer behind the log (225 `[0151h]` invocations against
-    222 steps).  With the mask the `[0151h]` delta equals the step count, which the check uses
-    as a guard;
-  - results: track 1 (328 events, 225 groups), track 18 (2041 events, 1436 groups) and track 8
-    song slice (1214 events, 926 groups, includes 408 ignored `En` slots) all match the static
-    walk exactly, `T = N`, self-stop via `FF 2Fh` and state 0;
-  - `WORLD.DAT` layout documented in `docs/sbfmdrv.md` 4.1: CTMF header fields (magic, format
-    `01 01`, instrument table at `28h`, stream after it, tempo `60h`, 16 per-channel flags,
-    count at `24h`), AdLib-layout 16-byte patches, 21 CTMF blocks of which records 1..19 are the
-    last 19, every song ends with `FF 2Fh` (no real stream uses `FC`/jumps), and the shipped
-    size table is shifted (for ids 1..17 `size[id]` is the song length of record `id+2`, so ids
-    2/4/7/8/12/14/15 load a window that cuts their song short; the game's id `14h` request is
-    already past the table);
-  - driver byte gate green: `SBFMDRV.COM: OK`, `IDENTICAL`, 0 warnings; game tree untouched;
-  - still open: percussion-path black-box, custom instrument table via command 2, real
-    `F0`/`F7`/`FC` streams (none shipped), audio-captured game run.
-- 2026-10-19 — SBFMDRV.COM: percussion path black-boxed (`engine/asm/sbfmdrv/test/test.asm`):
-  - the API run now ends with a second crafted stream: `B0 67 01`, one hit per drum (`9Bh..9Fh`
-    on channels 0Bh..0Fh), one release per drum, `B0 67 00`, `FF 2F`; the trace logs the `BDh`
-    shadow `[02F7h]` (`R`), the voice count `[014Bh]` (`C`) and the rhythm flag `[02F8h]` (`M`)
-    after every step, then the drum note slots and the slot-6 frequency word.  IRQ0 is masked
-    while stepping (same pitfall the music harness hit);
-  - observed exactly the decoded behaviour: the mode switch gives 6 voices / BDh `E0h`, each
-    hit sets its bit (`10h,08h,04h,02h,01h`), each release clears it, `B0 67 00` gives 9 voices /
-    `C0h`, and `FF 2F` stops (state 0) with the silence path masking `[02F7h]` to `E0h`; the drum
-    notes stay in slots 6..10 after the releases (a percussion note-off only clears the BDh bit);
-  - docs 4.4 now spells out the three register writes per hit (TL = `40h` + drum level
-    `10h,14h,12h,15h,11h`, +3 for the bass drum, and `A0h/B0h + {6,7,8,8,7}`) and that the drum
-    operators' other registers come from the `sub_AF2` template loaded for voice slots 6..8;
-    6.2 records the trace; the open-items list drops the percussion and custom-table entries
-    (the real-block run installs each block's own table through command 2);
-  - `CDB`/layout commentary in sbfmdrv.md 6 refreshed for the bigger test binary (the stream
-    runtime offset moved from `099Bh` to `0A98h`);
+- 2026-10-19 — SBFMDRV.COM: real `WORLD.DAT` music blocks run through the
+  reference driver:
+  - `engine/asm/sbfmdrv/test/music.py` locates the game's record directory in
+    DGROUP by content (dword offsets at `DS:0CED3h`, word sizes at `DS:0CF27h`,
+    indexed by `id-1` from `fn_180F9`), extracts a record, walks its stream with
+    the decoded grammar and cross-checks driver logs;
+  - `engine/asm/sbfmdrv/test/music.asm` (`MUSIC.COM`) loads `MUSIC.BLK`, starts
+    it with commands 2/4/6 (tempo `1234DCh / word[+0Ch]`; `60h` -> 96 Hz) and
+    single-steps the sequencer through the whole song, logging `S<step>
+    P<position> X<status>`; `run.sh music` extracts, runs under DOSBox-X and
+    compares (`MUSIC_TRACK`/`MUSIC_SONG` select the record / exact song slice);
+  - the step loop masks IRQ0: DOS re-enables interrupts inside `INT 21h`, and
+    with the timer live the resident ISR ran the sequencer behind the log (225
+    `[0151h]` invocations against 222 steps). With the mask the `[0151h]` delta
+    equals the step count, which the check uses as a guard;
+  - results: track 1 (328 events, 225 groups), track 18 (2041 events, 1436
+    groups) and track 8 song slice (1214 events, 926 groups, includes 408
+    ignored `En` slots) all match the static walk exactly, `T = N`, self-stop
+    via `FF 2Fh` and state 0;
+  - `WORLD.DAT` layout documented in `docs/sbfmdrv.md` 4.1: CTMF header fields
+    (magic, format `01 01`, instrument table at `28h`, stream after it, tempo
+    `60h`, 16 per-channel flags, count at `24h`), AdLib-layout 16-byte patches,
+    21 CTMF blocks of which records 1..19 are the last 19, every song ends with
+    `FF 2Fh` (no real stream uses `FC`/jumps), and the shipped size table is
+    shifted (for ids 1..17 `size[id]` is the song length of record `id+2`, so
+    ids 2/4/7/8/12/14/15 load a window that cuts their song short; the game's id
+    `14h` request is already past the table);
+  - driver byte gate green: `SBFMDRV.COM: OK`, `IDENTICAL`, 0 warnings; game
+    tree untouched;
+  - still open: percussion-path black-box, custom instrument table via command
+    2, real `F0`/`F7`/`FC` streams (none shipped), audio-captured game run.
+- 2026-10-19 — SBFMDRV.COM: percussion path black-boxed
+  (`engine/asm/sbfmdrv/test/test.asm`):
+  - the API run now ends with a second crafted stream: `B0 67 01`, one hit per
+    drum (`9Bh..9Fh` on channels 0Bh..0Fh), one release per drum, `B0 67 00`,
+    `FF 2F`; the trace logs the `BDh` shadow `[02F7h]` (`R`), the voice count
+    `[014Bh]` (`C`) and the rhythm flag `[02F8h]` (`M`) after every step, then
+    the drum note slots and the slot-6 frequency word. IRQ0 is masked while
+    stepping (same pitfall the music harness hit);
+  - observed exactly the decoded behaviour: the mode switch gives 6 voices / BDh
+    `E0h`, each hit sets its bit (`10h,08h,04h,02h,01h`), each release clears
+    it, `B0 67 00` gives 9 voices / `C0h`, and `FF 2F` stops (state 0) with the
+    silence path masking `[02F7h]` to `E0h`; the drum notes stay in slots 6..10
+    after the releases (a percussion note-off only clears the BDh bit);
+  - docs 4.4 now spells out the three register writes per hit (TL = `40h` + drum
+    level `10h,14h,12h,15h,11h`, +3 for the bass drum, and `A0h/B0h +
+    {6,7,8,8,7}`) and that the drum operators' other registers come from the
+    `sub_AF2` template loaded for voice slots 6..8; 6.2 records the trace; the
+    open-items list drops the percussion and custom-table entries (the
+    real-block run installs each block's own table through command 2);
+  - `CDB`/layout commentary in sbfmdrv.md 6 refreshed for the bigger test binary
+    (the stream runtime offset moved from `099Bh` to `0A98h`);
   - driver byte gate green: `SBFMDRV.COM: OK`, `IDENTICAL`, 0 warnings.
-- 2026-10-19 — SBFMDRV.COM: real songs played through the driver's own timer ISR, with audio capture:
-  - `MUSIC.COM` gained a playback mode (command tail `P`, `MUSIC_PLAY=1`): instead of stepping, it
-    leaves IRQ0 live, waits for the driver's self-stop and logs `PLAY ST=.. T=.. C=..` (final
-    state, `[0151h]` invocation delta, elapsed BIOS ticks 0040:006Ch), bounded at ~60 s;
-  - `music.py check --play` validates that line against the static walk: track 1 gives `ST=0000`,
-    `T=00E1` (= exactly the 225 walk groups) and `C=00D5` = 213 BIOS ticks = 11.70 s against the
-    decoded 1119 tempo ticks at 96 Hz = 11.66 s (0.4% off).  The timer path consumes the same
-    groups with the same total delay as the static model -- the delay/tempo model is now verified
-    on the real ISR, not only by manual stepping;
-  - `MUSIC_CAP=1` wraps the run in DOSBox-X `DX-CAPTURE /A`; `music.py check --wav` reports the
-    recording (track 1: 14.68 s, 48 kHz stereo, peak 41.8% FS, signal in 25/29 half-second
-    windows), so the OPL output of a real song is audible and lasts as decoded.  This is the
-    audio reference for the port's OPL layer and it regenerates headless (no GUI needed);
-  - `run.sh` now patches the DOSBox-X profile per run (command tail, capture prefix, time limit:
-    `MUSIC_PLAY`, `MUSIC_CAP`, `MUSIC_TIMEOUT`); step mode and its cross-check are unchanged;
-  - docs: `docs/sbfmdrv.md` 6.1 records the playback/capture results; README and the script
-    docstrings describe the modes.  Driver byte gate green (`SBFMDRV.COM: OK`, `IDENTICAL`).
-- 2026-10-19 — audio and OPL-register capture in the oracle harness (both gates green):
-  - found two DOSBox-X capabilities the earlier driver work had written off: `DX-CAPTURE /A|/O`
-    (start a mixed-audio WAV capture, or an OPL register log in DRO 2.0 format, around a program)
-    and the fact that both can run at once;
-  - `tools/dosbox/audio.sh [seconds]` (`AUDIO_MODE=wav|dro|both`) runs the original `CH2.BAT` with
-    `DX-CAPTURE /A /O SWREG.EXE ... /W /B` patched into a copy of the batch.  Two traps found by
-    experiment: wrapping `CH2.BAT` itself stops the capture at SBFMDRV's TSR install, and starting
-    `SWREG.EXE` outside the batch makes the game print "Please run Yendorian Tales Chapter 2 from
-    CH2.BAT" (it requires the `/B` switch the batch passes);
-  - observed 40 s run: `swreg_000.wav` 39.97 s, peak 41.8% FS, 79/79 half-second windows with
-    signal; `swreg_000.dro` 1379 writes, 101 registers, 267 note-on writes; every one of the 266
-    note-on gaps lies on the 10.42 ms tick grid of the shipped blocks (96 Hz) -- the game really
-    drives the resident music engine itself, and the port now has an audio *and* a register-level
+- 2026-10-19 — SBFMDRV.COM: real songs played through the driver's own timer
+  ISR, with audio capture:
+  - `MUSIC.COM` gained a playback mode (command tail `P`, `MUSIC_PLAY=1`):
+    instead of stepping, it leaves IRQ0 live, waits for the driver's self-stop
+    and logs `PLAY ST=.. T=.. C=..` (final state, `[0151h]` invocation delta,
+    elapsed BIOS ticks 0040:006Ch), bounded at ~60 s;
+  - `music.py check --play` validates that line against the static walk: track 1
+    gives `ST=0000`, `T=00E1` (= exactly the 225 walk groups) and `C=00D5` = 213
+    BIOS ticks = 11.70 s against the decoded 1119 tempo ticks at 96 Hz = 11.66 s
+    (0.4% off). The timer path consumes the same groups with the same total
+    delay as the static model -- the delay/tempo model is now verified on the
+    real ISR, not only by manual stepping;
+  - `MUSIC_CAP=1` wraps the run in DOSBox-X `DX-CAPTURE /A`; `music.py check
+    --wav` reports the recording (track 1: 14.68 s, 48 kHz stereo, peak 41.8%
+    FS, signal in 25/29 half-second windows), so the OPL output of a real song
+    is audible and lasts as decoded. This is the audio reference for the port's
+    OPL layer and it regenerates headless (no GUI needed);
+  - `run.sh` now patches the DOSBox-X profile per run (command tail, capture
+    prefix, time limit: `MUSIC_PLAY`, `MUSIC_CAP`, `MUSIC_TIMEOUT`); step mode
+    and its cross-check are unchanged;
+  - docs: `docs/sbfmdrv.md` 6.1 records the playback/capture results; README and
+    the script docstrings describe the modes. Driver byte gate green
+    (`SBFMDRV.COM: OK`, `IDENTICAL`).
+- 2026-10-19 — audio and OPL-register capture in the oracle harness (both gates
+  green):
+  - found two DOSBox-X capabilities the earlier driver work had written off:
+    `DX-CAPTURE /A|/O` (start a mixed-audio WAV capture, or an OPL register log
+    in DRO 2.0 format, around a program) and the fact that both can run at once;
+  - `tools/dosbox/audio.sh [seconds]` (`AUDIO_MODE=wav|dro|both`) runs the
+    original `CH2.BAT` with `DX-CAPTURE /A /O SWREG.EXE ... /W /B` patched into
+    a copy of the batch. Two traps found by experiment: wrapping `CH2.BAT`
+    itself stops the capture at SBFMDRV's TSR install, and starting `SWREG.EXE`
+    outside the batch makes the game print "Please run Yendorian Tales Chapter 2
+    from CH2.BAT" (it requires the `/B` switch the batch passes);
+  - observed 40 s run: `swreg_000.wav` 39.97 s, peak 41.8% FS, 79/79 half-second
+    windows with signal; `swreg_000.dro` 1379 writes, 101 registers, 267 note-on
+    writes; every one of the 266 note-on gaps lies on the 10.42 ms tick grid of
+    the shipped blocks (96 Hz) -- the game really drives the resident music
+    engine itself, and the port now has an audio *and* a register-level
     reference for its OPL layer;
-  - `tools/stream/dro.py` decodes DRO 2.0 (header, codemap, short/long delay codes, initial register
-    snapshot) with `summary` and `dump` modes; `tools/stream/wav.py` reports capture statistics and
-    fails on silence;
-  - `engine/asm/sbfmdrv/test/run.sh music` gained `MUSIC_CAP=wav|dro|both` (one `DX-CAPTURE /A /O` run) and
-    `music.py check --dro` compares a playback run's register log with the static walk: track 1
-    gives 808 writes, **161 key-ons and 161 key-offs, exactly the walk's note-on/note-off counts**,
-    spanning 11 656 ms, with every key-on within one tick (10.1 ms) of the decoded timeline;
-  - docs: `docs/oracle.md` gained the capture section + the DRO format notes; `docs/sbfmdrv.md`
-    6.1/8 updated (the game-level audio item is done; the drum-TL comparison and crafted jump
-    streams stay open); `CONTRIBUTING.md` and `engine/asm/sbfmdrv/README.md` list the new scripts/flags.
-- 2026-10-19 — SBFMDRV.COM: percussion OPL replay and the jump/callback/FC paths (both gates green):
-  - `API_CAP=dro` wraps TEST.COM in `DX-CAPTURE /O`; the capture does not change the run
-    (RESULT.TXT byte-identical with and without it).  `engine/asm/sbfmdrv/test/perc.py` replays the
-    percussion section against the capture: 26 writes from `BD=E0h` (rhythm on) to `BD=C0h`
-    (rhythm off), TL + A0h + B0h + BDh per hit and BDh per release, all matching the decoded
-    path -- the TL curve is pinned to the reference velocity table at CS:0A1Ch, indexed
-    `(velocity+4)>>3` (verified against the image).  Docs 4.4 corrected: the note-on also
-    writes `BDh` (that is the drum key-on), the `B0h` write has no key-on bit, and a
-    percussion note-off writes `BDh` only;
-  - found a capture quirk worth knowing: DOSBox-X's DRO writer keeps a **last-value cache per
-    register** and drops writes that do not change a value (both captures have zero such
-    writes), which is why the cymbal's `B0h=09h` is absent -- the replay applies the same
-    filter;
-  - three crafted streams cover the control events and API command 0Bh: F7 forward jump over
-    traps (+8 -> `P000C`), F7 backward jump looping on the stream's first delay byte
-    (`P0005` on every step), FC stopping without a delay read (`P0011`, state 0), and F0
-    calling the command 0Bh callback exactly once (`F0CB N0001`) before its +4 jump;
-  - docs 4.2 gained the jump/FC/callback semantics (offset relative to just after the offset
-    VLQ, applied as 32-bit two's complement; a target is a *delay byte* because every
-    non-stop event reads a delay), 6.2 the OPL replay, 6.3 the traces; the open-items list
-    drops the drum-TL and F0/F7/FC entries (crafted-only coverage is stated);
+  - `tools/stream/dro.py` decodes DRO 2.0 (header, codemap, short/long delay
+    codes, initial register snapshot) with `summary` and `dump` modes;
+    `tools/stream/wav.py` reports capture statistics and fails on silence;
+  - `engine/asm/sbfmdrv/test/run.sh music` gained `MUSIC_CAP=wav|dro|both` (one
+    `DX-CAPTURE /A /O` run) and `music.py check --dro` compares a playback run's
+    register log with the static walk: track 1 gives 808 writes, **161 key-ons
+    and 161 key-offs, exactly the walk's note-on/note-off counts**, spanning 11
+    656 ms, with every key-on within one tick (10.1 ms) of the decoded timeline;
+  - docs: `docs/oracle.md` gained the capture section + the DRO format notes;
+    `docs/sbfmdrv.md` 6.1/8 updated (the game-level audio item is done; the
+    drum-TL comparison and crafted jump streams stay open); `CONTRIBUTING.md`
+    and `engine/asm/sbfmdrv/README.md` list the new scripts/flags.
+- 2026-10-19 — SBFMDRV.COM: percussion OPL replay and the jump/callback/FC paths
+  (both gates green):
+  - `API_CAP=dro` wraps TEST.COM in `DX-CAPTURE /O`; the capture does not change
+    the run (RESULT.TXT byte-identical with and without it).
+    `engine/asm/sbfmdrv/test/perc.py` replays the percussion section against the
+    capture: 26 writes from `BD=E0h` (rhythm on) to `BD=C0h` (rhythm off), TL +
+    A0h + B0h + BDh per hit and BDh per release, all matching the decoded path
+    -- the TL curve is pinned to the reference velocity table at CS:0A1Ch,
+    indexed `(velocity+4)>>3` (verified against the image). Docs 4.4 corrected:
+    the note-on also writes `BDh` (that is the drum key-on), the `B0h` write has
+    no key-on bit, and a percussion note-off writes `BDh` only;
+  - found a capture quirk worth knowing: DOSBox-X's DRO writer keeps a
+    **last-value cache per register** and drops writes that do not change a
+    value (both captures have zero such writes), which is why the cymbal's
+    `B0h=09h` is absent -- the replay applies the same filter;
+  - three crafted streams cover the control events and API command 0Bh: F7
+    forward jump over traps (+8 -> `P000C`), F7 backward jump looping on the
+    stream's first delay byte (`P0005` on every step), FC stopping without a
+    delay read (`P0011`, state 0), and F0 calling the command 0Bh callback
+    exactly once (`F0CB N0001`) before its +4 jump;
+  - docs 4.2 gained the jump/FC/callback semantics (offset relative to just
+    after the offset VLQ, applied as 32-bit two's complement; a target is a
+    *delay byte* because every non-stop event reads a delay), 6.2 the OPL
+    replay, 6.3 the traces; the open-items list drops the drum-TL and F0/F7/FC
+    entries (crafted-only coverage is stated);
   - gates: `SBFMDRV.COM: OK` / `IDENTICAL`, `SWREG.EXE: IDENTICAL`.
 - 2026-10-20 — seam split + live client link (the first interactive test path):
-  - **split**: all integration code moved out of the game source into `engine/asm/swreg/src/seam.asm` (included
-    under `IFDEF SEAM`); `swreg.asm` keeps six tagged hook sites — start-up init, the present hook
-    in each of the two input-poll wrappers, and the three DAC hooks — plus the include. The 5-byte
-    far-call prefix shifts S1DEA's paragraph prefix, so the 2-byte pad that restores prefix 7
-    moved into the seam file with the state it protects;
-  - **pin**: `engine/asm/swreg/tools/seam_pin.py` strips the `IFDEF SEAM`/`IFDEF STREAM` blocks out of
-    `swreg.asm` and hashes the rest; the baseline was pinned *before* the refactor
-    (`sha256 3435777…871e5`, 1,051,189 bytes / 46,160 stripped lines) into `engine/asm/swreg/src/swreg.pin`,
-    and `verify.sh` checks it first, so an accidental edit to game code fails the gate. `--check`
-    is green after the refactor: only seam blocks changed;
-  - **palette policy**: the DAC hooks now only copy into a pending 768-byte palette; a send is the
-    diff span against the palette the client already has, rate-limited to one send per 2 BIOS
-    ticks from the hooks and flushed unconditionally once per present pass; every send pass ends
-    with `frame_end`, so a palette-only pass still presents and the last step of a fade is never
-    stranded. A received `'K'` (0x4B) requests a keyframe (`set_mode` + full palette + full-frame
-    pass), which makes client/server start order irrelevant;
-  - **builds**: `build.sh --variant serial` (`-DSEAM`, COM1 115200 8N1), `--variant file`
-    (`-DSEAM -DSEAM_FILE`, raw `OUTPUT.BIN`), `--variant tee` (`+ -DSEAM_TEE`, file *and* serial in
-    one run — the file stream is the ground truth for link checks), `--variant log`
-    (`+ -DSEAM_LOG`, `SEAMLOG.TXT` packed records); all run `fixhdr.py` + `check_mz_layout.py`;
-  - **client**: `client/` is C# (`net11.0`, SDL3 via P/Invoke, no NuGet) — reader thread, display
-    state, resync on the magic, keyframe request on connect, stats, `--ppm`/`--dump`/`--headless`;
-    `client/server.sh` stages the seam build and runs the game window, `tools/dosbox/dosbox-x-client.conf`
+  - **split**: all integration code moved out of the game source into
+    `engine/asm/swreg/src/seam.asm` (included under `IFDEF SEAM`); `swreg.asm`
+    keeps six tagged hook sites — start-up init, the present hook in each of the
+    two input-poll wrappers, and the three DAC hooks — plus the include. The
+    5-byte far-call prefix shifts S1DEA's paragraph prefix, so the 2-byte pad
+    that restores prefix 7 moved into the seam file with the state it protects;
+  - **pin**: `engine/asm/swreg/tools/seam_pin.py` strips the `IFDEF SEAM`/`IFDEF
+    STREAM` blocks out of `swreg.asm` and hashes the rest; the baseline was
+    pinned *before* the refactor (`sha256 3435777…871e5`, 1,051,189 bytes /
+    46,160 stripped lines) into `engine/asm/swreg/src/swreg.pin`, and
+    `verify.sh` checks it first, so an accidental edit to game code fails the
+    gate. `--check` is green after the refactor: only seam blocks changed;
+  - **palette policy**: the DAC hooks now only copy into a pending 768-byte
+    palette; a send is the diff span against the palette the client already has,
+    rate-limited to one send per 2 BIOS ticks from the hooks and flushed
+    unconditionally once per present pass; every send pass ends with
+    `frame_end`, so a palette-only pass still presents and the last step of a
+    fade is never stranded. A received `'K'` (0x4B) requests a keyframe
+    (`set_mode` + full palette + full-frame pass), which makes client/server
+    start order irrelevant;
+  - **builds**: `build.sh --variant serial` (`-DSEAM`, COM1 115200 8N1),
+    `--variant file` (`-DSEAM -DSEAM_FILE`, raw `OUTPUT.BIN`), `--variant tee`
+    (`+ -DSEAM_TEE`, file *and* serial in one run — the file stream is the
+    ground truth for link checks), `--variant log` (`+ -DSEAM_LOG`,
+    `SEAMLOG.TXT` packed records); all run `fixhdr.py` + `check_mz_layout.py`;
+  - **client**: `client/` is C# (`net11.0`, SDL3 via P/Invoke, no NuGet) —
+    reader thread, display state, resync on the magic, keyframe request on
+    connect, stats, `--ppm`/`--dump`/`--headless`; `client/server.sh` stages the
+    seam build and runs the game window, `tools/dosbox/dosbox-x-client.conf`
     bridges COM1 to TCP;
-  - **link facts** (each cost real time): `serial1 = nullmodem port:2324` — server is the default,
-    while `server:<host>` means *client* mode and fails silently; `multiplier:16` scales the
-    emulated baud (~165 KB/s measured; `1` -> 11,465 B/s = 115200/10, `4` -> 46,004 B/s), which
-    keeps a ~70 KB keyframe under half a second; and the nullmodem **doubles every `0xFF` byte**
-    on the wire (telnet escape, `CNullModem::transmitByte`), undone client-side by
-    `NullModemStream`.  It is deliberate and switchable: `transparent:1` (the value must be
-    numeric — `transparent:true` is *silently ignored*) turns escaping and telnet handling off,
-    which makes the link raw and needs the client's `--raw`; both combinations verified
-    byte-exact against the tee build's `OUTPUT.BIN`;
-  - **verification**: file backend 45 s no-input -> 482 messages / 150,316 bytes (42 frames, 402
-    rects, 38 palette messages); live link with the tee build -> the client received 478 messages
-    / 149,482 bytes and `tools/stream/compare_streams.py` reports them **byte-identical** to the seam's
-    own `OUTPUT.BIN` (the four missing ones predate its connection), with the rendered final frame
-    pixel-identical (0 differing index/palette bytes) to an independent decode of that stream; a
-    replayed recording renders byte-identically to the Python decoder's PPM; A/B against the
-    pre-refactor stream build is pixel-identical on final frames (mid-fade differs only by the
-    2-tick pacing);
-  - scope note: this client is a **development harness for the boundary**, not the M8/M9
-    deliverable — VIDEO only, no input/audio/VBE, no session headers;
-  - gates: `SWREG.EXE: OK` + `IDENTICAL` (default build), pin check green, seam builds assemble
-    with 0 warnings and pass the layout check, `dotnet build client -c Release` clean.
-- 2026-10-20 — repository layout settled, gates committed, Windows bundle reproducible:
-  - **tree**: `engine/asm/swreg/` (was `asm/`), `engine/asm/sbfmdrv/` (was `driver/`),
-    `engine/c/` (placeholder), `client/`, `tools/{dosbox,stream,repro}/`, `tests/{replay,link,data}/`;
-    `docs/layout.md` documents the tree, the `build/` mirror and where a given change goes.  The
-    harness split by purpose: `tools/dosbox/` (profiles, runners, X helpers, the client's nullmodem
-    profile) and `tools/stream/` (`replay.py`, formerly `stream_client.py`, plus
-    `compare_streams.py`, `dro.py`, `wav.py`);
+  - **link facts** (each cost real time): `serial1 = nullmodem port:2324` —
+    server is the default, while `server:<host>` means *client* mode and fails
+    silently; `multiplier:16` scales the emulated baud (~165 KB/s measured; `1`
+    -> 11,465 B/s = 115200/10, `4` -> 46,004 B/s), which keeps a ~70 KB keyframe
+    under half a second; and the nullmodem **doubles every `0xFF` byte** on the
+    wire (telnet escape, `CNullModem::transmitByte`), undone client-side by
+    `NullModemStream`. It is deliberate and switchable: `transparent:1` (the
+    value must be numeric — `transparent:true` is *silently ignored*) turns
+    escaping and telnet handling off, which makes the link raw and needs the
+    client's `--raw`; both combinations verified byte-exact against the tee
+    build's `OUTPUT.BIN`;
+  - **verification**: file backend 45 s no-input -> 482 messages / 150,316 bytes
+    (42 frames, 402 rects, 38 palette messages); live link with the tee build ->
+    the client received 478 messages / 149,482 bytes and
+    `tools/stream/compare_streams.py` reports them **byte-identical** to the
+    seam's own `OUTPUT.BIN` (the four missing ones predate its connection), with
+    the rendered final frame pixel-identical (0 differing index/palette bytes)
+    to an independent decode of that stream; a replayed recording renders
+    byte-identically to the Python decoder's PPM; A/B against the pre-refactor
+    stream build is pixel-identical on final frames (mid-fade differs only by
+    the 2-tick pacing);
+  - scope note: this client is a **development harness for the boundary**, not
+    the M8/M9 deliverable — VIDEO only, no input/audio/VBE, no session headers;
+  - gates: `SWREG.EXE: OK` + `IDENTICAL` (default build), pin check green, seam
+    builds assemble with 0 warnings and pass the layout check, `dotnet build
+    client -c Release` clean.
+- 2026-10-20 — repository layout settled, gates committed, Windows bundle
+  reproducible:
+  - **tree**: `engine/asm/swreg/` (was `asm/`), `engine/asm/sbfmdrv/` (was
+    `driver/`), `engine/c/` (placeholder), `client/`,
+    `tools/{dosbox,stream,repro}/`, `tests/{replay,link,data}/`;
+    `docs/layout.md` documents the tree, the `build/` mirror and where a given
+    change goes. The harness split by purpose: `tools/dosbox/` (profiles,
+    runners, X helpers, the client's nullmodem profile) and `tools/stream/`
+    (`replay.py`, formerly `stream_client.py`, plus `compare_streams.py`,
+    `dro.py`, `wav.py`);
   - **build**: the four single-purpose seam scripts collapsed into
-    `engine/asm/swreg/tools/build.sh --variant oracle|serial|file|tee|log` (`build.bat` takes the
-    variant too); outputs are `build/swreg/<variant>/`.  The client's MSBuild output moved to
-    `build/client/{bin,obj}` via `client/Directory.Build.props`, and the driver's to
-    `build/sbfmdrv/`; run artifacts are `build/runs/<kind>/<stamp>/` for every kind
-    (oracle -- audio runs as `oracle/<stamp>-audio` -- stream, link, replay, repro, sbfmdrv,
+    `engine/asm/swreg/tools/build.sh --variant oracle|serial|file|tee|log`
+    (`build.bat` takes the variant too); outputs are `build/swreg/<variant>/`.
+    The client's MSBuild output moved to `build/client/{bin,obj}` via
+    `client/Directory.Build.props`, and the driver's to `build/sbfmdrv/`; run
+    artifacts are `build/runs/<kind>/<stamp>/` for every kind (oracle -- audio
+    runs as `oracle/<stamp>-audio` -- stream, link, replay, repro, sbfmdrv,
     server);
-  - **committed gates**: `tests/replay/run.sh` (the client's render must equal the Python
-    decoder's, `cmp` on the PPM; hermetic, uses `tests/data/sample-video.bin`) and
-    `tests/link/run.sh` (tee build -> DOSBox-X -> client, verified byte-exact against the seam's
-    own `OUTPUT.BIN`); `tools/repro/nullmodem-0xff/` records the 0xFF finding with measured
-    numbers (224 discontinuities per 57,599 bytes by default, 0 with `transparent:1`);
-  - **Windows bundle**: `tools/publish-win.sh` publishes a self-contained win-x64 single-file
-    `Yt2Client.exe`, pins SDL3 3.4.18 win32-x64 (archive *and* DLL sha256 verified, `--sdl3` for a
-    local DLL), stages the game side (`server/game/<variant>`, `server/dosbox-x.conf`,
-    `start-server.bat`), the sample recording and `smoke-test.bat`, and zips it to
-    `build/dist/yt2-win-x64.zip` (~38 MB); the bundle cannot be run where it
-    is built (no Windows/wine here); its smoke test is the first thing to run
-    on the target;
-  - gates re-run green after every move: default build `SWREG.EXE: OK` + `IDENTICAL` + pin OK,
-    `SBFMDRV.COM: IDENTICAL`, all seam variants assemble with 0 warnings and pass the layout check,
-    replay and live link byte-exact, and the serial/file seam images unchanged by the reorg
-    (`3028ec99…`, `2409adb2…`).
+  - **committed gates**: `tests/replay/run.sh` (the client's render must equal
+    the Python decoder's, `cmp` on the PPM; hermetic, uses
+    `tests/data/sample-video.bin`) and `tests/link/run.sh` (tee build ->
+    DOSBox-X -> client, verified byte-exact against the seam's own
+    `OUTPUT.BIN`); `tools/repro/nullmodem-0xff/` records the 0xFF finding with
+    measured numbers (224 discontinuities per 57,599 bytes by default, 0 with
+    `transparent:1`);
+  - **Windows bundle**: `tools/publish-win.sh` publishes a self-contained
+    win-x64 single-file `Yt2Client.exe`, pins SDL3 3.4.18 win32-x64 (archive
+    *and* DLL sha256 verified, `--sdl3` for a local DLL), stages the game side
+    (`server/game/<variant>`, `server/dosbox-x.conf`, `start-server.bat`), the
+    sample recording and `smoke-test.bat`, and zips it to
+    `build/dist/yt2-win-x64.zip` (~38 MB); the bundle cannot be run where it is
+    built (no Windows/wine here); its smoke test is the first thing to run on
+    the target;
+  - gates re-run green after every move: default build `SWREG.EXE: OK` +
+    `IDENTICAL` + pin OK, `SBFMDRV.COM: IDENTICAL`, all seam variants assemble
+    with 0 warnings and pass the layout check, replay and live link byte-exact,
+    and the serial/file seam images unchanged by the reorg (`3028ec99…`,
+    `2409adb2…`).
 - 2026-10-20 — the link becomes interactive (CONTROL + keyboard INPUT):
-  - **framed RX**: the seam parses protocol-v0 messages from COM1 (`sub_SeamRxByte` /
-    `sub_SeamDispatch`), staging partial messages across polls; a bad header drops the staged bytes,
-    an unknown family answers one `error`, and the old bare `'K'` keyframe byte still works;
-  - **CONTROL**: the engine sends `hello(role 0, version 0)` before its first `set_mode` and answers
-    a client `hello` once per session; `keyframe_request` replaces `'K'` for the client;
-  - **keyboard**: INPUT `key(down, scan, ascii)` is written into the BIOS keyboard ring at
-    `0040:001A` with interrupts held off, which is exactly what the game's DOS `06h`/`0Ch` calls
-    drain — no game code and no new hook site.  Releases are ignored (the ring is type-ahead only);
-  - **client**: `FrameWriter` (framed TX, per-direction sequence), the hello/keyframe handshake
-    retried once a second until the engine answers (DOSBox-X drops host bytes before the game
-    reaches the seam), SDL key events mapped to XT scancodes + ASCII (`client/DosKeys.cs`),
-    `--key SECONDS:SCAN:ASCII` as the scripted-input hook, `bye` on exit, engine notices and
-    `control=`/`engine_errors=` in the stats line.  Esc is forwarded to the game; the client quits on
-    window close or Ctrl+Q;
-  - **bugs found while wiring it** (each cost a run): the RX poll was skipped whenever the backend was
-    the file backend, so the *tee* build never read the link at all; three `seam_txfam` writes used
-    the block segment instead of `cs:`; and the parser checked the magic byte-swapped
-    (`59 54` instead of the little-endian `54 59` that `0x5954` puts on the wire — now called out in
+  - **framed RX**: the seam parses protocol-v0 messages from COM1
+    (`sub_SeamRxByte` / `sub_SeamDispatch`), staging partial messages across
+    polls; a bad header drops the staged bytes, an unknown family answers one
+    `error`, and the old bare `'K'` keyframe byte still works;
+  - **CONTROL**: the engine sends `hello(role 0, version 0)` before its first
+    `set_mode` and answers a client `hello` once per session; `keyframe_request`
+    replaces `'K'` for the client;
+  - **keyboard**: INPUT `key(down, scan, ascii)` is written into the BIOS
+    keyboard ring at `0040:001A` with interrupts held off, which is exactly what
+    the game's DOS `06h`/`0Ch` calls drain — no game code and no new hook site.
+    Releases are ignored (the ring is type-ahead only);
+  - **client**: `FrameWriter` (framed TX, per-direction sequence), the
+    hello/keyframe handshake retried once a second until the engine answers
+    (DOSBox-X drops host bytes before the game reaches the seam), SDL key events
+    mapped to XT scancodes + ASCII (`client/DosKeys.cs`), `--key
+    SECONDS:SCAN:ASCII` as the scripted-input hook, `bye` on exit, engine
+    notices and `control=`/`engine_errors=` in the stats line. Esc is forwarded
+    to the game; the client quits on window close or Ctrl+Q;
+  - **bugs found while wiring it** (each cost a run): the RX poll was skipped
+    whenever the backend was the file backend, so the *tee* build never read the
+    link at all; three `seam_txfam` writes used the block segment instead of
+    `cs:`; and the parser checked the magic byte-swapped (`59 54` instead of the
+    little-endian `54 59` that `0x5954` puts on the wire — now called out in
     `docs/protocol.md`);
-  - **verification**: link test with a scripted Return at 20 s — 690 messages / 220,724 bytes sent,
-    the client received 685 / 219,873 (5 predate its connection) and every message is byte-identical
-    to the seam's `OUTPUT.BIN`; the engine hello arrives and is printed; the key changes the game
-    (the stream jumps from 482 to 688 messages), taking the logo to the next screen, which happens to
-    be VBE and therefore black client-side until VBE streaming lands.
+  - **verification**: link test with a scripted Return at 20 s — 690 messages /
+    220,724 bytes sent, the client received 685 / 219,873 (5 predate its
+    connection) and every message is byte-identical to the seam's `OUTPUT.BIN`;
+    the engine hello arrives and is printed; the key changes the game (the
+    stream jumps from 482 to 688 messages), taking the logo to the next screen,
+    which happens to be VBE and therefore black client-side until VBE streaming
+    lands.
 - 2026-10-20 — VBE intro streaming (both gates green):
-  - **engine** (`fn_SeamPresent` and friends in `engine/asm/swreg/src/seam.asm`): the present path now
-    detects the mode each pass (`int 10h 0Fh`, then `4F03h` = 101h for the intro's 640x480x8) and
-    keeps a small mode state (`seam_vmode`/`seam_vbank`/`seam_vbudget`).  Mode switches send
-    `set_mode` (640x480x8 on entry, 320x200x8 on the way back) and rely on the documented "a
-    `set_mode` means start from a blank screen" rule instead of a full repaint; a keyframe request
-    now only sets the flags and forces the mode message, so it works in both modes;
-  - **no second framebuffer**: 640x480 = 307,200 bytes cannot be shadowed in the seam block, so each
-    row is read through the VBE window (`4F05h` window A, bank reprogrammed only on a change, rows
-    that cross a 64 KB boundary read in two chunks) and compared with a 32-bit checksum per row; a
-    changed row is sent as `rect(0,y,640,1)`.  The checksum table lives at the mode-13h shadow area,
-    which is unused in VBE.  A pass carries at most 16 KB of rows (~25 rows), so a full repaint is
-    spread over passes and never stalls the game;
-  - **client**: `set_mode` reallocates the replica and clears it (`ClientStats.ModeChanges`), and
-    `SdlScreen.Resize` rebuilds the texture and the integer-scaling hint, so the window survives the
-    intro -> game transition.  `tools/stream/replay.py` carries the size as state as well;
-  - **verification**: the byte gate stayed green (`SWREG.EXE: OK`, `IDENTICAL`, 0 warnings) and the
-    default build contains none of this code; a 20 s file-backend run recorded
-    `modes 320x200 -> 640x480 -> 320x200`, 873 records / 341,240 bytes, and two runs are
-    byte-identical; the client and the Python decoder agree byte-for-byte on the new VBE fixture
-    (`tests/data/sample-vbe.bin`, 200 records / 123,257 bytes, 11 frames at 640x480, 184 rows) as
-    well as on the old 13h fixture, and `tests/replay/run.sh` runs both by default; the live link
-    (tee build) sent 1072 messages / 464,680 bytes of which the client received 874 / 341,697
-    byte-identical after joining at message 198; the rendered intro was checked visually against the
-    emulator (the X-window snapshot goes black during VESA — a DOSBox-X capture limitation
-    documented in `docs/oracle.md`, not a client fault);
-  - **bug found**: the cached VBE bank cannot be trusted across passes (the game draws through the
-    same window in between), so it is invalidated at the start of every pass.
+  - **engine** (`fn_SeamPresent` and friends in
+    `engine/asm/swreg/src/seam.asm`): the present path now detects the mode each
+    pass (`int 10h 0Fh`, then `4F03h` = 101h for the intro's 640x480x8) and
+    keeps a small mode state (`seam_vmode`/`seam_vbank`/`seam_vbudget`). Mode
+    switches send `set_mode` (640x480x8 on entry, 320x200x8 on the way back) and
+    rely on the documented "a `set_mode` means start from a blank screen" rule
+    instead of a full repaint; a keyframe request now only sets the flags and
+    forces the mode message, so it works in both modes;
+  - **no second framebuffer**: 640x480 = 307,200 bytes cannot be shadowed in the
+    seam block, so each row is read through the VBE window (`4F05h` window A,
+    bank reprogrammed only on a change, rows that cross a 64 KB boundary read in
+    two chunks) and compared with a 32-bit checksum per row; a changed row is
+    sent as `rect(0,y,640,1)`. The checksum table lives at the mode-13h shadow
+    area, which is unused in VBE. A pass carries at most 16 KB of rows (~25
+    rows), so a full repaint is spread over passes and never stalls the game;
+  - **client**: `set_mode` reallocates the replica and clears it
+    (`ClientStats.ModeChanges`), and `SdlScreen.Resize` rebuilds the texture and
+    the integer-scaling hint, so the window survives the intro -> game
+    transition. `tools/stream/replay.py` carries the size as state as well;
+  - **verification**: the byte gate stayed green (`SWREG.EXE: OK`, `IDENTICAL`,
+    0 warnings) and the default build contains none of this code; a 20 s
+    file-backend run recorded `modes 320x200 -> 640x480 -> 320x200`, 873 records
+    / 341,240 bytes, and two runs are byte-identical; the client and the Python
+    decoder agree byte-for-byte on the new VBE fixture
+    (`tests/data/sample-vbe.bin`, 200 records / 123,257 bytes, 11 frames at
+    640x480, 184 rows) as well as on the old 13h fixture, and
+    `tests/replay/run.sh` runs both by default; the live link (tee build) sent
+    1072 messages / 464,680 bytes of which the client received 874 / 341,697
+    byte-identical after joining at message 198; the rendered intro was checked
+    visually against the emulator (the X-window snapshot goes black during VESA
+    — a DOSBox-X capture limitation documented in `docs/oracle.md`, not a client
+    fault);
+  - **bug found**: the cached VBE bank cannot be trusted across passes (the game
+    draws through the same window in between), so it is invalidated at the start
+    of every pass.
 - 2026-10-20 — mouse input (INT 33h shim; transport limits measured):
-  - **game side**: `fn_MouseInit` probes `int 21h 3533h`, resets with `00h`, installs
-    `fn_MouseHandler` with `0Ch` (mask 1Fh) and asks for an 8:1 ratio with `0Fh`; its handler then
-    only reads the `0Bh` motion counters.  `sub_SeamMouseInstall` (called from `fn_SeamInit`, i.e.
-    before the probe) saves the vector, forwards everything the game uses and chains the rest to
-    DOSBox-X's driver.  `mouse_move`/`mouse_button` update shim counters and position, then
-    `sub_SeamMouseEvent` calls the game's handler exactly as a driver would (AX mask, BX buttons,
-    CX/DX position), so the game's software cursor follows the client;
-  - **bug found and fixed**: the first version restored AX/BX/CX/DX in the handler's epilogue, which
-    made `int 33h 00h` return 0 instead of FFFFh — the game then concluded "no driver" and never
-    installed its handler (visible in the log as `0Ch` never happening).  INT 33h returns values in
-    those four registers; only the rest is preserved;
-  - **link work**: the present pass now polls the UART inside the row scans (every 64 rows), and the
-    transmit wait loop parks arriving bytes in a 32-byte ring, because the tee mirror saturates COM1
-    and a full RX FIFO drops host bytes — the reason single-shot input could vanish.  The VBE scan
-    became a rolling 160-row window so a pass stays short; a whole 640x480 screen is scanned every
-    three passes;
-  - **client**: `--mouse S:DX:DY` and `--click S:BUTTON:0|1` scripted hooks, relative mouse mode
-    (`SDL_SetWindowRelativeMouseMode`), event pump for SDL3 mouse motion/buttons (offsets documented
-    in `client/Sdl.cs`), host pixels divided by the integer scale with the remainder kept, and
-    interactive keyboard forwarding wired into the same pump (it had only been scripted before);
-  - **verification**: `SWREG.EXE: OK`, `IDENTICAL`, `seam_pin: OK`, the serial and file builds pass
-    `check_mz_layout.py`, `tests/replay/run.sh` is green on both fixtures and `tests/link/run.sh`
-    (30 s, scripted mouse and click) reports every received message byte-identical.  Engine-side the
-    shim is proven end to end in the log build: `00h` answered, `0Ch` installs at S13A0:0002 with
-    mask 1Fh, and mouse messages arrive and dispatch (`tag 8`, family 3 type 1/2).  What is *not*
-    verified live is the game's reaction: this harness's nullmodem drops host-to-guest bytes when
-    the game is not reading, so a scripted click after the intro starts is usually lost before the
-    UART sees it (keyboard behaves the same, and the handshake only survives because it retries).
-    The `--mouse`/`--click` hooks are in place for a real trial; expect input to work while the game
-    is polling and to be flaky during long non-polling stretches of this emulator profile.
+  - **game side**: `fn_MouseInit` probes `int 21h 3533h`, resets with `00h`,
+    installs `fn_MouseHandler` with `0Ch` (mask 1Fh) and asks for an 8:1 ratio
+    with `0Fh`; its handler then only reads the `0Bh` motion counters.
+    `sub_SeamMouseInstall` (called from `fn_SeamInit`, i.e. before the probe)
+    saves the vector, forwards everything the game uses and chains the rest to
+    DOSBox-X's driver. `mouse_move`/`mouse_button` update shim counters and
+    position, then `sub_SeamMouseEvent` calls the game's handler exactly as a
+    driver would (AX mask, BX buttons, CX/DX position), so the game's software
+    cursor follows the client;
+  - **bug found and fixed**: the first version restored AX/BX/CX/DX in the
+    handler's epilogue, which made `int 33h 00h` return 0 instead of FFFFh — the
+    game then concluded "no driver" and never installed its handler (visible in
+    the log as `0Ch` never happening). INT 33h returns values in those four
+    registers; only the rest is preserved;
+  - **link work**: the present pass now polls the UART inside the row scans
+    (every 64 rows), and the transmit wait loop parks arriving bytes in a
+    32-byte ring, because the tee mirror saturates COM1 and a full RX FIFO drops
+    host bytes — the reason single-shot input could vanish. The VBE scan became
+    a rolling 160-row window so a pass stays short; a whole 640x480 screen is
+    scanned every three passes;
+  - **client**: `--mouse S:DX:DY` and `--click S:BUTTON:0|1` scripted hooks,
+    relative mouse mode (`SDL_SetWindowRelativeMouseMode`), event pump for SDL3
+    mouse motion/buttons (offsets documented in `client/Sdl.cs`), host pixels
+    divided by the integer scale with the remainder kept, and interactive
+    keyboard forwarding wired into the same pump (it had only been scripted
+    before);
+  - **verification**: `SWREG.EXE: OK`, `IDENTICAL`, `seam_pin: OK`, the serial
+    and file builds pass `check_mz_layout.py`, `tests/replay/run.sh` is green on
+    both fixtures and `tests/link/run.sh` (30 s, scripted mouse and click)
+    reports every received message byte-identical. Engine-side the shim is
+    proven end to end in the log build: `00h` answered, `0Ch` installs at
+    S13A0:0002 with mask 1Fh, and mouse messages arrive and dispatch (`tag 8`,
+    family 3 type 1/2). What is *not* verified live is the game's reaction: this
+    harness's nullmodem drops host-to-guest bytes when the game is not reading,
+    so a scripted click after the intro starts is usually lost before the UART
+    sees it (keyboard behaves the same, and the handshake only survives because
+    it retries). The `--mouse`/`--click` hooks are in place for a real trial;
+    expect input to work while the game is polling and to be flaky during long
+    non-polling stretches of this emulator profile.
 - 2026-10-20 — client window (done):
-  - **symptom**: the Windows bundle printed `client: window 960x600 (windows / direct3d11)` and
-    stayed console-only.  SDL reported success because it had done what it was told;
-  - **cause**: `client/Sdl.cs` passed `0x8` as "resizable".  In SDL3 `0x8` is `SDL_WINDOW_HIDDEN`
-    and `SDL_WINDOW_RESIZABLE` is `0x20`, so the window was created and never mapped (not in the
-    taskbar either).  D3D11 renderer creation and every frame upload succeeded, which is why the
-    replay, link and stream gates all stayed green: they render offscreen.  The same mistake also
-    set `SDL_INIT_EVENTS` to 0x40 (joystick) instead of 0x4000, harmless only because video implies
-    events;
-  - **fix**: correct flags, centre the window, call `SDL_ShowWindow` when the window system still
-    reports it hidden (and say so), and print the real geometry and backend:
-    `client: window 960x600 at 32,84 (Windows / Direct3D 11)` (SDL names are mapped to product
-    spelling);
-  - **related defects found while verifying**: the window was created *after* the TCP connect, so a
-    failed connect left a console-only client (`tests/link` starts it late on purpose); `--hold` was
-    parsed but never implemented, so `smoke-test.bat` would flash and exit; redirected stdout was
-    block-buffered, hiding the startup lines of a running client.  The window is now opened first,
-    `--hold` pumps until the window is closed, and both console streams are line-live;
-  - **new gate**: `tests/window/run.sh` runs the client on a private Xvfb display and requires a
-    mapped window (`Map State: IsViewable`), 960x600, and the first presented frame.  Proven by
-    reintroducing the old flags: the gate fails with `IsUnMapped` while `tests/replay/run.sh` stays
-    green;
-  - **verification**: asm untouched (`SWREG.EXE: OK` / `IDENTICAL` unaffected); `tests/replay/run.sh`
-    green on both fixtures; `tests/link/run.sh` (25 s, tee build) received 678 messages /
-    218,546 bytes, every message byte-identical to `OUTPUT.BIN`; the window gate is green with the
-    fix and red with the old flags.  The Windows `.exe` itself still needs the user's machine.
+  - **symptom**: the Windows bundle printed `client: window 960x600 (windows /
+    direct3d11)` and stayed console-only. SDL reported success because it had
+    done what it was told;
+  - **cause**: `client/Sdl.cs` passed `0x8` as "resizable". In SDL3 `0x8` is
+    `SDL_WINDOW_HIDDEN` and `SDL_WINDOW_RESIZABLE` is `0x20`, so the window was
+    created and never mapped (not in the taskbar either). D3D11 renderer
+    creation and every frame upload succeeded, which is why the replay, link and
+    stream gates all stayed green: they render offscreen. The same mistake also
+    set `SDL_INIT_EVENTS` to 0x40 (joystick) instead of 0x4000, harmless only
+    because video implies events;
+  - **fix**: correct flags, centre the window, call `SDL_ShowWindow` when the
+    window system still reports it hidden (and say so), and print the real
+    geometry and backend: `client: window 960x600 at 32,84 (Windows / Direct3D
+    11)` (SDL names are mapped to product spelling);
+  - **related defects found while verifying**: the window was created *after*
+    the TCP connect, so a failed connect left a console-only client
+    (`tests/link` starts it late on purpose); `--hold` was parsed but never
+    implemented, so `smoke-test.bat` would flash and exit; redirected stdout was
+    block-buffered, hiding the startup lines of a running client. The window is
+    now opened first, `--hold` pumps until the window is closed, and both
+    console streams are line-live;
+  - **new gate**: `tests/window/run.sh` runs the client on a private Xvfb
+    display and requires a mapped window (`Map State: IsViewable`), 960x600, and
+    the first presented frame. Proven by reintroducing the old flags: the gate
+    fails with `IsUnMapped` while `tests/replay/run.sh` stays green;
+  - **verification**: asm untouched (`SWREG.EXE: OK` / `IDENTICAL` unaffected);
+    `tests/replay/run.sh` green on both fixtures; `tests/link/run.sh` (25 s, tee
+    build) received 678 messages / 218,546 bytes, every message byte-identical
+    to `OUTPUT.BIN`; the window gate is green with the fix and red with the old
+    flags. The Windows `.exe` itself still needs the user's machine.
 - 2026-10-20 — late client resync + VBE 0x100 (done, stall open):
-  - **symptom**: a client that connected while the VBE logo was playing stayed at 320x200 and
-    printed one `bad rect ... (resyncing)` per 640-wide row for the rest of the session, so the
-    window showed garbage.  Reproduced locally by starting the client ~1 s after DOSBox (it joins
-    mid-intro): 44 bad rects, no `set_mode(640,480)` on the wire after the join;
-  - **cause**: the handshake burst is `hello` (17 bytes) + `keyframe_request` (15) = 32 bytes and
-    the engine's UART FIFO holds 16.  The `hello` survived, the keyframe behind it was dropped, and
-    the client stopped retrying as soon as *any* record arrived, so the engine never learned that a
-    late client needed a keyframe.  The engine only volunteers `set_mode` when the game changes
-    mode, hence the wrong mode forever;
-  - **fix (client)**: retry the keyframe until a `set_mode` arrives (and `hello` until the engine's
-    hello), keyframe frame first so it is the one that fits the FIFO; a well-framed `rect` that does
-    not fit the current mode is no longer a framing error - it bumps `bad_rects`, requests a
-    keyframe (rate-limited) and leaves the stream aligned;
-  - **fix (engine)**: the seam streamed only VBE 101h (640x480, the logo).  The title and later
-    screens are 100h (640x400x8), so the client went black there.  `seam_vh` carries the height,
-    both modes are accepted, and a height change clears the checksum table and sends a fresh
-    `set_mode`; `sub_SeamEnterVbe` and the row wrap use it.  `fixhdr.py` now also pins
-    `eMinAlloc` to 33: UASM writes 0 when the stack segment is not last, the reference asks for 528
-    bytes and DOSBox aborts with `Corrupt MCB chain` without them;
-  - **verification**: early-join link run (tee build, client 1 s after DOSBox) - 0 bad rects, the
-    engine re-sent `set_mode(640,480)` at the join point (message 189 of 188+), the client followed
-    the logo back to 320x200, and `compare_streams.py` reports every received message byte-identical.
-    `verify.sh`: `SWREG.EXE: OK`, `IDENTICAL`; `seam_pin: OK`; layout checks pass for serial, file,
-    tee and log; replay and window gates green; the default link gate is byte-identical;
-  - **open**: every seam build stops at a black screen right after the publisher logo and never
-    reaches the 640x400 title, while the unmodified game (same profile, same data files, same Xvfb
-    harness) shows it at 15-35 s.  Ruled out: the seam's runtime (a build whose `fn_SeamInit` and
-    hooks return immediately stalls the same way), the 66 KB conventional block (a TSR keeping the
-    same 4,160 paragraphs in front of the original game is harmless), and the EXE's file size
-    (appending 3,369 bytes to the original changes nothing).  What is left is the image layout:
-    the seam segment sits between `S1DEA` and the stack, which moves `SS` from 0x2d66 to 0x2e38.
-    Moving the include after `STK` keeps `SS` but makes DOSBox abort at load with
-    `Corrupt MCB chain` (the seam then has no `OUTPUT.BIN` either), so that placement is not usable
-    as is.  Next: find which segment the game depends on and place the seam
-    code/data where it keeps every game segment address, or prove the
-    dependency is not layout at all (both suspects were tested and ruled out;
-    see the final entry).
+  - **symptom**: a client that connected while the VBE logo was playing stayed
+    at 320x200 and printed one `bad rect ... (resyncing)` per 640-wide row for
+    the rest of the session, so the window showed garbage. Reproduced locally by
+    starting the client ~1 s after DOSBox (it joins mid-intro): 44 bad rects, no
+    `set_mode(640,480)` on the wire after the join;
+  - **cause**: the handshake burst is `hello` (17 bytes) + `keyframe_request`
+    (15) = 32 bytes and the engine's UART FIFO holds 16. The `hello` survived,
+    the keyframe behind it was dropped, and the client stopped retrying as soon
+    as *any* record arrived, so the engine never learned that a late client
+    needed a keyframe. The engine only volunteers `set_mode` when the game
+    changes mode, hence the wrong mode forever;
+  - **fix (client)**: retry the keyframe until a `set_mode` arrives (and `hello`
+    until the engine's hello), keyframe frame first so it is the one that fits
+    the FIFO; a well-framed `rect` that does not fit the current mode is no
+    longer a framing error - it bumps `bad_rects`, requests a keyframe
+    (rate-limited) and leaves the stream aligned;
+  - **fix (engine)**: the seam streamed only VBE 101h (640x480, the logo). The
+    title and later screens are 100h (640x400x8), so the client went black
+    there. `seam_vh` carries the height, both modes are accepted, and a height
+    change clears the checksum table and sends a fresh `set_mode`;
+    `sub_SeamEnterVbe` and the row wrap use it. `fixhdr.py` now also pins
+    `eMinAlloc` to 33: UASM writes 0 when the stack segment is not last, the
+    reference asks for 528 bytes and DOSBox aborts with `Corrupt MCB chain`
+    without them;
+  - **verification**: early-join link run (tee build, client 1 s after DOSBox) -
+    0 bad rects, the engine re-sent `set_mode(640,480)` at the join point
+    (message 189 of 188+), the client followed the logo back to 320x200, and
+    `compare_streams.py` reports every received message byte-identical.
+    `verify.sh`: `SWREG.EXE: OK`, `IDENTICAL`; `seam_pin: OK`; layout checks
+    pass for serial, file, tee and log; replay and window gates green; the
+    default link gate is byte-identical;
+  - **open**: every seam build stops at a black screen right after the publisher
+    logo and never reaches the 640x400 title, while the unmodified game (same
+    profile, same data files, same Xvfb harness) shows it at 15-35 s. Ruled out:
+    the seam's runtime (a build whose `fn_SeamInit` and hooks return immediately
+    stalls the same way), the 66 KB conventional block (a TSR keeping the same
+    4,160 paragraphs in front of the original game is harmless), and the EXE's
+    file size (appending 3,369 bytes to the original changes nothing). What is
+    left is the image layout: the seam segment sits between `S1DEA` and the
+    stack, which moves `SS` from 0x2d66 to 0x2e38. Moving the include after
+    `STK` keeps `SS` but makes DOSBox abort at load with `Corrupt MCB chain`
+    (the seam then has no `OUTPUT.BIN` either), so that placement is not usable
+    as is. Next: find which segment the game depends on and place the seam
+    code/data where it keeps every game segment address, or prove the dependency
+    is not layout at all (both suspects were tested and ruled out; see the final
+    entry).
 - 2026-10-20 — window live while connecting and the stall narrowed (open):
   - **symptom**: the client window was frozen ("not responding") until the
-    server answered.  `TcpSource.Connect` ran on the main thread after the
-    window was created and nothing pumped SDL for up to `--connect-timeout`;
-  - **fix (client)**: the connect loop pumps the window between retries, a
-    black 320x200 frame is presented before connecting, and closing the window
-    cancels the wait quietly.  The relative mouse capture follows focus
-    (losing the window releases the pointer) and `Ctrl+M` toggles it;
+    server answered. `TcpSource.Connect` ran on the main thread after the window
+    was created and nothing pumped SDL for up to `--connect-timeout`;
+  - **fix (client)**: the connect loop pumps the window between retries, a black
+    320x200 frame is presented before connecting, and closing the window cancels
+    the wait quietly. The relative mouse capture follows focus (losing the
+    window releases the pointer) and `Ctrl+M` toggles it;
   - **verification**: with no listener the window is mapped at 960x600 and
     `Ctrl+Q` during the retry loop exits immediately; window and replay gates
     green (docs/client.md);
-  - **stall, corrections**: `SS` is not the trigger - the oracle EXE with
-    `e_ss` raised by one paragraph still shows the castle at 55 s.  Nor is
-    image growth - an oracle build with an extra 3,300-byte dummy segment
-    before `STK` (same `eMinAlloc` pin, no seam code) also shows the castle.
-    The seam segment plus its hook calls add 32 bytes (the pad at the end of
-    `seam.asm` keeps the data segment at prefix 7); deleting the calls breaks
-    that alignment and the game exits at startup, so the calls have to stay;
+  - **stall, corrections**: `SS` is not the trigger - the oracle EXE with `e_ss`
+    raised by one paragraph still shows the castle at 55 s. Nor is image growth
+    - an oracle build with an extra 3,300-byte dummy segment before `STK` (same
+    `eMinAlloc` pin, no seam code) also shows the castle. The seam segment plus
+    its hook calls add 32 bytes (the pad at the end of `seam.asm` keeps the data
+    segment at prefix 7); deleting the calls breaks that alignment and the game
+    exits at startup, so the calls have to stay;
   - **next probe**: log the caller's `CS:IP` at the present hook in the log
     build, so the stalled game's spin location is visible instead of inferred.
 - 2026-10-20 — client survives the server; transport ceiling measured:
-  - **reconnect**: a lost link used to end the client - the reader cancelled
-    the whole process, and a write racing the dead socket escaped as an
-    IOException.  The window now stays, prints `link lost; waiting for the
-    server` and reconnects; each session gets a fresh state and handshake, the
-    mouse is released while waiting, and writes on a dead socket are swallowed
-    and marked.  Verified by killing DOSBox mid-run and restarting it: two
-    sessions, frames after the second, client alive throughout; a TCP reset
-    with no server is survived the same way.  Headless runs still end with the
-    link, so the gates stay short;
+  - **reconnect**: a lost link used to end the client - the reader cancelled the
+    whole process, and a write racing the dead socket escaped as an IOException.
+    The window now stays, prints `link lost; waiting for the server` and
+    reconnects; each session gets a fresh state and handshake, the mouse is
+    released while waiting, and writes on a dead socket are swallowed and
+    marked. Verified by killing DOSBox mid-run and restarting it: two sessions,
+    frames after the second, client alive throughout; a TCP reset with no server
+    is survived the same way. Headless runs still end with the link, so the
+    gates stay short;
   - **transport ceiling**: a saturating COM1 writer (poll THRE, divisor 1)
-    measures 180 KiB/s at multiplier 16, 139 KiB/s at 64, 152 KiB/s at 1024,
-    and 161 KiB/s at 100 MHz - the nullmodem path is per-byte host cost, not
-    baud.  The emulated UART cannot reach MB/s, and the guest poll loop cannot
-    outrun it;
+    measures 180 KiB/s at multiplier 16, 139 KiB/s at 64, 152 KiB/s at 1024, and
+    161 KiB/s at 100 MHz - the nullmodem path is per-byte host cost, not baud.
+    The emulated UART cannot reach MB/s, and the guest poll loop cannot outrun
+    it;
   - **shared directory**: the same writer doing 32 KiB INT 21h writes into the
-    mounted directory reaches 7.8 MiB/s at stock cycles.  A file-backed video
+    mounted directory reaches 7.8 MiB/s at stock cycles. A file-backed video
     link (client tails the growing `OUTPUT.BIN`) is the way to MB/s; input can
     stay on the UART, which carries a few hundred bytes per second.
 - 2026-10-20 — folder link, and the stall explained:
-  - **folder transport**: files per direction, as the link the bundle uses.
-    The engine appends to `OUTPUT.BIN` (file backend) and reads `INPUT.BIN`
-    from the present poll; the client gains `--follow PATH` (blocks at EOF,
-    rewinds when the file shrinks) and `--input PATH` (appends framed input,
-    flushes per message).  Both files are pseudo-rings: at 8 MiB / 64 KiB the
-    writer truncates to zero and restarts, the reader rewinds, and a video
-    wrap is followed by a forced keyframe.  The engine seeks to its read
-    position before every `INPUT.BIN` chunk because DOS keeps EOF set on a
-    file that grows under it.  Verified live: a client started after the game
-    receives the debug history, the engine reads the file (RX dispatches in
-    the log build for keyframe_request/hello/keys) and answers with a fresh
-    `set_mode`; a 256 KiB scratch limit wrapped once, the client rewound and
-    kept rendering without decode errors.  Gates after the change: oracle
-    `IDENTICAL`, replay, window (mapped 960x600) and link (878 messages,
-    byte-identical) all green; the Windows bundle now stages the `file` build
-    and `run-client.bat` passes `--follow/--input`;
-  - **palette, investigated to the source**: the client renderer itself is
-    exact - a synthetic stream of known RGB values renders the same colours in
-    the window and in the PPM (the earlier "palette" suspicion there is
-    closed).  The colours the user sees are the last palette the engine sent
-    before its output stops: the client freezes on a mid-transition frame, so
-    the symptom is the stall, not the DAC capture;
+  - **folder transport**: files per direction, as the link the bundle uses. The
+    engine appends to `OUTPUT.BIN` (file backend) and reads `INPUT.BIN` from the
+    present poll; the client gains `--follow PATH` (blocks at EOF, rewinds when
+    the file shrinks) and `--input PATH` (appends framed input, flushes per
+    message). Both files are pseudo-rings: at 8 MiB / 64 KiB the writer
+    truncates to zero and restarts, the reader rewinds, and a video wrap is
+    followed by a forced keyframe. The engine seeks to its read position before
+    every `INPUT.BIN` chunk because DOS keeps EOF set on a file that grows under
+    it. Verified live: a client started after the game receives the debug
+    history, the engine reads the file (RX dispatches in the log build for
+    keyframe_request/hello/keys) and answers with a fresh `set_mode`; a 256 KiB
+    scratch limit wrapped once, the client rewound and kept rendering without
+    decode errors. Gates after the change: oracle `IDENTICAL`, replay, window
+    (mapped 960x600) and link (878 messages, byte-identical) all green; the
+    Windows bundle now stages the `file` build and `run-client.bat` passes
+    `--follow/--input`;
+  - **palette, investigated to the source**: the client renderer itself is exact
+    - a synthetic stream of known RGB values renders the same colours in the
+    window and in the PPM (the earlier "palette" suspicion there is closed). The
+    colours the user sees are the last palette the engine sent before its output
+    stops: the client freezes on a mid-transition frame, so the symptom is the
+    stall, not the DAC capture;
   - **stall root cause**: the six 5-byte hook calls inserted into game code
-    shift every following code offset.  An oracle build with only those same
+    shift every following code offset. An oracle build with only those same
     5-byte NOPs (no seam code at runtime, same layout shift) stalls at exactly
     the same point, while the unmodified oracle reaches the castle; the
-    data-segment pad keeps `S1DEA` at prefix 7 but cannot undo the code
-    shifts.  Next: replace the inserted calls with size-preserving hooks
-    (a call over the first five bytes of the target function, with the seam
-    executing the displaced instructions and jumping back to +5), so the
-    game's code offsets stay put.
+    data-segment pad keeps `S1DEA` at prefix 7 but cannot undo the code shifts.
+    Next: replace the inserted calls with size-preserving hooks (a call over the
+    first five bytes of the target function, with the seam executing the
+    displaced instructions and jumping back to +5), so the game's code offsets
+    stay put.
 - 2026-10-20 — launchers, pointer policy, client-first start order:
   - **launchers**: the folder-link bundle shipped LF-only `.bat` files (an
     editor rewrite), and cmd.exe mis-executes the parenthesised blocks in
-    `start-server.bat`, so DOSBox-X never started.  CRLF is restored and
+    `start-server.bat`, so DOSBox-X never started. CRLF is restored and
     `publish-win.sh` rewrites every staged `.bat` to CRLF, so an LF-writing
     editor cannot break a bundle again;
   - **pointer**: the client no longer uses SDL relative mouse mode and never
-    hides the cursor.  It turns the pointer's absolute position over the
-    focused window into game-relative motion (scale-divided, remainder kept)
-    and forgets that position on leave/focus loss, so the desktop keeps the
-    pointer outside the window.  `Ctrl+M` is gone; `Ctrl+Q` stays;
+    hides the cursor. It turns the pointer's absolute position over the focused
+    window into game-relative motion (scale-divided, remainder kept) and forgets
+    that position on leave/focus loss, so the desktop keeps the pointer outside
+    the window. `Ctrl+M` is gone; `Ctrl+Q` stays;
   - **start order**: the client no longer creates `OUTPUT.BIN`; it opens an
     existing file, prints `follow: waiting for ...`, and retries on a sharing
-    violation.  The engine owns the file, so a client started first cannot
-    hold a handle DOSBox has to create.  Verified client-first end to end: no
-    file at launch, engine created it, client decoded 401 KB, and the game
-    still reaches mode 13h.  Replay, window and link gates green.
+    violation. The engine owns the file, so a client started first cannot hold a
+    handle DOSBox has to create. Verified client-first end to end: no file at
+    launch, engine created it, client decoded 401 KB, and the game still reaches
+    mode 13h. Replay, window and link gates green.
 - 2026-10-20 — size-preserving hooks, stall fixed, palette read from the DAC:
   - **hooks**: all six seam sites (start, `fn_WaitKey`, `fn_PollInput`,
     `fn_WriteDAC`, `sub_SetDACBlock`, `sub_WriteDAC768`) now replace whole
-    instructions of the same length with a far call to a seam tail that runs
-    the displaced instructions and rejoins; no byte is inserted, so the
-    game's code offsets (and the raw data offsets `4124h`/`4424h`/`4D56h`)
-    stay exactly where the reference puts them.  The layout gate reports
-    `S1DEA prefix 7, EMMXXXX0 delta 0xC99`, the oracle stays `IDENTICAL`,
-    and the pin is `7c69d26f08528d41ce3e9da49ce85949b8fe543ef25edca9b3c1b28e09d5b6c3`;
+    instructions of the same length with a far call to a seam tail that runs the
+    displaced instructions and rejoins; no byte is inserted, so the game's code
+    offsets (and the raw data offsets `4124h`/`4424h`/`4D56h`) stay exactly
+    where the reference puts them. The layout gate reports `S1DEA prefix 7,
+    EMMXXXX0 delta 0xC99`, the oracle stays `IDENTICAL`, and the pin is
+    `7c69d26f08528d41ce3e9da49ce85949b8fe543ef25edca9b3c1b28e09d5b6c3`;
   - **stall**: with the offsets intact the file build reaches the castle at
     about 40 s and the narration at 60 s (proof frames in
-    `build/runs/stall/file-20261020-161736/`).  The earlier oracle-with-NOPs
-    experiment had isolated the inserted calls as the cause; this confirms
-    the fix;
+    `build/runs/stall/file-20261020-161736/`). The earlier oracle-with-NOPs
+    experiment had isolated the inserted calls as the cause; this confirms the
+    fix;
   - **stale input**: the engine seeks `INPUT.BIN` to its current end on the
-    first open, so a server-only start cannot replay a previous client
-    session's keys/clicks into the fresh game; a client that starts first
-    still retries its hello/keyframe request;
+    first open, so a server-only start cannot replay a previous client session's
+    keys/clicks into the fresh game; a client that starts first still retries
+    its hello/keyframe request;
   - **palette**: the capture no longer trusts the game's palette source
-    pointers.  The fade tables are zero for many writes and the block/768
-    paths missed the scene's low entries, so the client kept the intro
-    palette; reading the DAC back through ports 3C7h/3C9h at the end of each
-    present pass and diffing against the copy the client has captures every
-    writer.  The old sent-palette update also wrote through `SS:BP` (a
-    missing `ds:` override), so diffs were re-sent forever; both are fixed.
-    The client's frame is now pixel-identical to the DOSBox window at the
-    main menu (64000/64000), and the castle/narration frame matches
-    visually; palette messages reuse the palette span message, so the
-    protocol and the client stay unchanged.
+    pointers. The fade tables are zero for many writes and the block/768 paths
+    missed the scene's low entries, so the client kept the intro palette;
+    reading the DAC back through ports 3C7h/3C9h at the end of each present pass
+    and diffing against the copy the client has captures every writer. The old
+    sent-palette update also wrote through `SS:BP` (a missing `ds:` override),
+    so diffs were re-sent forever; both are fixed. The client's frame is now
+    pixel-identical to the DOSBox window at the main menu (64000/64000), and the
+    castle/narration frame matches visually; palette messages reuse the palette
+    span message, so the protocol and the client stay unchanged.
 - 2026-10-20 — frame rate, absolute mouse, and the pale shadow:
-  - **frame rate**: the file backend used to pay one `INT 21h` write per row, which on a host
-    directory is slow enough to cap a pass at a few milliseconds per row.  Messages now go into a
-    16 KiB `SEAM_TX` buffer in the seam block and one write flushes a whole present.  The block's
-    old 64 KB mode-13h shadow was replaced by 4-byte per-row checksums, which frees the space the
-    buffer needs and removes a real wrap bug: the shadow started at `0940h`, so its last two rows
-    (offsets `0FC0h`+) wrapped past `0FFFFh` into `0000h`/`0300h` — the DAC buffer and the first
-    entries of the sent-palette copy that the client-diff is computed against.  A changed bottom
-    row could therefore poison the diff, which is the "subtle" palette mismatch: reads and writes
-    of the sent copy disagreed.  The checksum pass rescans all 200 rows every present and sends
-    rows whose checksum changed (no shadow at all);
-  - **delivery**: the engine commits `OUTPUT.BIN` after every flush (`INT 21h` AH=68h).  Without
-    it DOSBox keeps the host-side buffer, so the reader receives the stream in bursts and the last
-    frame of each burst is never seen; the bundle test went from a stale frame to pixel-identical;
-  - **palette**: a present pass now always reads the DAC and sends the diff (the `seam_flushpal`
-    flag is gone).  The game also sets palettes through paths no hook sees (BIOS block loads, the
-    menu fade), so gating the readback on the hooks' dirty bit left the client on a stale palette
-    until the next hooked write.  Palette hooks only mark the palette dirty for writes between two
-    passes; the two-tick pacing keeps the readback off the game's own DAC writes;
-  - **mouse**: the client no longer sends deltas.  SDL pointer positions are divided by the window
-    scale and sent as `mouse_abs(x, y)` (INPUT type 3, `u16 x`, `u16 y`) in game pixels.  The
-    engine's shim sets its motion counters to `target - current` and calls the game's `0Ch`
-    handler, so the game's own `fn_MouseMoveBy` clamps and lands exactly on the target: the
-    mapping is proportional (window upper-left to game upper-left, centre to centre) in both
-    320x200 and 640x480, and repeated updates cannot drift.  `mouse_move` stays for recordings;
-  - **per-frame hook**: `fn_DelayTicks` gets the same size-preserving present hook as
-    `fn_PollInput`/`fn_WaitKey`; animations that pace with delays now stream without waiting for
-    the next input poll;
-  - **Linux bundle**: `tools/publish-linux.sh` + `client/publish/linux/` publish a self-contained
-    linux-x64 single-file client with `libSDL3.so.0`, the file-backend server, `start-server.sh`,
-    `run-client.sh`, `play.sh` and a smoke test — the same shape as the Windows bundle;
-  - **verified**: oracle `SWREG.EXE: OK` + `IDENTICAL`; layout `S1DEA prefix 7, EMMXXXX0 delta
-    0xC99`; seam pin refreshed to `7e890a07b9766b5d`; replay/link/window gates green; the
-    published Linux bundle starts the server and client and the client's last frame is
-    pixel-identical to the DOSBox-X window at the menu (64000/64000); a host pointer moved to the
-    client window's centre puts the game's cursor at (160,100).
-  - **smoothness follow-up**: the transport was not the limit — with the host pointer moving across
-    the menu the client received 9.1 frames/s, exactly the two-tick pacing, and each 200-row pass
-    finished within one BIOS tick.  A pass now runs once per tick (18.2 Hz) and the palette
-    readback only runs when a palette hook fired, plus a once-a-second resync; with the same
-    pointer test the client now receives ~18 frames/s.  The VBE pass moved from 16 KB to 32 KB of
-    rows per visit so a full 640x480 keyframe takes about ten passes.  A mode set blanks the DAC,
-    so the next four passes skip the palette readback (`seam_palhold`) — that blank read was the
-    one-frame black flash the player saw; the menu frame is still pixel-identical
-    (64000/64000).
-  - **client presentation**: the client used to snapshot the whole 320x200 replica for every rect
-    and palette message, i.e. about 200 full-frame conversions per stream frame and 200 partial
-    window updates.  It now presents once per `frame_end`: measured client CPU during continuous
-    pointer motion dropped to ~5%, the link runs at the 18.2 Hz pass rate, and rows are never
+  - **frame rate**: the file backend used to pay one `INT 21h` write per row,
+    which on a host directory is slow enough to cap a pass at a few milliseconds
+    per row. Messages now go into a 16 KiB `SEAM_TX` buffer in the seam block
+    and one write flushes a whole present. The block's old 64 KB mode-13h shadow
+    was replaced by 4-byte per-row checksums, which frees the space the buffer
+    needs and removes a real wrap bug: the shadow started at `0940h`, so its
+    last two rows (offsets `0FC0h`+) wrapped past `0FFFFh` into `0000h`/`0300h`
+    — the DAC buffer and the first entries of the sent-palette copy that the
+    client-diff is computed against. A changed bottom row could therefore poison
+    the diff, which is the "subtle" palette mismatch: reads and writes of the
+    sent copy disagreed. The checksum pass rescans all 200 rows every present
+    and sends rows whose checksum changed (no shadow at all);
+  - **delivery**: the engine commits `OUTPUT.BIN` after every flush (`INT 21h`
+    AH=68h). Without it DOSBox keeps the host-side buffer, so the reader
+    receives the stream in bursts and the last frame of each burst is never
+    seen; the bundle test went from a stale frame to pixel-identical;
+  - **palette**: a present pass now always reads the DAC and sends the diff (the
+    `seam_flushpal` flag is gone). The game also sets palettes through paths no
+    hook sees (BIOS block loads, the menu fade), so gating the readback on the
+    hooks' dirty bit left the client on a stale palette until the next hooked
+    write. Palette hooks only mark the palette dirty for writes between two
+    passes; the two-tick pacing keeps the readback off the game's own DAC
+    writes;
+  - **mouse**: the client no longer sends deltas. SDL pointer positions are
+    divided by the window scale and sent as `mouse_abs(x, y)` (INPUT type 3,
+    `u16 x`, `u16 y`) in game pixels. The engine's shim sets its motion counters
+    to `target - current` and calls the game's `0Ch` handler, so the game's own
+    `fn_MouseMoveBy` clamps and lands exactly on the target: the mapping is
+    proportional (window upper-left to game upper-left, centre to centre) in
+    both 320x200 and 640x480, and repeated updates cannot drift. `mouse_move`
+    stays for recordings;
+  - **per-frame hook**: `fn_DelayTicks` gets the same size-preserving present
+    hook as `fn_PollInput`/`fn_WaitKey`; animations that pace with delays now
+    stream without waiting for the next input poll;
+  - **Linux bundle**: `tools/publish-linux.sh` + `client/publish/linux/` publish
+    a self-contained linux-x64 single-file client with `libSDL3.so.0`, the
+    file-backend server, `start-server.sh`, `run-client.sh`, `play.sh` and a
+    smoke test — the same shape as the Windows bundle;
+  - **verified**: oracle `SWREG.EXE: OK` + `IDENTICAL`; layout `S1DEA prefix 7,
+    EMMXXXX0 delta 0xC99`; seam pin refreshed to `7e890a07b9766b5d`;
+    replay/link/window gates green; the published Linux bundle starts the server
+    and client and the client's last frame is pixel-identical to the DOSBox-X
+    window at the menu (64000/64000); a host pointer moved to the client
+    window's centre puts the game's cursor at (160,100).
+  - **smoothness follow-up**: the transport was not the limit — with the host
+    pointer moving across the menu the client received 9.1 frames/s, exactly the
+    two-tick pacing, and each 200-row pass finished within one BIOS tick. A pass
+    now runs once per tick (18.2 Hz) and the palette readback only runs when a
+    palette hook fired, plus a once-a-second resync; with the same pointer test
+    the client now receives ~18 frames/s. The VBE pass moved from 16 KB to 32 KB
+    of rows per visit so a full 640x480 keyframe takes about ten passes. A mode
+    set blanks the DAC, so the next four passes skip the palette readback
+    (`seam_palhold`) — that blank read was the one-frame black flash the player
+    saw; the menu frame is still pixel-identical (64000/64000).
+  - **client presentation**: the client used to snapshot the whole 320x200
+    replica for every rect and palette message, i.e. about 200 full-frame
+    conversions per stream frame and 200 partial window updates. It now presents
+    once per `frame_end`: measured client CPU during continuous pointer motion
+    dropped to ~5%, the link runs at the 18.2 Hz pass rate, and rows are never
     shown before the palette that belongs to them (the source of the flicker).
-  - **diagnostics**: the client's stats line now ends with `fps=`, `--keyframe-every S` asks for a
-    full frame every S seconds, and the engine sends a debug control message with its build
-    marker (the client prints `engine debug: ...`).  With a full 320x200 keyframe every 50 ms the
-    link sustains 19-20 frames/s (0.7 MB/s) and the client stays at ~5% CPU, so a lower rate on a
-    machine points at the emulator side, not at the link.  The video ring grew from 8 MiB to
-    64 MiB: at full-frame rates a small ring wrapped every few seconds and each wrap restarted
-    the client from a keyframe, which read as a periodic palette flash.
-  - **tick-driven present**: the intro drew 15-45 changes/s in DOSBox but the client received
-    about 0.7 frames/s.  The pass was hooked into the input poll, the key wait and the tick delay;
-    the intro animates without polling input between frames, so the seam only saw the final frame
-    of each transition.  `fn_SeamPresent` is now also called from `fn_TickISR` (the game's INT 1Ch
-    handler, an 18.2 Hz clock): the intro streams ~15 frames/s and the client's `shown` counter
-    tracks `frames`.  The tick gate now runs before the input poll, DAC read and row scan, so the
-    tight poll loops (`fn_PollInput`, `fn_WaitKey`) stay cheap; the palette is read every tick, so
-    fades step at the pass rate instead of once a second.  The client gained `shown=`/`render=`
-    stats, re-presents its last frame after a resize/expose, and maps the mouse through the live
-    window size (integer scale plus letterbox), which fixes the pointer after a maximise.  Gate:
-    oracle `SWREG.EXE: OK` + `IDENTICAL`.
-  - **scene-palette ordering**: a logo switch faded out to black, then loaded the next logo's
-    palette while the old logo's pixels were still on screen; the client painted the faded picture
-    in the new colours ("screams"), and the VBE rows arrived over the next ten passes.  A palette
-    jump larger than 24 units on any channel, with no rows in the same pass, is now held until the
-    rows have streamed and the screen has been quiet for a full three-pass sweep (all 480 VBE
-    rows), then sent onto the new picture; fades (small steps) still go out at once.  The hold is
-    capped at 12 passes.
-  - **palette ordering at the source**: frame-by-frame capture of the real client window showed
-    the SW Games palette fading in while the previous publisher logo's pixels were still in the
-    client's frame buffer, and the new rows arriving only after the fade.  The engine's own log
-    showed the passes running, so the screen really did hold the old picture at that moment: the
-    intro's fades run with interrupts masked, the tick ISR never got a pass between the steps, and
-    the palette hooks sent each step on its own.  Palette hooks now run a pass themselves (same
-    BIOS-tick gate as the ISR); a palette message never closes a frame on its own, so the rows and
-    the palette that belongs to them travel in one frame; and after a mode set the keyframe rows
-    wait out the four-pass palette hold instead of presenting with the previous palette.  Verified
-    frame by frame against the DOSBox window: the publisher logos now fade in and out on their own
-    pixels in the same order and with the same colours as the reference, with no wrong-colour
-    frame.  Live run: the intro still streams ~15 frames/s and the client renders at ~2 ms/frame.
+  - **diagnostics**: the client's stats line now ends with `fps=`,
+    `--keyframe-every S` asks for a full frame every S seconds, and the engine
+    sends a debug control message with its build marker (the client prints
+    `engine debug: ...`). With a full 320x200 keyframe every 50 ms the link
+    sustains 19-20 frames/s (0.7 MB/s) and the client stays at ~5% CPU, so a
+    lower rate on a machine points at the emulator side, not at the link. The
+    video ring grew from 8 MiB to 64 MiB: at full-frame rates a small ring
+    wrapped every few seconds and each wrap restarted the client from a
+    keyframe, which read as a periodic palette flash.
+  - **tick-driven present**: the intro drew 15-45 changes/s in DOSBox but the
+    client received about 0.7 frames/s. The pass was hooked into the input poll,
+    the key wait and the tick delay; the intro animates without polling input
+    between frames, so the seam only saw the final frame of each transition.
+    `fn_SeamPresent` is now also called from `fn_TickISR` (the game's INT 1Ch
+    handler, an 18.2 Hz clock): the intro streams ~15 frames/s and the client's
+    `shown` counter tracks `frames`. The tick gate now runs before the input
+    poll, DAC read and row scan, so the tight poll loops (`fn_PollInput`,
+    `fn_WaitKey`) stay cheap; the palette is read every tick, so fades step at
+    the pass rate instead of once a second. The client gained `shown=`/`render=`
+    stats, re-presents its last frame after a resize/expose, and maps the mouse
+    through the live window size (integer scale plus letterbox), which fixes the
+    pointer after a maximise. Gate: oracle `SWREG.EXE: OK` + `IDENTICAL`.
+  - **scene-palette ordering**: a logo switch faded out to black, then loaded
+    the next logo's palette while the old logo's pixels were still on screen;
+    the client painted the faded picture in the new colours ("screams"), and the
+    VBE rows arrived over the next ten passes. A palette jump larger than 24
+    units on any channel, with no rows in the same pass, is now held until the
+    rows have streamed and the screen has been quiet for a full three-pass sweep
+    (all 480 VBE rows), then sent onto the new picture; fades (small steps)
+    still go out at once. The hold is capped at 12 passes.
+  - **palette ordering at the source**: frame-by-frame capture of the real
+    client window showed the SW Games palette fading in while the previous
+    publisher logo's pixels were still in the client's frame buffer, and the new
+    rows arriving only after the fade. The engine's own log showed the passes
+    running, so the screen really did hold the old picture at that moment: the
+    intro's fades run with interrupts masked, the tick ISR never got a pass
+    between the steps, and the palette hooks sent each step on its own. Palette
+    hooks now run a pass themselves (same BIOS-tick gate as the ISR); a palette
+    message never closes a frame on its own, so the rows and the palette that
+    belongs to them travel in one frame; and after a mode set the keyframe rows
+    wait out the four-pass palette hold instead of presenting with the previous
+    palette. Verified frame by frame against the DOSBox window: the publisher
+    logos now fade in and out on their own pixels in the same order and with the
+    same colours as the reference, with no wrong-colour frame. Live run: the
+    intro still streams ~15 frames/s and the client renders at ~2 ms/frame.
 - 2026-10-21 — bundle packaging aligned:
-  - both bundles now share one shape: `client/` (the binary plus its SDL3), `server/` (the DOSBox-X
-    profile, `game/`, `capture/`), `sample/OUTPUT.BIN`, a root `README.txt`, and the launchers in
-    the root — `client-start.sh|bat`, `server-start.sh|bat`, `play.sh|bat`, `smoke-test.sh|bat`;
-  - Windows is no longer the odd one out: `Yt2Client.exe` and `SDL3.dll` moved from the bundle root
-    into `client/`, `server/README.txt` is gone (the root README covers both sides), the leftover
-    `build/dist/publish-win-x64` staging directory is no longer produced, and `play.bat` now matches
-    `play.sh` (server in its own window, stopped when the client exits);
-  - `docs/client.md` and `docs/layout.md` updated; the two trees now differ only in the launcher
-    extension, the SDL3 library name and the archive format.
-  - **busy-wait screens kept their palette**: the story screen after the logos is drawn and faded
-    in while the game sits in a busy wait (no input poll, no delay hook), so the only passes were
-    tick-ISR passes, which must not read the DAC.  A palette hook whose pass was rate-limited now
-    samples the DAC itself and leaves it for the next pass; the sample and the rows share a frame.
-    Verified with a 75 s run: the client shows the gated story screen after the logos instead of
-    staying black until the game starts.
+  - both bundles now share one shape: `client/` (the binary plus its SDL3),
+    `server/` (the DOSBox-X profile, `game/`, `capture/`), `sample/OUTPUT.BIN`,
+    a root `README.txt`, and the launchers in the root — `client-start.sh|bat`,
+    `server-start.sh|bat`, `play.sh|bat`, `smoke-test.sh|bat`;
+  - Windows is no longer the odd one out: `Yt2Client.exe` and `SDL3.dll` moved
+    from the bundle root into `client/`, `server/README.txt` is gone (the root
+    README covers both sides), the leftover `build/dist/publish-win-x64` staging
+    directory is no longer produced, and `play.bat` now matches `play.sh`
+    (server in its own window, stopped when the client exits);
+  - `docs/client.md` and `docs/layout.md` updated; the two trees now differ only
+    in the launcher extension, the SDL3 library name and the archive format.
+  - **busy-wait screens kept their palette**: the story screen after the logos
+    is drawn and faded in while the game sits in a busy wait (no input poll, no
+    delay hook), so the only passes were tick-ISR passes, which must not read
+    the DAC. A palette hook whose pass was rate-limited now samples the DAC
+    itself and leaves it for the next pass; the sample and the rows share a
+    frame. Verified with a 75 s run: the client shows the gated story screen
+    after the logos instead of staying black until the game starts.
 - 2026-10-21 — palette at the scene boundary (the title flash):
-  - the client painted the title screen in the VGA default palette for a frame or two right after
-    the intro.  The game sets mode 13h (the BIOS reloads the DAC with its default palette), draws
-    the title, then shows its saved "current" palette (the default) and fades it to black before
-    fading in the real palette.  The engine sent the default palette (a DAC readback after the
-    mode set, and the hooked block write) and the title rows before the fade-out's black reached
-    the client, so one frame paired the new rows with the default colours;
-  - palette hooks now stage the exact bytes of the write they are about to make (`DS:SI` for
-    `fn_WriteDAC`, `ES:DX` for the block call), so a fade step or a scene palette reaches the
-    client at the moment it happens.  Regular passes no longer read the DAC: every game palette
-    write is hooked, and a readback after a mode set is the BIOS default, not the picture's
-    palette.  The DAC is read only for a forced send (keyframe), where the client's picture is
+  - the client painted the title screen in the VGA default palette for a frame
+    or two right after the intro. The game sets mode 13h (the BIOS reloads the
+    DAC with its default palette), draws the title, then shows its saved
+    "current" palette (the default) and fades it to black before fading in the
+    real palette. The engine sent the default palette (a DAC readback after the
+    mode set, and the hooked block write) and the title rows before the
+    fade-out's black reached the client, so one frame paired the new rows with
+    the default colours;
+  - palette hooks now stage the exact bytes of the write they are about to make
+    (`DS:SI` for `fn_WriteDAC`, `ES:DX` for the block call), so a fade step or a
+    scene palette reaches the client at the moment it happens. Regular passes no
+    longer read the DAC: every game palette write is hooked, and a readback
+    after a mode set is the BIOS default, not the picture's palette. The DAC is
+    read only for a forced send (keyframe), where the client's picture is
     cleared anyway;
-  - a tick pass may send the staged palette with its rows (bytes only, no DAC access), so a screen
-    drawn in a busy wait gets its palette in the same frame; `seam_pendflag` and the DAC sampler
-    are gone;
-  - a scene-sized jump (more than 24 units on any channel) that arrives with rows holds its frame
-    for one grace pass, and a held frame takes the next staged palette immediately (bypassing the
-    quiet-jump hold), so the title blit with the default palette is replaced by the fade-out's
-    black before it is presented;
-  - verified by reconstructing every frame from `OUTPUT.BIN` in four 75 s runs: no frame pairs the
-    title rows with a bright palette, the logos still fade in and out on their own pixels, and the
-    story screen and the gated story text appear in colour; oracle `SWREG.EXE: OK` + `IDENTICAL`,
-    seam pin OK, replay OK, link OK (2958 messages byte-identical).
+  - a tick pass may send the staged palette with its rows (bytes only, no DAC
+    access), so a screen drawn in a busy wait gets its palette in the same
+    frame; `seam_pendflag` and the DAC sampler are gone;
+  - a scene-sized jump (more than 24 units on any channel) that arrives with
+    rows holds its frame for one grace pass, and a held frame takes the next
+    staged palette immediately (bypassing the quiet-jump hold), so the title
+    blit with the default palette is replaced by the fade-out's black before it
+    is presented;
+  - verified by reconstructing every frame from `OUTPUT.BIN` in four 75 s runs:
+    no frame pairs the title rows with a bright palette, the logos still fade in
+    and out on their own pixels, and the story screen and the gated story text
+    appear in colour; oracle `SWREG.EXE: OK` + `IDENTICAL`, seam pin OK, replay
+    OK, link OK (2958 messages byte-identical).
 - 2026-10-21 — palette mode-boundary and ESC-skip follow-up:
-  - a mode change detected inside a palette hook now preserves that hook's staged palette (the
-    initial VBE logo); a mode change detected on another pass discards the old-mode staged value;
-  - once a game palette write establishes the current mode's palette, DAC reconciliation catches
-    writes outside the hooks; tick-ISR samples wait two quiet ticks after a palette hook and never
-    run while one is active. Mode entry invalidates the baseline so the BIOS default is not adopted;
-  - the timed ESC capture showed a near-full menu redraw arriving with staged intermediate palettes
-    (sums 1,556 and 10,414) before the full menu palette (23,462). Mode-13h passes that emit at least
-    160 changed rows now keep the frame open through one bounded extra present pass, so the client
-    presents the rows only with the final palette; stream reconstruction confirms `frame_end` follows
-    the 23,462 palette. The VBE logo and post-skip menu both render in color;
-  - oracle verification: `SWREG.EXE: OK` + `IDENTICAL`; seam pin OK; file variant layout check and
-    `tests/replay/run.sh` pass.
+  - a mode change detected inside a palette hook now preserves that hook's
+    staged palette (the initial VBE logo); a mode change detected on another
+    pass discards the old-mode staged value;
+  - once a game palette write establishes the current mode's palette, DAC
+    reconciliation catches writes outside the hooks; tick-ISR samples wait two
+    quiet ticks after a palette hook and never run while one is active. Mode
+    entry invalidates the baseline so the BIOS default is not adopted;
+  - the timed ESC capture showed a near-full menu redraw arriving with staged
+    intermediate palettes (sums 1,556 and 10,414) before the full menu palette
+    (23,462). Mode-13h passes that emit at least 160 changed rows now keep the
+    frame open through one bounded extra present pass, so the client presents
+    the rows only with the final palette; stream reconstruction confirms
+    `frame_end` follows the 23,462 palette. The VBE logo and post-skip menu both
+    render in color;
+  - oracle verification: `SWREG.EXE: OK` + `IDENTICAL`; seam pin OK; file
+    variant layout check and `tests/replay/run.sh` pass.
 - 2026-10-22 — the live link check is byte-exact again:
-  - the file backend batches its writes, so the file copy lags the wire by the frame that is
-    still in flight; the check read that lag as a mismatch ("17 of 4688 messages differ").
-    `tools/stream/compare_streams.py` now compares by sequence number: the messages the file
-    copy does not have yet are reported as in flight, a gap in the received stream is a
-    failure, and a message that is in both has to match byte for byte;
-  - the seam's flush was not re-entrancy safe: a tick during the DOS write could send into the
-    same TX buffer, and the batched file copy and the wire copy could then differ.  A flush
-    now blocks sending while it writes, and the file write retries a short write, so both
-    copies carry the same bytes;
-  - the serial write waited for the transmitter holding register to be empty only, and wrote
-    16 bytes at a time: the emulated 16-byte FIFO could still be full, and a full FIFO
-    overwrites the oldest byte, which corrupted the stream.  The write now waits for the FIFO
-    to drain, and the stall budget is long enough that a link that pauses for a moment does
-    not cost a message;
-  - the client reads a stream that ends inside a frame as the end of the stream, not as a
-    broken link, and asks for a larger socket receive buffer;
-  - the emulated serial link is lossy in its own right: when the host's TCP thread stalls,
-    the emulator's nullmodem buffer overflows and a chunk of the stream is lost.  That shows
-    up as a gap in the received stream, so the check runs the session twice and fails only
-    when both sessions lose data;
-  - gates: `SWREG.EXE: OK` + `IDENTICAL` (seam pin OK), the four seam variants assemble with
-    0 warnings, `tests/replay/run.sh` OK, `tests/window/run.sh` OK, `tests/link/run.sh` OK.
+  - the file backend batches its writes, so the file copy lags the wire by the
+    frame that is still in flight; the check read that lag as a mismatch ("17 of
+    4688 messages differ"). `tools/stream/compare_streams.py` now compares by
+    sequence number: the messages the file copy does not have yet are reported
+    as in flight, a gap in the received stream is a failure, and a message that
+    is in both has to match byte for byte;
+  - the seam's flush was not re-entrancy safe: a tick during the DOS write could
+    send into the same TX buffer, and the batched file copy and the wire copy
+    could then differ. A flush now blocks sending while it writes, and the file
+    write retries a short write, so both copies carry the same bytes;
+  - the serial write waited for the transmitter holding register to be empty
+    only, and wrote 16 bytes at a time: the emulated 16-byte FIFO could still be
+    full, and a full FIFO overwrites the oldest byte, which corrupted the
+    stream. The write now waits for the FIFO to drain, and the stall budget is
+    long enough that a link that pauses for a moment does not cost a message;
+  - the client reads a stream that ends inside a frame as the end of the stream,
+    not as a broken link, and asks for a larger socket receive buffer;
+  - the emulated serial link is lossy in its own right: when the host's TCP
+    thread stalls, the emulator's nullmodem buffer overflows and a chunk of the
+    stream is lost. That shows up as a gap in the received stream, so the check
+    runs the session twice and fails only when both sessions lose data;
+  - gates: `SWREG.EXE: OK` + `IDENTICAL` (seam pin OK), the four seam variants
+    assemble with 0 warnings, `tests/replay/run.sh` OK, `tests/window/run.sh`
+    OK, `tests/link/run.sh` OK.
 - 2026-10-22 — the serial transport is marked obsolete:
-  - the folder link is the transport the product uses: the engine writes `OUTPUT.BIN` and reads
-    `INPUT.BIN` in its working directory, the client follows them, and a shared or mounted
-    directory carries the link across a machine boundary just as well - the UART adds nothing
-    there;
-  - the serial backend (`-DSEAM`), the tee build, the nullmodem profile, the client's 0xFF
-    unescape and the live link check stay in the tree, are marked obsolete in the source, the
-    protocol and the client docs, and are kept only for fun;
+  - the folder link is the transport the product uses: the engine writes
+    `OUTPUT.BIN` and reads `INPUT.BIN` in its working directory, the client
+    follows them, and a shared or mounted directory carries the link across a
+    machine boundary just as well - the UART adds nothing there;
+  - the serial backend (`-DSEAM`), the tee build, the nullmodem profile, the
+    client's 0xFF unescape and the live link check stay in the tree, are marked
+    obsolete in the source, the protocol and the client docs, and are kept only
+    for fun;
   - the file transport stays what the bundles stage and what the gates use.
 - 2026-10-22 — the client can scale the picture with xBRZ:
-  - `--filter xbrz` scales the engine's frame in the client with the xBRZ filter ("scale by
-    rules", Zenju's pixel-art scaler) instead of letting the graphics driver enlarge it block by
-    block.  The implementation is the advanced form of the algorithm: a 4x4 kernel decides for
-    every corner whether it has to be blended and how strongly, and only those corners are
-    blended, which keeps the small features of the art and smooths the rest.  The scale factor
-    is the window scale (2 to 6);
-  - the implementation is an independent one of the published algorithm, and its arithmetic
-    follows the reference step for step: the port was checked against the reference
-    implementation on random, structured and flat images for every scale from 2 to 6, and on the
-    real game frame (576 000 pixels, no difference);
-  - `tests/xbrz/run.sh` keeps that honest: the client replays the sample recording with the
-    filter and compares the filtered frame with the reference's output, byte for byte.  The
-    window gate now also runs the client with the filter, so the scaled presentation is checked
-    on screen as well;
-  - the filter has to be fast: the picture is scaled on every frame, and a naive port costs
-    about 20 ms for one 320x200 frame at 3x - enough to make the window judder.  Three changes
-    bring that down to about 4 ms, and the live link is limited by the emulated serial link
-    again (the frame rate over the file link is the same with and without the filter):
-    - the reference's own trick, the table of the colour distance for every pair of channel
-      differences, is the difference between 20 ms and 1 ms: a small table around the middle
-      (the pairs that matter - the neighbours of a pixel - differ in a few steps) covers the
-      game art, the rare rest is computed as before;
-    - only the rows that changed are scaled, with the row above and below them, because a
-      blend looks two rows up and down.  The engine sends one row per rectangle, so a frame
-      touches a few dozen rows out of two hundred.  The sliced scale gives the same pixels as
-      the full one (checked row by row), and the client tracks the changed rows;
-    - the scaled pixels are the texture's own words already (0xAARRGGBB in memory is the
-      ARGB8888 layout), so they go to the window without being shuffled into bytes first -
-      that conversion wrote 2.3 MB four bytes at a time and cost more than the scaling.
+  - `--filter xbrz` scales the engine's frame in the client with the xBRZ filter
+    ("scale by rules", Zenju's pixel-art scaler) instead of letting the graphics
+    driver enlarge it block by block. The implementation is the advanced form of
+    the algorithm: a 4x4 kernel decides for every corner whether it has to be
+    blended and how strongly, and only those corners are blended, which keeps
+    the small features of the art and smooths the rest. The scale factor is the
+    window scale (2 to 6);
+  - the implementation is an independent one of the published algorithm, and its
+    arithmetic follows the reference step for step: the port was checked against
+    the reference implementation on random, structured and flat images for every
+    scale from 2 to 6, and on the real game frame (576 000 pixels, no
+    difference);
+  - `tests/xbrz/run.sh` keeps that honest: the client replays the sample
+    recording with the filter and compares the filtered frame with the
+    reference's output, byte for byte. The window gate now also runs the client
+    with the filter, so the scaled presentation is checked on screen as well;
+  - the filter has to be fast: the picture is scaled on every frame, and a naive
+    port costs about 20 ms for one 320x200 frame at 3x - enough to make the
+    window judder. Three changes bring that down to about 4 ms, and the live
+    link is limited by the emulated serial link again (the frame rate over the
+    file link is the same with and without the filter):
+    - the reference's own trick, the table of the colour distance for every pair
+      of channel differences, is the difference between 20 ms and 1 ms: a small
+      table around the middle (the pairs that matter - the neighbours of a pixel
+      - differ in a few steps) covers the game art, the rare rest is computed as
+      before;
+    - only the rows that changed are scaled, with the row above and below them,
+      because a blend looks two rows up and down. The engine sends one row per
+      rectangle, so a frame touches a few dozen rows out of two hundred. The
+      sliced scale gives the same pixels as the full one (checked row by row),
+      and the client tracks the changed rows;
+    - the scaled pixels are the texture's own words already (0xAARRGGBB in
+      memory is the ARGB8888 layout), so they go to the window without being
+      shuffled into bytes first - that conversion wrote 2.3 MB four bytes at a
+      time and cost more than the scaling.
 
-  - what is left in the "flags near the gate" scene is the engine's own pace, not the client:
-    over the file link the client delivers the same frames per second with and without the
-    filter (5 to 13 frames per second in DOSBox-X, depending on the scene), and the filter
-    takes 3 to 4 ms of a frame that arrives every 80 to 200 ms.
+  - what is left in the "flags near the gate" scene is the engine's own pace,
+    not the client: over the file link the client delivers the same frames per
+    second with and without the filter (5 to 13 frames per second in DOSBox-X,
+    depending on the scene), and the filter takes 3 to 4 ms of a frame that
+    arrives every 80 to 200 ms.
 - 2026-10-22 — the serial seam variant assembles again:
-  - `sub_SeamFlush` - the file backend's batched write, with the `OUTPUT.BIN` pseudo-ring
-    wrap - is now inside `IFDEF SEAM_FILE`, and so is its call in `sub_SeamFrameEnd`.  A
-    `-DSEAM` (serial) build used to fail to assemble: `seam_written` and
-    `sub_SeamWrapVideo` are declared in the file-only block, but the flush body was not
-    guarded, so the serial build reported four undefined symbols.  The serial backend
-    writes every message straight to COM1 and never needed the batched flush;
+  - `sub_SeamFlush` - the file backend's batched write, with the `OUTPUT.BIN`
+    pseudo-ring wrap - is now inside `IFDEF SEAM_FILE`, and so is its call in
+    `sub_SeamFrameEnd`. A `-DSEAM` (serial) build used to fail to assemble:
+    `seam_written` and `sub_SeamWrapVideo` are declared in the file-only block,
+    but the flush body was not guarded, so the serial build reported four
+    undefined symbols. The serial backend writes every message straight to COM1
+    and never needed the batched flush;
   - the file, tee and log builds are byte-identical to before (`SWREG.EXE` md5
-    `7e86bad4…`, `411906d5…`, `6c22cfce…`), the serial build now assembles with 0 warnings
-    (md5 `2590a1a4…`), and the oracle stays `SWREG.EXE: OK` + `IDENTICAL` with the pin OK.
+    `7e86bad4…`, `411906d5…`, `6c22cfce…`), the serial build now assembles with
+    0 warnings (md5 `2590a1a4…`), and the oracle stays `SWREG.EXE: OK` +
+    `IDENTICAL` with the pin OK.
 - 2026-10-22 — VIDEO codec 1 (row runs) in the seam and the client:
-  - the seam encodes every changed row as runs: `00 nn` repeats the previous pixel, `01 nn vv` a
-    new one, `02 nn` plus `nn` literals, `03` ends the row.  Runs of one or two pixels stay
-    literals (three bytes for two pixels is not a saving) and literals are merged and flushed in
-    chunks of 255, so an encoded row can never outgrow the raw one and the payload never
-    overgrows the message buffer.  Both engine modes use it (mode 13h 320-pixel rows, VBE
-    640-pixel rows); the codec byte in the message header carries it per message;
-  - the client decodes both codecs and only rejects codecs above 1; `tools/stream/replay.py` grew
-    the same decoder so the offline gate compares two independent implementations of the format;
-  - sizing: a frame of the 320x200 game was ~64 KB of raw rows and is now 1 to 4 KB in flat art
-    and up to ~65 KB only for full-screen noise; the live link writes ~20 KiB/s where the raw
-    rows cost ~1 MB/s over the wrap (`OUTPUT.BIN` used to wrap 8 MiB in 15 s);
-  - the encoder's return value and destination pointer had three bugs that only showed up as a
-    frozen game (a wrong length made `sub_SeamSend` copy a huge payload into the TX buffer, and
-    the literal flusher restored the output pointer); they were found with a standalone COM
-    round-trip harness (six 640-pixel rows: a flat run, all-distinct, a checkerboard, noise, two
-    long runs, mixed) that decodes the output in Python and compares it with the source;
-  - measured on the same machine, the seam's pass rate is what the client shows, not the filter
-    or the link: the DOSBox-X window redraws the low-res scene at 19 to 32 distinct pictures a
-    second while the client receives 9 to 10, with or without a client attached (so it is the
-    seam's own pace, not the transport).  Removing the tick gate lifts the client to 18 to 50
-    pictures a second and leaves the game's window at the same 19 to 20 - the gate, not the
-    cost of a pass, is the limit.  The DAC readback (768 port reads a pass), the file commit,
-    the encoder (raw rows instead of runs) and a bounded number of rows per pass were each
-    probed and left the rate unchanged; a BIOS tick is 55 ms, so a tick gate cannot present
-    faster than 18.2 a second, and its passes land back to back inside one tick where they all
-    see the same screen even when two are allowed.
-  - pacing is therefore its own job: two passes per tick showed the client no more pictures
-    (the passes bunch), and pacing off the PIT channel 0 counter - the only finer clock the
-    machine has - stopped the passes in the first attempt and needs to be debugged in isolation
-    the way the encoder was.  The seam is back at the tick gate, which is safe, if coarse.
+  - the seam encodes every changed row as runs: `00 nn` repeats the previous
+    pixel, `01 nn vv` a new one, `02 nn` plus `nn` literals, `03` ends the row.
+    Runs of one or two pixels stay literals (three bytes for two pixels is not a
+    saving) and literals are merged and flushed in chunks of 255, so an encoded
+    row can never outgrow the raw one and the payload never overgrows the
+    message buffer. Both engine modes use it (mode 13h 320-pixel rows, VBE
+    640-pixel rows); the codec byte in the message header carries it per
+    message;
+  - the client decodes both codecs and only rejects codecs above 1;
+    `tools/stream/replay.py` grew the same decoder so the offline gate compares
+    two independent implementations of the format;
+  - sizing: a frame of the 320x200 game was ~64 KB of raw rows and is now 1 to 4
+    KB in flat art and up to ~65 KB only for full-screen noise; the live link
+    writes ~20 KiB/s where the raw rows cost ~1 MB/s over the wrap (`OUTPUT.BIN`
+    used to wrap 8 MiB in 15 s);
+  - the encoder's return value and destination pointer had three bugs that only
+    showed up as a frozen game (a wrong length made `sub_SeamSend` copy a huge
+    payload into the TX buffer, and the literal flusher restored the output
+    pointer); they were found with a standalone COM round-trip harness (six
+    640-pixel rows: a flat run, all-distinct, a checkerboard, noise, two long
+    runs, mixed) that decodes the output in Python and compares it with the
+    source;
+  - measured on the same machine, the seam's pass rate is what the client shows,
+    not the filter or the link: the DOSBox-X window redraws the low-res scene at
+    19 to 32 distinct pictures a second while the client receives 9 to 10, with
+    or without a client attached (so it is the seam's own pace, not the
+    transport). Removing the tick gate lifts the client to 18 to 50 pictures a
+    second and leaves the game's window at the same 19 to 20 - the gate, not the
+    cost of a pass, is the limit. The DAC readback (768 port reads a pass), the
+    file commit, the encoder (raw rows instead of runs) and a bounded number of
+    rows per pass were each probed and left the rate unchanged; a BIOS tick is
+    55 ms, so a tick gate cannot present faster than 18.2 a second, and its
+    passes land back to back inside one tick where they all see the same screen
+    even when two are allowed.
+  - pacing is therefore its own job: two passes per tick showed the client no
+    more pictures (the passes bunch), and pacing off the PIT channel 0 counter -
+    the only finer clock the machine has - stopped the passes in the first
+    attempt and needs to be debugged in isolation the way the encoder was. The
+    seam is back at the tick gate, which is safe, if coarse.
 - 2026-10-22 — a `fast` build, to measure the presentation gate:
-  - `-DSEAM -DSEAM_FILE -DSEAM_FAST` (`build.sh --variant fast`) opens the tick gate in
-    `fn_SeamPresent`, so a pass runs on every hook call.  It is a diagnostic, not a product
-    build: the gate is there because a poll or wait-key loop calls the hook in a tight loop and
-    a pass scans the whole screen.  Every other build assembles the same code (`IFNDEF`);
-  - same machine, same scene, folder link, one run each: the client received 8.0 pictures a
-    second with the gate and 23.9 with it open (frames 106 -> 470 at 10 s and 282 -> 996 at
-    32 s); DOSBox-X's own window changed at 19 to 21 pictures a second in the gated run and at
-    9 to 31 in the open one, and the oracle build measured 19, 10 and 32 at the same
-    checkpoints - so the gate, not the work in a pass, is what the client shows, and opening it
-    does not visibly slow the game in this scene;
-  - that is the trade to design around: the client needs the rate, the game must keep it.
-    Pacing off the PIT (the only clock finer than the 55 ms BIOS tick) is the next step and
-    `fast` is how its result gets measured.
-- 2026-10-22 — whole-screen pans go out as VIDEO `scroll` (type 5), and the choppiness at the gate
-  is gone at its cause:
-  - **the symptom, measured**: the client was choppy exactly when the game pans the camera past the
-    gate in the opening scene — the one place where the whole screen changes from picture to
-    picture.  A live tap of `OUTPUT.BIN` during that pan: 168 changed rows and 22 KB per presented
-    picture, 11 pictures a second, against 50+ a second when the screen stands still.  Opening the
-    tick gate (`-DSEAM_FAST`) did not help, and this is why: the cost was the row work, not the
-    gate.  The server was sending a whole screen of row messages for what is a pure shift;
-  - **the fix**: a mode-13h pass now scans the rows first and sends second, and scores whole-screen
-    shifts of +-8 rows against the row checksums it already keeps (a pan makes this pass's row `y`
-    equal the row the client had at `y-dy`).  A step that explains more rows than no shift at all,
-    and at least 100, wins: one 2-byte `scroll(dy)`, the client's checksum table shifted with it,
-    and then the ordinary row pass sends the rows that slid in and everything that did not move
-    with the picture (the two waving flags).  No match means no message, and the pass behaves
-    exactly as before, so the heuristic can only cost bytes, never correctness;
-  - **numbers**, same scene, folder link, client with xBRZ: 168 rows -> 1 row and 22 KB -> 0.4 KB
-    per picture; before the change the pan's pictures arrived at 11/s, now the client renders 39-44
-    pictures/s in the fast build and 16-17/s in the gated one, so what is left is the 18.2/s
-    BIOS-tick gate, not the seam's work.  The client scales every picture with xBRZ in 3.3 ms, so
-    the filter is not the limit either.  The remaining tick-gate limit is gone in the next entry
-    (a presentation budget per tick); the pan's own rate turns out to be the game's, not the
-    gate's, and that is measured there too;
-  - **verification**: the detector is tested as assembly (`tests/seam-scroll/run.sh`, extracted
-    verbatim, ten cases against a Python model: pans of +-1..8 with and without a row that moves on
-    its own, a pan past the range, a repaint, still pictures with 1 and 40 changed rows); the new
-    fixtures `tests/data/sample-pan-rows.bin` and `sample-pan-scroll.bin` are the same twelve
-    pictures encoded both ways and must decode identically (the scroll form is 18,887 bytes against
-    202,587); `tests/replay/run.sh` renders all five recordings with the client and the Python
-    decoder; and a real run's client-rendered frames show the -1 row shift the game's content
-    makes, which is what pins the sign of the message end to end.  The harness builds a plain
-    binary (`uasm -bin`): with `-mz` and `org 100h` every label sits 0x100 above where the image
-    loads, which made the first harness read its case table out of its own code;
-  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds are not
-    byte-identical on purpose (`docs/client.md`).
-- 2026-10-22 — presentation is paced by a per-tick budget, and the pan's real limit is measured:
-  - **why the tick gate had to go**: a pass per 55 ms tick capped the client at 18.2 pictures a
-    second.  A pan advances one row per presented picture, so the game's own pan (one row per BIOS
-    tick, 18.2/s) was arriving at 16-17/s with visible jitter, and scenes the game draws faster
-    than one picture per tick (the intro's fades) were held at 18.2/s as well - the tap showed
-    36-53/s once that cap was lifted, with the intro's mode switches at the same times as before
-    (640x480 at 0.37 s, 320x200 at 3.84 s), so the game keeps its speed;
-  - **a finer clock does not exist here, and the attempt is worth recording**: the PIT channel-0
-    counter looks like a 0.84 us clock, but SBFMDRV reprograms the channel to divisor 48D3h
-    (~64 Hz, `sub_0A67` writes 36h to port 43h, then the divisor to port 40h; its ISR keeps the
-    visible BIOS tick at 18.2 Hz, `docs/sbfmdrv.md`).  The counter therefore reloads every 15.6 ms
-    and 16-bit subtraction cannot measure a 25 ms pass interval at all: the first build presented
-    *nothing* in a tight poll loop (the diagnostic log showed 0 passes over 300 ticks while calls
-    continued).  The per-call read is also far too expensive for the hot path: measured under
-    DOSBox-X, `int 1Ah` costs 0.27 us and a PIT latch-and-read 3.0 us, and the game calls the
-    present hook about 1,800 times per tick in a tight poll loop (a pass per call read the clock
-    on every one of them and stretched the intro threefold, 4.4 s -> 13 s);
-  - **the fix**: `fn_SeamPresent` takes at most `SEAM_PASSES_PER_TICK` = 3 passes per BIOS tick
-    (55/s at most), with a forced pass (mode set, resync, keyframe) bypassing the budget.  The
-    tick comes straight from the BIOS data area (0040:006Ch) - a memory read, cheap enough to do
-    on every hook call - and the gate is a handful of instructions.  A tight poll loop can still
-    not flood the screen; a game-driven frame goes out as it is drawn;
-  - **the pan's own limit, measured**: with the budget in place the pan still presents ~17
-    pictures a second, and the diagnostic `fast` build (a pass on every call, no budget) presents
-    the same 196-197 scroll pictures in the same window and the same ~17/s in the busiest two
-    seconds.  The pan is therefore tick-driven in the original: one row per BIOS tick is all the
-    game draws.  What the seam does now is deliver every one of those pictures (the tick gate
-    dropped some), and what it adds beyond the pan is the faster scenes (fades up to 53/s).  A
-    smoother pan than the original would need client-side interpolation, which is not planned;
-  - **verification**: `tests/seam-pace/run.sh` extracts `sub_SeamTickGate` verbatim and drives it
-    against the real BIOS tick under DOSBox-X: five calls in one tick give exactly
-    `[1, 1, 1, 0, 0]`, a forced pass on an exhausted budget still runs and clears its flag, and
-    the first call of the next tick starts the budget over (the harness retries if a tick boundary
-    falls inside a group, which would legitimately reset it); `tests/seam-pace/check.py` pins
-    those rules, so a wrong clock read or a broken cap fails the gate.  The call and pass counts
-    above came from the log build's existing per-call (tag 7) and per-pass (tag 12) records;
-  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds are not
-    byte-identical on purpose (`docs/client.md`).
-- 2026-10-22 — SBFMDRV: the uninstall refusal is tested (the last open driver behaviour):
-  - `sub_1A58` walks the MCB chain from the driver's own block and stops with error `0005h`
-    when another program sits above it: restoring the saved `INT 08h`/`09h` vectors would cut
-    that program out of the chain, and the driver cannot know whether it hooked them, so
-    refusing is the safe answer.  Until now only the clean `/U` run was tested (`NO DRIVER`);
-  - `test/late.asm` (`LATE.COM`) is a 9-paragraph TSR that hooks `INT 60h` (below the driver's
-    `80h..BFh` API-vector search window) and answers `0A55Ah`.  It moves `SS:SP` into its kept
-    block: DOS points the stack at the top of the 64 KB block, which a small TSR gives back;
+  - `-DSEAM -DSEAM_FILE -DSEAM_FAST` (`build.sh --variant fast`) opens the tick
+    gate in `fn_SeamPresent`, so a pass runs on every hook call. It is a
+    diagnostic, not a product build: the gate is there because a poll or
+    wait-key loop calls the hook in a tight loop and a pass scans the whole
+    screen. Every other build assembles the same code (`IFNDEF`);
+  - same machine, same scene, folder link, one run each: the client received 8.0
+    pictures a second with the gate and 23.9 with it open (frames 106 -> 470 at
+    10 s and 282 -> 996 at 32 s); DOSBox-X's own window changed at 19 to 21
+    pictures a second in the gated run and at 9 to 31 in the open one, and the
+    oracle build measured 19, 10 and 32 at the same checkpoints - so the gate,
+    not the work in a pass, is what the client shows, and opening it does not
+    visibly slow the game in this scene;
+  - that is the trade to design around: the client needs the rate, the game must
+    keep it. Pacing off the PIT (the only clock finer than the 55 ms BIOS tick)
+    is the next step and `fast` is how its result gets measured.
+- 2026-10-22 — whole-screen pans go out as VIDEO `scroll` (type 5), and the
+  choppiness at the gate is gone at its cause:
+  - **the symptom, measured**: the client was choppy exactly when the game pans
+    the camera past the gate in the opening scene — the one place where the
+    whole screen changes from picture to picture. A live tap of `OUTPUT.BIN`
+    during that pan: 168 changed rows and 22 KB per presented picture, 11
+    pictures a second, against 50+ a second when the screen stands still.
+    Opening the tick gate (`-DSEAM_FAST`) did not help, and this is why: the
+    cost was the row work, not the gate. The server was sending a whole screen
+    of row messages for what is a pure shift;
+  - **the fix**: a mode-13h pass now scans the rows first and sends second, and
+    scores whole-screen shifts of +-8 rows against the row checksums it already
+    keeps (a pan makes this pass's row `y` equal the row the client had at
+    `y-dy`). A step that explains more rows than no shift at all, and at least
+    100, wins: one 2-byte `scroll(dy)`, the client's checksum table shifted with
+    it, and then the ordinary row pass sends the rows that slid in and
+    everything that did not move with the picture (the two waving flags). No
+    match means no message, and the pass behaves exactly as before, so the
+    heuristic can only cost bytes, never correctness;
+  - **numbers**, same scene, folder link, client with xBRZ: 168 rows -> 1 row
+    and 22 KB -> 0.4 KB per picture; before the change the pan's pictures
+    arrived at 11/s, now the client renders 39-44 pictures/s in the fast build
+    and 16-17/s in the gated one, so what is left is the 18.2/s BIOS-tick gate,
+    not the seam's work. The client scales every picture with xBRZ in 3.3 ms, so
+    the filter is not the limit either. The remaining tick-gate limit is gone in
+    the next entry (a presentation budget per tick); the pan's own rate turns
+    out to be the game's, not the gate's, and that is measured there too;
+  - **verification**: the detector is tested as assembly
+    (`tests/seam-scroll/run.sh`, extracted verbatim, ten cases against a Python
+    model: pans of +-1..8 with and without a row that moves on its own, a pan
+    past the range, a repaint, still pictures with 1 and 40 changed rows); the
+    new fixtures `tests/data/sample-pan-rows.bin` and `sample-pan-scroll.bin`
+    are the same twelve pictures encoded both ways and must decode identically
+    (the scroll form is 18,887 bytes against 202,587); `tests/replay/run.sh`
+    renders all five recordings with the client and the Python decoder; and a
+    real run's client-rendered frames show the -1 row shift the game's content
+    makes, which is what pins the sign of the message end to end. The harness
+    builds a plain binary (`uasm -bin`): with `-mz` and `org 100h` every label
+    sits 0x100 above where the image loads, which made the first harness read
+    its case table out of its own code;
+  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds
+    are not byte-identical on purpose (`docs/client.md`).
+- 2026-10-22 — presentation is paced by a per-tick budget, and the pan's real
+  limit is measured:
+  - **why the tick gate had to go**: a pass per 55 ms tick capped the client at
+    18.2 pictures a second. A pan advances one row per presented picture, so the
+    game's own pan (one row per BIOS tick, 18.2/s) was arriving at 16-17/s with
+    visible jitter, and scenes the game draws faster than one picture per tick
+    (the intro's fades) were held at 18.2/s as well - the tap showed 36-53/s
+    once that cap was lifted, with the intro's mode switches at the same times
+    as before (640x480 at 0.37 s, 320x200 at 3.84 s), so the game keeps its
+    speed;
+  - **a finer clock does not exist here, and the attempt is worth recording**:
+    the PIT channel-0 counter looks like a 0.84 us clock, but SBFMDRV reprograms
+    the channel to divisor 48D3h (~64 Hz, `sub_0A67` writes 36h to port 43h,
+    then the divisor to port 40h; its ISR keeps the visible BIOS tick at 18.2
+    Hz, `docs/sbfmdrv.md`). The counter therefore reloads every 15.6 ms and
+    16-bit subtraction cannot measure a 25 ms pass interval at all: the first
+    build presented *nothing* in a tight poll loop (the diagnostic log showed 0
+    passes over 300 ticks while calls continued). The per-call read is also far
+    too expensive for the hot path: measured under DOSBox-X, `int 1Ah` costs
+    0.27 us and a PIT latch-and-read 3.0 us, and the game calls the present hook
+    about 1,800 times per tick in a tight poll loop (a pass per call read the
+    clock on every one of them and stretched the intro threefold, 4.4 s -> 13
+    s);
+  - **the fix**: `fn_SeamPresent` takes at most `SEAM_PASSES_PER_TICK` = 3
+    passes per BIOS tick (55/s at most), with a forced pass (mode set, resync,
+    keyframe) bypassing the budget. The tick comes straight from the BIOS data
+    area (0040:006Ch) - a memory read, cheap enough to do on every hook call -
+    and the gate is a handful of instructions. A tight poll loop can still not
+    flood the screen; a game-driven frame goes out as it is drawn;
+  - **the pan's own limit, measured**: with the budget in place the pan still
+    presents ~17 pictures a second, and the diagnostic `fast` build (a pass on
+    every call, no budget) presents the same 196-197 scroll pictures in the same
+    window and the same ~17/s in the busiest two seconds. The pan is therefore
+    tick-driven in the original: one row per BIOS tick is all the game draws.
+    What the seam does now is deliver every one of those pictures (the tick gate
+    dropped some), and what it adds beyond the pan is the faster scenes (fades
+    up to 53/s). A smoother pan than the original would need client-side
+    interpolation, which is not planned;
+  - **verification**: `tests/seam-pace/run.sh` extracts `sub_SeamTickGate`
+    verbatim and drives it against the real BIOS tick under DOSBox-X: five calls
+    in one tick give exactly `[1, 1, 1, 0, 0]`, a forced pass on an exhausted
+    budget still runs and clears its flag, and the first call of the next tick
+    starts the budget over (the harness retries if a tick boundary falls inside
+    a group, which would legitimately reset it); `tests/seam-pace/check.py` pins
+    those rules, so a wrong clock read or a broken cap fails the gate. The call
+    and pass counts above came from the log build's existing per-call (tag 7)
+    and per-pass (tag 12) records;
+  - the byte gate stays green (`SWREG.EXE: OK`, `IDENTICAL`); the seam builds
+    are not byte-identical on purpose (`docs/client.md`).
+- 2026-10-22 — SBFMDRV: the uninstall refusal is tested (the last open driver
+  behaviour):
+  - `sub_1A58` walks the MCB chain from the driver's own block and stops with
+    error `0005h` when another program sits above it: restoring the saved `INT
+    08h`/`09h` vectors would cut that program out of the chain, and the driver
+    cannot know whether it hooked them, so refusing is the safe answer. Until
+    now only the clean `/U` run was tested (`NO DRIVER`);
+  - `test/late.asm` (`LATE.COM`) is a 9-paragraph TSR that hooks `INT 60h`
+    (below the driver's `80h..BFh` API-vector search window) and answers
+    `0A55Ah`. It moves `SS:SP` into its kept block: DOS points the stack at the
+    top of the 64 KB block, which a small TSR gives back;
   - `test/run.sh uninstall-late` installs the driver, loads `LATE.COM`, runs
-    `SBFMDRV.COM /U > U.TXT`, then `TEST.COM L`.  `U.TXT` carries `Error 0005: Other program
-    exist after SBFMDRV.`, and the test proves the refusal left everything alone: `INT 08h` at
-    `driver:1226h`, `INT 09h` at `driver:12B2h`, the API vector at `driver:12E6h`, and `INT 60h`
-    still answering - `uninstall-late: OK`.  The plain `uninstall` (`NO DRIVER`) and `api`
-    modes still pass; `docs/sbfmdrv.md` 2.6/6.4 document the scenario and section 8 no longer
-    lists it;
-  - with that, the driver's open items are document-only (the installer's error strings) or
-    unobservable in the shipped content (jumps/`FC`/percussion have crafted coverage, and the
-    digitized-SFX far calls are no-ops), so M2 is the next milestone.
-- 2026-10-22 — housekeeping: the folder link leads every document, and the plan's numbering is fixed:
-  - **serial path decision**: the folder transport (`OUTPUT.BIN`/`INPUT.BIN`) is the product link.
-    The COM1/nullmodem path stays in the tree - the `serial`/`tee` builds, `client/NullModemStream.cs`,
-    `client/server.sh` and `tests/link/` - but every one of them is now marked obsolete, and the
-    README quick start, `docs/client.md` (pieces, quick start, section order), `client/README.md`,
-    `tests/README.md` and the `CONTRIBUTING.md` gate table lead with the folder link instead.
-    Keeping it is deliberate: it carries the only socket-level live check and the wire notes
-    (`0xFF` doubling, `multiplier` baud scaling), at ~120 lines per side;
-  - **plan numbering**: there were two sections numbered 6 and no 9.  Milestones stays 6, risks
-    becomes 7, the completed M0 checklist (a stale "immediate next actions" list whose every item
-    was done) is gone, open items stays 8 and the progress log is 9; the cross-references in
-    `README.md`, `AGENTS.md` and `CONTRIBUTING.md` follow.  Risk 1 now records the finished
-    stream/OPL decode and audio-captured run (`docs/sbfmdrv.md` 6.1/6.2) instead of listing them as
-    open, section 3's SDL2 leftovers say SDL3, the `(see §7)` pointer in the sound bullet points at
-    `docs/sbfmdrv.md`, and the M9 C# binding item notes the bootstrap client's hand-rolled SDL3
-    P/Invoke;
-  - `docs/stream.md` no longer claims the file backend cannot read input: it does, from
-    `INPUT.BIN` (the folder link), and only the obsolete serial backend has no input channel;
-  - the progress log had two runs: the bootstrap's M0/M1/SBFMDRV entries had ended up after the
-    later ones.  They now sit in date order at the top, so the section reads oldest first again;
-  - no code changed, so all gates stay as they were (byte gate `IDENTICAL`, seam/client gates
-    green); the last full run is the entry above.
-- 2026-10-24 — AUDIO family: the seam mirrors the music state, the client decodes the family:
-  - the protocol now has concrete AUDIO payload layouts (`docs/protocol.md`): `opl_write`
-    (`port, reg, val`), `opl_batch` (`count`, then `count` triples), `audio_ctrl`
-    (`rate`, `fmt`, `on`).  The family existed by name only ("spec-only") before;
-  - **client**: `ClientState.Apply` handles family 2.  Writes land in a per-port 256-byte OPL
-    register file (`client/Opl.cs`), `audio_ctrl` sets rate/format/on, and the stats line grows
-    `audio=<writes>w/<batches>b/<controls>c`.  Writes never touch the framebuffer, so the picture
-    path and every render gate are unchanged;
-  - **seam**: `sub_SeamAudioState` runs in the size-preserving music hook and compares `v_MusicId`
-    (DS, the track the game wants) with the last id sent; when it changes it emits
-    `audio_ctrl(44100, 0, on)`.  A 45 s file-backend run carries three of them
-    (`audio: 0w/0b/3c`) and the picture stream is unchanged (6844 rects, 846 frames);
+    `SBFMDRV.COM /U > U.TXT`, then `TEST.COM L`. `U.TXT` carries `Error 0005:
+    Other program exist after SBFMDRV.`, and the test proves the refusal left
+    everything alone: `INT 08h` at `driver:1226h`, `INT 09h` at `driver:12B2h`,
+    the API vector at `driver:12E6h`, and `INT 60h` still answering -
+    `uninstall-late: OK`. The plain `uninstall` (`NO DRIVER`) and `api` modes
+    still pass; `docs/sbfmdrv.md` 2.6/6.4 document the scenario and section 8 no
+    longer lists it;
+  - with that, the driver's open items are document-only (the installer's error
+    strings) or unobservable in the shipped content (jumps/`FC`/percussion have
+    crafted coverage, and the digitized-SFX far calls are no-ops), so M2 is the
+    next milestone.
+- 2026-10-22 — housekeeping: the folder link leads every document, and the
+  plan's numbering is fixed:
+  - **serial path decision**: the folder transport (`OUTPUT.BIN`/`INPUT.BIN`) is
+    the product link. The COM1/nullmodem path stays in the tree - the
+    `serial`/`tee` builds, `client/NullModemStream.cs`, `client/server.sh` and
+    `tests/link/` - but every one of them is now marked obsolete, and the README
+    quick start, `docs/client.md` (pieces, quick start, section order),
+    `client/README.md`, `tests/README.md` and the `CONTRIBUTING.md` gate table
+    lead with the folder link instead. Keeping it is deliberate: it carries the
+    only socket-level live check and the wire notes (`0xFF` doubling,
+    `multiplier` baud scaling), at ~120 lines per side;
+  - **plan numbering**: there were two sections numbered 6 and no 9. Milestones
+    stays 6, risks becomes 7, the completed M0 checklist (a stale "immediate
+    next actions" list whose every item was done) is gone, open items stays 8
+    and the progress log is 9; the cross-references in `README.md`, `AGENTS.md`
+    and `CONTRIBUTING.md` follow. Risk 1 now records the finished stream/OPL
+    decode and audio-captured run (`docs/sbfmdrv.md` 6.1/6.2) instead of listing
+    them as open, section 3's SDL2 leftovers say SDL3, the `(see §7)` pointer in
+    the sound bullet points at `docs/sbfmdrv.md`, and the M9 C# binding item
+    notes the bootstrap client's hand-rolled SDL3 P/Invoke;
+  - `docs/stream.md` no longer claims the file backend cannot read input: it
+    does, from `INPUT.BIN` (the folder link), and only the obsolete serial
+    backend has no input channel;
+  - the progress log had two runs: the bootstrap's M0/M1/SBFMDRV entries had
+    ended up after the later ones. They now sit in date order at the top, so the
+    section reads oldest first again;
+  - no code changed, so all gates stay as they were (byte gate `IDENTICAL`,
+    seam/client gates green); the last full run is the entry above.
+- 2026-10-24 — AUDIO family: the seam mirrors the music state, the client
+  decodes the family:
+  - the protocol now has concrete AUDIO payload layouts (`docs/protocol.md`):
+    `opl_write` (`port, reg, val`), `opl_batch` (`count`, then `count` triples),
+    `audio_ctrl` (`rate`, `fmt`, `on`). The family existed by name only
+    ("spec-only") before;
+  - **client**: `ClientState.Apply` handles family 2. Writes land in a per-port
+    256-byte OPL register file (`client/Opl.cs`), `audio_ctrl` sets
+    rate/format/on, and the stats line grows
+    `audio=<writes>w/<batches>b/<controls>c`. Writes never touch the
+    framebuffer, so the picture path and every render gate are unchanged;
+  - **seam**: `sub_SeamAudioState` runs in the size-preserving music hook and
+    compares `v_MusicId` (DS, the track the game wants) with the last id sent;
+    when it changes it emits `audio_ctrl(44100, 0, on)`. A 45 s file-backend run
+    carries three of them (`audio: 0w/0b/3c`) and the picture stream is
+    unchanged (6844 rects, 846 frames);
   - **gate**: `tests/data/sample-audio.bin` (synthetic, 4,807 bytes, built by
-    `tests/replay/mkaudio.py`) interleaves an `opl_write`, an `opl_batch` and an `audio_ctrl` with
-    two video frames.  `tests/replay/run.sh` renders it through the C# client and the Python
-    decoder (`tools/stream/replay.py` now applies family 2 as well) and compares the PPMs:
-    `replay: OK`;
-  - **not yet**: the driver's OPL register writes.  The writing happens inside the resident
-    SBFMDRV (its `sub_0A78` writes the port pair on the 64 Hz ISR), so capturing it means hooking
-    that routine in the driver segment and buffering the writes for the present pass; the client's
-    register file and `opl_batch` layout are the substrate.  Client-side FM synthesis and SDL
-    audio output are the other half (M6).
+    `tests/replay/mkaudio.py`) interleaves an `opl_write`, an `opl_batch` and an
+    `audio_ctrl` with two video frames. `tests/replay/run.sh` renders it through
+    the C# client and the Python decoder (`tools/stream/replay.py` now applies
+    family 2 as well) and compares the PPMs: `replay: OK`;
+  - **not yet**: the driver's OPL register writes. The writing happens inside
+    the resident SBFMDRV (its `sub_0A78` writes the port pair on the 64 Hz ISR),
+    so capturing it means hooking that routine in the driver segment and
+    buffering the writes for the present pass; the client's register file and
+    `opl_batch` layout are the substrate. Client-side FM synthesis and SDL audio
+    output are the other half (M6).
 - 2026-10-24 — AUDIO capture: the resident driver's OPL writes reach the stream:
-  - **driver hook**: the seam scans `INT 80h..BFh` for the `"FMDRV"` signature and patches
-    `sub_0A78`'s five-byte prologue (`9Ch FAh 50h 52h 51h`, `0A78h..0A7Ch`) with `EAh` + the
-    seam's hook offset/segment.  The hook (`fn_SeamOplHook`) runs from the driver's timer ISR,
-    copies `(AH, AL)` into the current log buffer and then executes the displaced bytes before
-    jumping back to `0A7Dh`; all registers, `DS`, `ES` and the caller's flags are restored, so the
-    driver sees exactly the code it expects.  The driver's integrity check only reads `[0101h]` at
-    the first command 6 and never re-hashes, so the patch is invisible to it (`docs/sbfmdrv.md`
-    4.5/5);
-  - **log and batching**: two 4 KB buffers in the seam block (`8000h`/`9000h`, 1024 writes each)
-    are swapped with interrupts off; the present pass and the `fn_SeamPresentMusic` poll hook
-    drain one into `opl_batch` messages of 1..192 writes (port from the driver's `0114h`,
-    `0x228`) at the poll rate, since the log changes on the driver's 96 Hz tick.  The messages go
-    out with `seam_inpresent` held and the batch is flushed even when the pass closes no frame, so
-    a static picture does not hold the sound.  The music hook saves `DS`, `AX` and the flags (the
-    game calls it with its own `DS`), and the 4 KB size covers ~12 s of writes with no drain;
-  - **music state**: `sub_SeamAudioState` now reads the driver's `[02F2h]` sequencer byte instead
-    of the game's `v_MusicId`; the poll sites do not all run with `DS` pointing at the game data
-    (some point at buffers), which made the old read flap and flooded `audio_ctrl` (39,591
-    messages in 15 s).  The driver byte changes only on play/stop (4 messages in 45 s);
-  - **segments**: `sp_finish` can reach the end of a present pass with `DS` still on the seam
-    segment, and a batch flushed with the game's `DS` wrote game code/`EXE` image into
-    `OUTPUT.BIN`.  `sub_SeamSend` and `sub_SeamFlush` now load the block segment themselves (and
-    the pass re-establishes it at `sp_off`), so no caller context can corrupt a batch;
-  - **run**: 45 s file backend, 8,828 records / 1,200,758 bytes, 853 frames, 6,823 rects, 165
-    scrolls, 625 palette messages, 353 `opl_batch` / 2,361 register writes / 4 `audio_ctrl`; the
-    C# client replays it with `unknown=0` and reports `audio=2361w/353b/4c`, final frame the
-    opening gate scene; melodic key-ons/offs balance 275/268 (the last chord is still held), and
-    all writes use the FM base `0x228`;
-  - **gates**: `verify.sh` stays `IDENTICAL`; `tests/replay/run.sh` (including the AUDIO fixture)
-    stays green; the batch-write count now feeds the client's `audio=w/b/c` stat;
-  - **not yet**: client-side FM synthesis and SDL3 audio output (M6), plus timestamps for the
-    batches if the present-pass quantisation turns out audible.
+  - **driver hook**: the seam scans `INT 80h..BFh` for the `"FMDRV"` signature
+    and patches `sub_0A78`'s five-byte prologue (`9Ch FAh 50h 52h 51h`,
+    `0A78h..0A7Ch`) with `EAh` + the seam's hook offset/segment. The hook
+    (`fn_SeamOplHook`) runs from the driver's timer ISR, copies `(AH, AL)` into
+    the current log buffer and then executes the displaced bytes before jumping
+    back to `0A7Dh`; all registers, `DS`, `ES` and the caller's flags are
+    restored, so the driver sees exactly the code it expects. The driver's
+    integrity check only reads `[0101h]` at the first command 6 and never
+    re-hashes, so the patch is invisible to it (`docs/sbfmdrv.md` 4.5/5);
+  - **log and batching**: two 4 KB buffers in the seam block (`8000h`/`9000h`,
+    1024 writes each) are swapped with interrupts off; the present pass and the
+    `fn_SeamPresentMusic` poll hook drain one into `opl_batch` messages of
+    1..192 writes (port from the driver's `0114h`, `0x228`) at the poll rate,
+    since the log changes on the driver's 96 Hz tick. The messages go out with
+    `seam_inpresent` held and the batch is flushed even when the pass closes no
+    frame, so a static picture does not hold the sound. The music hook saves
+    `DS`, `AX` and the flags (the game calls it with its own `DS`), and the 4 KB
+    size covers ~12 s of writes with no drain;
+  - **music state**: `sub_SeamAudioState` now reads the driver's `[02F2h]`
+    sequencer byte instead of the game's `v_MusicId`; the poll sites do not all
+    run with `DS` pointing at the game data (some point at buffers), which made
+    the old read flap and flooded `audio_ctrl` (39,591 messages in 15 s). The
+    driver byte changes only on play/stop (4 messages in 45 s);
+  - **segments**: `sp_finish` can reach the end of a present pass with `DS`
+    still on the seam segment, and a batch flushed with the game's `DS` wrote
+    game code/`EXE` image into `OUTPUT.BIN`. `sub_SeamSend` and `sub_SeamFlush`
+    now load the block segment themselves (and the pass re-establishes it at
+    `sp_off`), so no caller context can corrupt a batch;
+  - **run**: 45 s file backend, 8,828 records / 1,200,758 bytes, 853 frames,
+    6,823 rects, 165 scrolls, 625 palette messages, 353 `opl_batch` / 2,361
+    register writes / 4 `audio_ctrl`; the C# client replays it with `unknown=0`
+    and reports `audio=2361w/353b/4c`, final frame the opening gate scene;
+    melodic key-ons/offs balance 275/268 (the last chord is still held), and all
+    writes use the FM base `0x228`;
+  - **gates**: `verify.sh` stays `IDENTICAL`; `tests/replay/run.sh` (including
+    the AUDIO fixture) stays green; the batch-write count now feeds the client's
+    `audio=w/b/c` stat;
+  - **not yet**: client-side FM synthesis and SDL3 audio output (M6), plus
+    timestamps for the batches if the present-pass quantisation turns out
+    audible.
 - 2026-10-24 - AUDIO output: the client synthesises the driver's OPL stream:
   - **core**: `client/Opl2.cs` is an independent YM3812 implementation: nine
     two-operator channels, FM or additive connection, feedback, the four OPL2
     waveforms, the ADSR envelope with the YMF278B 64-rate tables, key scaling
-    (KSR/KSL), total level, tremolo and vibrato.  The first attempt used a
-    hand-fitted rate curve and a half-cycle modulation index; against the
-    paired DOSBox-X WAV the notes died about 50x too fast and the timbre had
-    almost no sidebands.  The rate tables and the chip's four-cycle (8*pi)
-    modulator index bring it in line;
-  - **output**: `client/Opl.cs` owns one chip and one 256-byte register file
-    per FM port; `client/SdlAudio.cs` opens an SDL3 s16 stereo stream at
-    44100 Hz and keeps ~100 ms queued.  Rendering runs on the main thread, the
-    reader thread only applies writes.  `--headless` and `--no-audio` leave the
-    device closed.  The shipped DOSBox-X profiles now set `nosound = true`:
-    the emulated SB/OPL still runs and the seam still sees its writes, but
-    the host plays only the client, not a second delayed copy;
+    (KSR/KSL), total level, tremolo and vibrato. The first attempt used a
+    hand-fitted rate curve and a half-cycle modulation index; against the paired
+    DOSBox-X WAV the notes died about 50x too fast and the timbre had almost no
+    sidebands. The rate tables and the chip's four-cycle (8*pi) modulator index
+    bring it in line;
+  - **output**: `client/Opl.cs` owns one chip and one 256-byte register file per
+    FM port; `client/SdlAudio.cs` opens an SDL3 s16 stereo stream at 44100 Hz
+    and keeps ~100 ms queued. Rendering runs on the main thread, the reader
+    thread only applies writes. `--headless` and `--no-audio` leave the device
+    closed. The shipped DOSBox-X profiles now set `nosound = true`: the emulated
+    SB/OPL still runs and the seam still sees its writes, but the host plays
+    only the client, not a second delayed copy;
   - **reference check**: `tests/data/music-walk.dro` is a 2.3 KB DRO capture of
     the real SBFMDRV playing one WORLD.DAT block; `--dro/--wav` renders it
-    through the same core.  Against the paired 14.69 s DOSBox-X WAV, the
-    12.66 s render has peak 41.2% FS / rms 2261 vs 41.8% / 2310, the envelope
-    follows the reference, and the first bars' pitches match;
+    through the same core. Against the paired 14.69 s DOSBox-X WAV, the 12.66 s
+    render has peak 41.2% FS / rms 2261 vs 41.8% / 2310, the envelope follows
+    the reference, and the first bars' pitches match;
   - **gates**: `verify.sh` `IDENTICAL`; `tests/audio/run.sh` (new) checks the
     DRO render's duration, level and pitches and requires the dummy SDL device
     to push frames; `tests/replay/run.sh` stays green; the 45 s client replay
     reports `audio=2361w/353b/4c`, `unknown=0`; a live 20 s folder-link run
-    decoded 1,694 writes / 241 batches / 4 controls with the dummy device
-    open;
-  - **not yet**: per-write timestamps; v0 applies each batch at the present
-    pass that carries it, so rhythm can be quantised by tens of milliseconds.
-    The live link has no audible check on this machine (no sound device); the
-    dummy device and the DRO reference are the gates here.
+    decoded 1,694 writes / 241 batches / 4 controls with the dummy device open;
+  - **not yet**: per-write timestamps; v0 applies each batch at the present pass
+    that carries it, so rhythm can be quantised by tens of milliseconds. The
+    live link has no audible check on this machine (no sound device); the dummy
+    device and the DRO reference are the gates here.
 - 2026-10-24 - AUDIO timestamps and the SFX question:
-  - **engine**: `fn_SeamOplHook` now appends `(u32 PIT, register, value)`
-    (6 bytes per write, 682 per buffer).  The stamp is the BIOS tick at
-    `40:006Ch` times the driver's reload `CS:0141h` plus its tick phase
-    `CS:0147h`, read under `cli`; the driver zeroes the phase at every music
-    start, so `seam_opl_adj` adds the lost part and the stamps never step
-    back.  `sub_SeamAudioFlush` sends `opl_batch_timed` (type 3: port, count,
-    then 6-byte records, 1..128 writes per message); the untimed type 1 stays
-    in the protocol for older recordings;
+  - **engine**: `fn_SeamOplHook` now appends `(u32 PIT, register, value)` (6
+    bytes per write, 682 per buffer). The stamp is the BIOS tick at `40:006Ch`
+    times the driver's reload `CS:0141h` plus its tick phase `CS:0147h`, read
+    under `cli`; the driver zeroes the phase at every music start, so
+    `seam_opl_adj` adds the lost part and the stamps never step back.
+    `sub_SeamAudioFlush` sends `opl_batch_timed` (type 3: port, count, then
+    6-byte records, 1..128 writes per message); the untimed type 1 stays in the
+    protocol for older recordings;
   - **client**: `client/Opl.cs` schedules timed writes on the render timeline
     (the first anchors at the render front, later stamps advance by their
-    modular difference, a late write plays at the front) and splits its
-    render blocks at event frames; `ClientState` parses type 3.  `--file
-    rec.bin --wav out.wav` renders a recording's audio offline (`StreamAudio`
+    modular difference, a late write plays at the front) and splits its render
+    blocks at event frames; `ClientState` parses type 3. `--file rec.bin --wav
+    out.wav` renders a recording's audio offline (`StreamAudio`
     + `Opl.FreeRun`), so a folder-link capture can be checked or heard without
-    the engine.  `tools/stream/replay.py` decodes type 3 too;
-  - **verification**: a 20 s file run carries 240 timed batches / 1,699
-    writes / 4 controls over 353 frames / 2,073 rects; no batch is
-    non-monotonic, the stamps advance by 12,428 counts (96 Hz) inside a music
-    sequence, and the span matches the wall clock.  `tests/audio/run.sh`
-    encodes `tests/data/music-walk.dro` as timed batches, replays it with
-    `--file --wav` and gets a WAV byte-identical to the direct DRO render.
-    A live 20 s folder run with the dummy device decoded 1,774 writes / 254
-    batches / 4 controls, `unknown=0`, and an instrumented 18 s run scheduled
-    1,657 writes with none behind the render front (`late=0`);
+      the engine. `tools/stream/replay.py` decodes type 3 too;
+  - **verification**: a 20 s file run carries 240 timed batches / 1,699 writes /
+    4 controls over 353 frames / 2,073 rects; no batch is non-monotonic, the
+    stamps advance by 12,428 counts (96 Hz) inside a music sequence, and the
+    span matches the wall clock. `tests/audio/run.sh` encodes
+    `tests/data/music-walk.dro` as timed batches, replays it with `--file --wav`
+    and gets a WAV byte-identical to the direct DRO render. A live 20 s folder
+    run with the dummy device decoded 1,774 writes / 254 batches / 4 controls,
+    `unknown=0`, and an instrumented 18 s run scheduled 1,657 writes with none
+    behind the render front (`late=0`);
   - **SFX**: `fn_PlaySFX` needs `v_SoundState` bit 3, which only
     `sub_SoundPreInit` sets; the chapter skips that path (the capture shows no
-    FM-detect writes from it), and the options toggle is gated on the
-    pre-init bit, so this configuration has no OPL sound effects.  Only
-    effect 3's PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2) remains, and
-    the protocol does not carry it; M6's wording now says so.
+    FM-detect writes from it), and the options toggle is gated on the pre-init
+    bit, so this configuration has no OPL sound effects. Only effect 3's
+    PC-speaker beep (`fn_SpeakerBeep`, PIT channel 2) remains, and the protocol
+    does not carry it; M6's wording now says so.
 - 2026-10-24 - PC-speaker beep:
   - **engine**: the OPL hook's stamp logic moved into `sub_SeamStamp` (same
     clock, same `seam_opl_adj` shift) so the speaker hooks share it.
-    `fn_SpeakerBeep`'s PIT and gate writes are replaced by size-preserving
-    far calls (plus nop padding) to `fn_SeamSpeakerOn`/`fn_SeamSpeakerOff`;
-    the stubs execute the displaced instructions and send
-    `speaker(gate,divisor,pit)` (AUDIO type 4: gate, u16 divisor, u32 PIT)
-    on the same timeline as the register writes.  Keeping `S06E7` the same
-    size matters: a 10-byte growth shifted every later segment and froze the
-    intro after the logo, which is why the first version (and its S1DC9 pad)
-    was replaced.  The oracle build excludes the blocks and stays
-    byte-identical;
-  - **client**: `ClientState` parses type 4, `Opl.Speaker` schedules the edge
-    at its stamp and `Render` mixes a 30% FS square wave at
-    `1,193,182/divisor` between on and off (reset phase at each edge); the
-    `speaker=` count joins the stats line and `--file --wav` renders it
-    offline;
+    `fn_SpeakerBeep`'s PIT and gate writes are replaced by size-preserving far
+    calls (plus nop padding) to `fn_SeamSpeakerOn`/`fn_SeamSpeakerOff`; the
+    stubs execute the displaced instructions and send
+    `speaker(gate,divisor,pit)` (AUDIO type 4: gate, u16 divisor, u32 PIT) on
+    the same timeline as the register writes. Keeping `S06E7` the same size
+    matters: a 10-byte growth shifted every later segment and froze the intro
+    after the logo, which is why the first version (and its S1DC9 pad) was
+    replaced. The oracle build excludes the blocks and stays byte-identical;
+  - **client**: `ClientState` parses type 4, `Opl.Speaker` schedules the edge at
+    its stamp and `Render` mixes a 30% FS square wave at `1,193,182/divisor`
+    between on and off (reset phase at each edge); the `speaker=` count joins
+    the stats line and `--file --wav` renders it offline;
   - **verification**: `verify.sh` 0 warnings, `SWREG.EXE: OK`, `IDENTICAL`;
-    `tests/data/sample-audio.bin` gained the on/off pair (divisor 662,
-    220 ms) and `tests/audio/run.sh` checks the 1.47 s render, 30% rms,
-    ~1800 Hz and that the tone stays inside the gate window.  The first,
-    size-growing hook emitted the pair in a 20 s run (divisor 662,
-    262,140 counts = 219.7 ms apart) but shifted `S06E7` and froze the intro
-    after the logo; with the size-preserving stubs a temporary one-shot call
-    at `fn_SeamPresentMusic` beeped through the real `fn_SpeakerBeep` in a
-    40 s run (one on/off pair, divisor 662, 262,140 counts apart,
-    non-decreasing stamps) while the game ran normally: 763 frames / 2,296
-    writes / 341 batches / 4 controls.  The temporary call was reverted
-    before the commit; `tests/replay/run.sh` stays green;
+    `tests/data/sample-audio.bin` gained the on/off pair (divisor 662, 220 ms)
+    and `tests/audio/run.sh` checks the 1.47 s render, 30% rms, ~1800 Hz and
+    that the tone stays inside the gate window. The first, size-growing hook
+    emitted the pair in a 20 s run (divisor 662, 262,140 counts = 219.7 ms
+    apart) but shifted `S06E7` and froze the intro after the logo; with the
+    size-preserving stubs a temporary one-shot call at `fn_SeamPresentMusic`
+    beeped through the real `fn_SpeakerBeep` in a 40 s run (one on/off pair,
+    divisor 662, 262,140 counts apart, non-decreasing stamps) while the game ran
+    normally: 763 frames / 2,296 writes / 341 batches / 4 controls. The
+    temporary call was reverted before the commit; `tests/replay/run.sh` stays
+    green;
   - **not yet**: the audible check still needs a machine with a PCM device.
 - 2026-10-25 - WORLD.DAT VOC sound effects:
-  - **data**: the game's 111 `fn_PlaySFX` call sites use 80 Creative Voice
-    File records in WORLD.DAT (8-bit unsigned PCM, 4000–14925 Hz, 0.1–5 s).
-    The SFX pointer table is at `DS:0CF51h` (80 entries, `v_5160`); `fn_183BD`
-    reads the record, but
-    the far entry it calls (`v_SoundEntry`) is zero and SBFMDRV 1.34 has no
-    digitized path, so the reference configuration only beeps for effect 3.
+  - **data**: the game's 111 `fn_PlaySFX` call sites use 80 Creative Voice File
+    records in WORLD.DAT (8-bit unsigned PCM, 4000–14925 Hz, 0.1–5 s). The SFX
+    pointer table is at `DS:0CF51h` (80 entries, `v_5160`); `fn_183BD` reads the
+    record, but the far entry it calls (`v_SoundEntry`) is zero and SBFMDRV 1.34
+    has no digitized path, so the reference configuration only beeps for effect
+    3.
   - **engine**: `fn_PlaySFX`'s first six-byte `TEST` is replaced, in the seam
     build only, by a far call plus nop to `fn_SeamPlaySFX`; the stub preserves
-    every register/flag, sends `sample(id, offset, pit)` (AUDIO type 5: u16
-    id, u32 offset from the game's own table, u32 PIT stamp) on the shared
-    stamp timeline and then executes the displaced test.  The oracle branch
-    keeps the original instruction and the reference image stays identical;
-    the pin was refreshed for the guarded hook.
+    every register/flag, sends `sample(id, offset, pit)` (AUDIO type 5: u16 id,
+    u32 offset from the game's own table, u32 PIT stamp) on the shared stamp
+    timeline and then executes the displaced test. The oracle branch keeps the
+    original instruction and the reference image stays identical; the pin was
+    refreshed for the guarded hook.
   - **client**: new `client/Samples.cs` parses the VOC header/blocks (codec 0,
     type 1/2/8/9) and caches by offset; `Opl` schedules a sample start on the
-    PIT timeline, mixes up to eight records with linear resampling at 37.5%
-    FS, and drops effect 3's following speaker pair when the sample is
-    available.  `--world PATH` overrides the default WORLD.DAT lookup (next to
+    PIT timeline, mixes up to eight records with linear resampling at 37.5% FS,
+    and drops effect 3's following speaker pair when the sample is available.
+    `--world PATH` overrides the default WORLD.DAT lookup (next to
     `--follow`/`--file`, then `server/game/WORLD.DAT` next to the client).
     `--file --wav` renders samples too, extending the tail to the last record;
   - **verification**: `verify.sh` 0 warnings, `SWREG.EXE: OK`, `IDENTICAL`;
-    `tests/audio/run.sh` renders the real effect 3 (`09FFE6h`, 0.20 s) with
-    its beep pair and alone (identical, so the beep was dropped), effect 5
-    (`0A076Ah`, 1 s at 345 Hz) alone (2.00 s, rms 1488; 345 Hz dominates
-    1800 Hz) and a beep-only control; `tests/replay`, `tests/xbrz`,
-    `tests/window` stay green.  A 95 s keyed run (`STREAM_KEYS="62:Return
-    63:space ..."`) carried 9 sample messages, ids 16–25 with offsets
-    matching `0CF51h`; the client rendered 95.51 s with 9/9 played /
-    0 unknown, sample windows rms 2.2k–4.7k against ~1.1k between lines;
+    `tests/audio/run.sh` renders the real effect 3 (`09FFE6h`, 0.20 s) with its
+    beep pair and alone (identical, so the beep was dropped), effect 5
+    (`0A076Ah`, 1 s at 345 Hz) alone (2.00 s, rms 1488; 345 Hz dominates 1800
+    Hz) and a beep-only control; `tests/replay`, `tests/xbrz`, `tests/window`
+    stay green. A 95 s keyed run (`STREAM_KEYS="62:Return 63:space ..."`)
+    carried 9 sample messages, ids 16–25 with offsets matching `0CF51h`; the
+    client rendered 95.51 s with 9/9 played / 0 unknown, sample windows rms
+    2.2k–4.7k against ~1.1k between lines;
   - **not yet**: the audible check still needs the user's PCM device; the
     offline WAV and the live stream counts are the gates on this host.
 - 2026-10-25 - M1c: timed, bidirectional asm-server session capture/replay:
-  - **format**: the optional `YT2S` wrapper records complete v0 frames from
-    both directions. One monotonic client clock stamps an engine frame when
-    fully received and a client frame after its write succeeds. Its timestamps
+  - **format**: the optional `YT2S` wrapper records complete v0 frames from both
+    directions. One monotonic client clock stamps an engine frame when fully
+    received and a client frame after its write succeeds. Its timestamps
     describe boundary-observed time, not the exact game instruction that
     consumed an input;
   - **client**: TCP runs capture a full-duplex trace by default under
-    `build/runs/session/<stamp>/session.yt2s`; `--record-session` chooses another
-    path and `--no-record-session` disables capture. `--file` detects `YT2S` and
-    replays engine output at its captured pace (`--session` remains an alias).
-    `--replay-input` accepts timed INPUT records as well as the YT2S capture and
-    schedules game INPUT frames into a live `--follow` server (with a fresh
-    handshake);
+    `build/runs/session/<stamp>/session.yt2s`; `--record-session` chooses
+    another path and `--no-record-session` disables capture. `--file` detects
+    `YT2S` and replays engine output at its captured pace (`--session` remains
+    an alias). `--replay-input` accepts timed INPUT records as well as the YT2S
+    capture and schedules game INPUT frames into a live `--follow` server (with
+    a fresh handshake);
   - **asm-server run**: a 12 s DOSBox-X run of the file build produced a
     190,623-byte session with 169,469 bytes / 1,311 engine messages, the
-    handshake and a scripted Return at 7 s. Replaying the session displayed
-    159 frames over 12.84 s; feeding its input into a fresh asm-server run
-    delivered the recorded key frame;
+    handshake and a scripted Return at 7 s. Replaying the session displayed 159
+    frames over 12.84 s; feeding its input into a fresh asm-server run delivered
+    the recorded key frame;
   - **gate**: `tests/session/run.sh` uses a fake full-duplex peer to check both
     directions, nondecreasing timestamps, a 0.26 s output gap, paced playback
     and timed INPUT replay. `dotnet build client -c Release` and the existing
     stream decoder gates remain green. With M1c closed, M2 is next.
 - 2026-10-26 - timed folder-link playback (`YT2B`):
-  - **transport**: `OUTPUT.BIN` and `INPUT.BIN` now wrap each unchanged v0
-    frame with a PIT timestamp and length. The ASM server timestamps output on
-    its monotonic PIT timeline and unwraps client input; the client stamps
-    input on its own monotonic PIT clock (seeded from the first server frame
-    only before any input is written), auto-detects timed `.BIN` playback, and
-    retains raw fixture plus YT2S compatibility;
+  - **transport**: `OUTPUT.BIN` and `INPUT.BIN` now wrap each unchanged v0 frame
+    with a PIT timestamp and length. The ASM server timestamps output on its
+    monotonic PIT timeline and unwraps client input; the client stamps input on
+    its own monotonic PIT clock (seeded from the first server frame only before
+    any input is written), auto-detects timed `.BIN` playback, and retains raw
+    fixture plus YT2S compatibility;
   - **sample/bundles**: added a deterministic timed engine-output fixture from
     `sample-video.bin`; Linux and Windows publishers stage it as
     `sample/OUTPUT.BIN`, and smoke-test launchers play that file. Live folder
     launchers no longer require a separate `.yt2s` capture;
-  - **first-frame clock fix**: replaying a captured `INPUT.BIN` exposed that
-    the client re-anchored its input clock when the first server frame arrived
-    after the handshake; a 0.8 s key could then be written with a 4-5 s gap.
-    The input clock now keeps one client epoch, seeded from the server only
-    when no input has been written yet, and the session gate checks that the
-    gap stays sub-second;
+  - **first-frame clock fix**: replaying a captured `INPUT.BIN` exposed that the
+    client re-anchored its input clock when the first server frame arrived after
+    the handshake; a 0.8 s key could then be written with a 4-5 s gap. The input
+    clock now keeps one client epoch, seeded from the server only when no input
+    has been written yet, and the session gate checks that the gap stays
+    sub-second;
   - **verification**: `verify.sh` reports `SWREG.EXE: OK` / `IDENTICAL`;
     `tests/session/run.sh` checks YT2S compatibility, timed BIN paced playback,
     both Python stream tools, timed input replay and the late-anchor clock;
     `tests/replay/run.sh` compares the C# and Python renders for the timed
-    sample byte-for-byte. A 15 s DOSBox-X run produced 1,849 records in
-    282,337 bytes spanning 14.897 s; a separate live run consumed a timed
-    `INPUT.BIN` keyframe request (set_mode 1 -> 3) and produced 934 records in
-    8.923 s.
+    sample byte-for-byte. A 15 s DOSBox-X run produced 1,849 records in 282,337
+    bytes spanning 14.897 s; a separate live run consumed a timed `INPUT.BIN`
+    keyframe request (set_mode 1 -> 3) and produced 934 records in 8.923 s.
 - 2026-10-28 - transport rename (`STREAM.BIN` -> `OUTPUT.BIN`):
   - the asm seam now creates `OUTPUT.BIN`; the client help, bundle launchers,
     publishers, DOSBox profiles, session tests and all current docs use the new
@@ -1269,125 +1494,122 @@ items now live in `docs/roadmap.md`).
   - `seam_name` keeps the same 8.3 width, so the seam block layout and size are
     unchanged and the oracle build stays byte-identical;
   - **verification**: `verify.sh` `seam_pin: OK`, `SWREG.EXE: OK`, `IDENTICAL`;
-    the file build assembles with 0 warnings (`S1DEA prefix 7`, `EMMXXXX0`
-    delta `0C99h`); `tests/session/run.sh` passed three consecutive runs;
-    `tests/replay` and `tests/audio` are green; `tests/link/run.sh --seconds
-    10` reports every received message byte-identical; `tools/dosbox/stream.sh
-    10` produced 1,068 records / 164,337 bytes and 150 PNG frames; both
-    publishers stage `sample/OUTPUT.BIN`, and the Linux bundle replay decodes
-    41 frames. The session gate now waits for its replay/log completion line
-    before terminating the client, removing a termination race.
+    the file build assembles with 0 warnings (`S1DEA prefix 7`, `EMMXXXX0` delta
+    `0C99h`); `tests/session/run.sh` passed three consecutive runs;
+    `tests/replay` and `tests/audio` are green; `tests/link/run.sh --seconds 10`
+    reports every received message byte-identical; `tools/dosbox/stream.sh 10`
+    produced 1,068 records / 164,337 bytes and 150 PNG frames; both publishers
+    stage `sample/OUTPUT.BIN`, and the Linux bundle replay decodes 41 frames.
+    The session gate now waits for its replay/log completion line before
+    terminating the client, removing a termination race.
 - 2026-10-28 - M2 scope:
   - M2 is the C core plus a **headless platform service layer**, not an
     engine-side SDL3 host. The existing C# client remains the host and the C
-    core has no SDL3 dependency. The first gate is seam parity: a stub C
-    program writes timed `OUTPUT.BIN` and reads timed `INPUT.BIN`, and the
-    existing client renders/replays that stream. A direct SDL3 host is a later
-    optional backend behind the same service interface.
+    core has no SDL3 dependency. The first gate is seam parity: a stub C program
+    writes timed `OUTPUT.BIN` and reads timed `INPUT.BIN`, and the existing
+    client renders/replays that stream. A direct SDL3 host is a later optional
+    backend behind the same service interface.
 - 2026-10-28 - M2: C core and headless service layer:
   - **core**: `engine/c/` now builds a C11 `yt2stub` and `yt2core-tests` under
-    `build/c/`. The core has the flat `0x110000`-byte memory with
-    `seg:off -> seg*16+off`, explicit 16-bit registers and CF/PF/AF/ZF/SF/OF
-    rules for add/sub/inc/dec/logic/test/neg plus all 16 condition codes.
-    There is no interpreter; the transliterated code will do its own
-    arithmetic through the helpers;
-  - **protocol/service**: v0 header/frame builders and parsers for VIDEO,
-    AUDIO, INPUT and CONTROL, the incremental timed-input parser (including
-    the bare `'K'` keyframe request), and the service seam that owns the
-    output sequence, answers a client hello once, turns INPUT/CONTROL frames
-    into callbacks and returns `error(2,"bad message")` for an unknown
-    family. The engine core never reads a wall clock; the host clock is
-    platform code;
+    `build/c/`. The core has the flat `0x110000`-byte memory with `seg:off ->
+    seg*16+off`, explicit 16-bit registers and CF/PF/AF/ZF/SF/OF rules for
+    add/sub/inc/dec/logic/test/neg plus all 16 condition codes. There is no
+    interpreter; the transliterated code will do its own arithmetic through the
+    helpers;
+  - **protocol/service**: v0 header/frame builders and parsers for VIDEO, AUDIO,
+    INPUT and CONTROL, the incremental timed-input parser (including the bare
+    `'K'` keyframe request), and the service seam that owns the output sequence,
+    answers a client hello once, turns INPUT/CONTROL frames into callbacks and
+    returns `error(2,"bad message")` for an unknown family. The engine core
+    never reads a wall clock; the host clock is platform code;
   - **display**: `yt2_video` keeps the current mode, pixels and DAC plus the
     shadow of what the client has. A present sends `set_mode` when needed,
     changed 1-line rects, the minimal changed palette span and `frame_end`; a
-    keyframe resends the mode, the whole palette and every row. Raw video
-    codec 0 for now;
-  - **backends**: `null` drops frames, `stream` writes a raw v0 recording,
-    and `folder` writes timed `YT2B` records to `OUTPUT.BIN` (16-byte header,
+    keyframe resends the mode, the whole palette and every row. Raw video codec
+    0 for now;
+  - **backends**: `null` drops frames, `stream` writes a raw v0 recording, and
+    `folder` writes timed `YT2B` records to `OUTPUT.BIN` (16-byte header,
     per-frame flush, 64 MiB pseudo-ring wrap) and follows timed or legacy
-    `INPUT.BIN` (header detection, append/rewind handling, `--input-start`
-    for offline replay). INPUT timestamps are validated as envelopes but are
-    applied on poll, matching the asm seam;
-  - **stub**: a deterministic 320x200x8 scene with palette animation,
-    row-delta presentation and key/mouse/keyframe/quit handling. Runs on the
-    three backends, or with `--replay-v0 PATH`, which re-encodes every frame
-    of a raw recording through the C builders and requires each payload to be
+    `INPUT.BIN` (header detection, append/rewind handling, `--input-start` for
+    offline replay). INPUT timestamps are validated as envelopes but are applied
+    on poll, matching the asm seam;
+  - **stub**: a deterministic 320x200x8 scene with palette animation, row-delta
+    presentation and key/mouse/keyframe/quit handling. Runs on the three
+    backends, or with `--replay-v0 PATH`, which re-encodes every frame of a raw
+    recording through the C builders and requires each payload to be
     byte-identical before sending it;
   - **verification**: `sh tests/c/run.sh` passes end to end: warnings-as-errors
     build, all unit tests, 483 v0 frames / 150,360 bytes re-emitted
     frame-identically from `tests/data/sample-video.bin`, stub output rendered
     byte-identically by the C# client and `tools/stream/replay.py`, scripted
-    keyframe/key/quit/live-append input runs, and the stream/null backends.
-    The final-state PPM from both decoders is `cmp`-identical and the client
-    reports `unknown=0`. No asm source changed for M2; `verify.sh` still reports
+    keyframe/key/quit/live-append input runs, and the stream/null backends. The
+    final-state PPM from both decoders is `cmp`-identical and the client reports
+    `unknown=0`. No asm source changed for M2; `verify.sh` still reports
     `seam_pin: OK`, `SWREG.EXE: OK` and `IDENTICAL`;
   - **deliberate limits**: codec 0 only (row runs/scroll detection arrive with
     the video subsystem), AUDIO payload encoders exist but no engine emitter
     uses them yet, the stub is not game content, and VBE modes wait for M3/M4.
 - 2026-10-28 - M3 first light: the emitted C reaches the title and attract:
   - **emission**: `tools/port/program.py` joins the UASM listing with the
-    original `SWREG.EXE` image (133 segments, `0x2D652` bytes, zero
-    label/frame mismatches) and `tools/port/emit_c.py` transliterates all
-    36,285 instructions of the 132 code segments into 11 C files, one
-    dispatch unit per `(segment, offset)`. `engine/c/tools/build.sh` now runs
-    UASM, the emitter and make in one pass; the generated sources land in
-    `build/c/generated/` and are never committed. DOS relocation sites keep
-    their linked values and are rebased to `YT2_LOAD_SEG` (`0x1000`);
+    original `SWREG.EXE` image (133 segments, `0x2D652` bytes, zero label/frame
+    mismatches) and `tools/port/emit_c.py` transliterates all 36,285
+    instructions of the 132 code segments into 11 C files, one dispatch unit per
+    `(segment, offset)`. `engine/c/tools/build.sh` now runs UASM, the emitter
+    and make in one pass; the generated sources land in `build/c/generated/` and
+    are never committed. DOS relocation sites keep their linked values and are
+    rebased to `YT2_LOAD_SEG` (`0x1000`);
   - **machine boundary**: `include/yt2/game.h` plus `src/game/` hold the
-    relocated image, guest stack, register plumbing, the segment dispatcher
-    and the DOS/BIOS/EMS/mouse/clock services. The guest runs on its own
-    stack, far calls use the guest stack, the INT 1Ch handler runs nested
-    through the `F000:0000` IRET sentinel and the BIOS tick word at `0x46C`
-    advances from the emitted cycle clock;
-  - **boot and display**: the PSP carries the `CH2.BAT` command line
-    (` /W /B`), EMS hands out the `0x20`-page work arena plus `0x180` cache
-    pages, mode 13h is set through INT 10h, the tick ISR installs at
-    `1FBA:019E`, and the intro settles on the Webfoot logo at tick 75 with
-    the attract scenes following. `yt2game` takes `--game DIR`, `--ticks N`,
-    `--transfers N`, `--dump DIR`, `--ppm FILE`, `--present-log FILE` and
-    `--present-dir DIR`;
+    relocated image, guest stack, register plumbing, the segment dispatcher and
+    the DOS/BIOS/EMS/mouse/clock services. The guest runs on its own stack, far
+    calls use the guest stack, the INT 1Ch handler runs nested through the
+    `F000:0000` IRET sentinel and the BIOS tick word at `0x46C` advances from
+    the emitted cycle clock;
+  - **boot and display**: the PSP carries the `CH2.BAT` command line (` /W /B`),
+    EMS hands out the `0x20`-page work arena plus `0x180` cache pages, mode 13h
+    is set through INT 10h, the tick ISR installs at `1FBA:019E`, and the intro
+    settles on the Webfoot logo at tick 75 with the attract scenes following.
+    `yt2game` takes `--game DIR`, `--ticks N`, `--transfers N`, `--dump DIR`,
+    `--ppm FILE`, `--present-log FILE` and `--present-dir DIR`;
   - **timing**: a provisional cycle model charges 2 cycles per emitted
-    instruction against the oracle profile's 30,000 cycles/ms and models
-    the VGA retrace window on port 3DAh, so palette fades and frame waits
-    no longer run free; the BIOS tick stays at 1,647,765 cycles;
-  - **checkpoints**: `tests/c/game_checkpoints.txt` pins seven settled
-    scenes of the no-input intro (Webfoot logo, both story screens and the
-    four attract vignettes) by framebuffer and DAC hash. They come from the
-    staged stream recording and agree with the DOSBox-X save states. At the
-    aligned save scene the settled globals also match (`v_94F1=0x1E0`,
-    `v_94D7=5`, `v_50F6=0x8000`); the remaining DGROUP deltas are BSS fill,
-    DOS heap segments, the absent SBFMDRV strings and timing counters;
-  - **verification**: `tests/c/run.sh` now runs `yt2game` for 2,500 ticks
-    (about 13 s, 18.1 M dispatches), requires the seven checkpoint pairs in
-    order with at least 60 ticks of hold each, and re-hashes the end
-    framebuffer, palette and globals from the dump. All seven match; the
-    asm sources were not touched, so `verify.sh` remains `SWREG.EXE: OK` /
-    `IDENTICAL`;
+    instruction against the oracle profile's 30,000 cycles/ms and models the VGA
+    retrace window on port 3DAh, so palette fades and frame waits no longer run
+    free; the BIOS tick stays at 1,647,765 cycles;
+  - **checkpoints**: `tests/c/game_checkpoints.txt` pins seven settled scenes of
+    the no-input intro (Webfoot logo, both story screens and the four attract
+    vignettes) by framebuffer and DAC hash. They come from the staged stream
+    recording and agree with the DOSBox-X save states. At the aligned save scene
+    the settled globals also match (`v_94F1=0x1E0`, `v_94D7=5`,
+    `v_50F6=0x8000`); the remaining DGROUP deltas are BSS fill, DOS heap
+    segments, the absent SBFMDRV strings and timing counters;
+  - **verification**: `tests/c/run.sh` now runs `yt2game` for 2,500 ticks (about
+    13 s, 18.1 M dispatches), requires the seven checkpoint pairs in order with
+    at least 60 ticks of hold each, and re-hashes the end framebuffer, palette
+    and globals from the dump. All seven match; the asm sources were not
+    touched, so `verify.sh` remains `SWREG.EXE: OK` / `IDENTICAL`;
   - **known deltas**: the cycle model is still flat, so the early
-    Webfoot-to-title palette cross-fade lands at a different loop
-    iteration than on the original (the settled frames agree), the RNG seed
-    and DOS heap layout differ, and SBFMDRV is not resident yet (M6).
-    These do not affect the gated scenes.
+    Webfoot-to-title palette cross-fade lands at a different loop iteration than
+    on the original (the settled frames agree), the RNG seed and DOS heap layout
+    differ, and SBFMDRV is not resident yet (M6). These do not affect the gated
+    scenes.
 - 2026-10-28 - live folder link: the C port is playable:
-  - **link**: `src/game/game_link.c` connects the M2 seam to the machine.
-    Every present pass polls `INPUT.BIN` through `yt2_service` first, then
-    copies the mode-13h framebuffer and DAC into `yt2_video`, which sends
-    `set_mode`, changed 1-line rects, the changed palette span and
-    `frame_end`. A client keyframe request forces mode + full palette + every
-    row; the 64 MiB pseudo-ring wrap forces the same. The folder transport
-    now batches one present and is committed by `yt2_service_flush` instead
-    of flushing every record;
-  - **keyboard**: INPUT key events go into a DOS type-ahead queue. INT 21h
-    06h returns the ASCII byte, or zero followed by the scancode on the next
-    call for an extended key; 0Ch flushes the queue. This is the exact
-    contract `fn_PollInput`/`fn_WaitKey` already used;
-  - **mouse**: INT 21h 3533h reports a sentinel vector so `fn_MouseInit`
-    probes successfully; the INT 33h shim handles 00h/03h/04h/0Bh/0Ch/0Fh and
-    delivers motion/button events to the game's own `fn_MouseHandler` through
-    a guest far call (`YT2_SENTINEL_SEG:0001`, balanced stack). Absolute
-    pointer events mirror the counters against `v_MouseNewX/Y` so the game's
-    clamp stays authoritative;
+  - **link**: `src/game/game_link.c` connects the M2 seam to the machine. Every
+    present pass polls `INPUT.BIN` through `yt2_service` first, then copies the
+    mode-13h framebuffer and DAC into `yt2_video`, which sends `set_mode`,
+    changed 1-line rects, the changed palette span and `frame_end`. A client
+    keyframe request forces mode + full palette + every row; the 64 MiB
+    pseudo-ring wrap forces the same. The folder transport now batches one
+    present and is committed by `yt2_service_flush` instead of flushing every
+    record;
+  - **keyboard**: INPUT key events go into a DOS type-ahead queue. INT 21h 06h
+    returns the ASCII byte, or zero followed by the scancode on the next call
+    for an extended key; 0Ch flushes the queue. This is the exact contract
+    `fn_PollInput`/`fn_WaitKey` already used;
+  - **mouse**: INT 21h 3533h reports a sentinel vector so `fn_MouseInit` probes
+    successfully; the INT 33h shim handles 00h/03h/04h/0Bh/0Ch/0Fh and delivers
+    motion/button events to the game's own `fn_MouseHandler` through a guest far
+    call (`YT2_SENTINEL_SEG:0001`, balanced stack). Absolute pointer events
+    mirror the counters against `v_MouseNewX/Y` so the game's clamp stays
+    authoritative;
   - **pacing**: `--live` enables the link and throttles the guest to the
     oracle's 30,000 cycles/ms in ~2 ms slices against the platform PIT clock;
     `--link` keeps the link without pacing for tests; `--transfers 0` is now
@@ -1397,596 +1619,570 @@ items now live in `docs/roadmap.md`).
   - **verification**: `tests/c/run.sh` adds a live game link section: a fast
     800-tick run consumes an appended key + mouse move, requires the
     `--trace-input` lines and inspects `OUTPUT.BIN` (single 320x200x8 mode,
-    40,521 rows, 289 frames, palette traffic). The M3 checkpoint run and the
-    asm gates are unchanged. A scripted Enter + Down at the title menu
-    reached "Assemble a Party", so the input path drives the real UI; the
-    intro/attract before the menu is the original's ~5.5 minutes;
-  - **bundle**: `tools/publish-linux.sh --server c` stages `yt2game` plus
-    the original game data and a C `server-start.sh`; `play.sh` starts the
-    engine and the client with no DOSBox-X. `tools/play-c.sh` does the same
-    from the tree (build if stale, stage game data, `--live`, then
-    `dotnet run`). The Windows C bundle waits for a Windows `yt2game.exe`
-    build;
-  - **limits**: VBE presentation and FM/PC-speaker audio still wait for
-    M4/M6; the cycle model stays flat, and input timestamps are applied when
-    polled (the live client writes them in real time).
+    40,521 rows, 289 frames, palette traffic). The M3 checkpoint run and the asm
+    gates are unchanged. A scripted Enter + Down at the title menu reached
+    "Assemble a Party", so the input path drives the real UI; the intro/attract
+    before the menu is the original's ~5.5 minutes;
+  - **bundle**: `tools/publish-linux.sh --server c` stages `yt2game` plus the
+    original game data and a C `server-start.sh`; `play.sh` starts the engine
+    and the client with no DOSBox-X. `tools/play-c.sh` does the same from the
+    tree (build if stale, stage game data, `--live`, then `dotnet run`). The
+    Windows C bundle waits for a Windows `yt2game.exe` build;
+  - **limits**: VBE presentation and FM/PC-speaker audio still wait for M4/M6;
+    the cycle model stays flat, and input timestamps are applied when polled
+    (the live client writes them in real time).
 - 2026-10-28 - fix: string instructions moved the wrong pointer:
-  - the shared step helper advanced **both** SI and DI for every string op,
-    so a `lodsb` inside a sprite loop also walked the destination. The
-    intro's gate scene draws its waving flags and other masked sprites with
-    `lodsb`/`stosb`, so every pixel landed two bytes apart and each row
-    drifted right: the flags smeared across the row while the settled M3
-    scenes (drawn with `rep movsw`) stayed correct, which is why the byte
-    gate did not see it;
+  - the shared step helper advanced **both** SI and DI for every string op, so a
+    `lodsb` inside a sprite loop also walked the destination. The intro's gate
+    scene draws its waving flags and other masked sprites with `lodsb`/`stosb`,
+    so every pixel landed two bytes apart and each row drifted right: the flags
+    smeared across the row while the settled M3 scenes (drawn with `rep movsw`)
+    stayed correct, which is why the byte gate did not see it;
   - the helper now takes the pointers that actually move: MOVS/CMPS both,
-    LODS/OUTS source, STOS/SCAS destination; DF still reverses the step and
-    the 8/16-bit sizes are unchanged;
+    LODS/OUTS source, STOS/SCAS destination; DF still reverses the step and the
+    8/16-bit sizes are unchanged;
   - regression: `engine/c/tests/test_game_main.c` builds as
     `build/c/yt2game-tests` (run by `tests/c/run.sh`) and checks the pointer,
     flag, DF, word and REP behaviour of all six operations;
   - visual check against the original's recording: the gate scene now shows
-    solid flags attached to the poles plus the guard, portcullis and banner
-    text (oracle frames around 710), and the hands/mirror scene matches; the
-    seven M3 checkpoints and the asm gate are unchanged.
+    solid flags attached to the poles plus the guard, portcullis and banner text
+    (oracle frames around 710), and the hands/mirror scene matches; the seven M3
+    checkpoints and the asm gate are unchanged.
 - 2026-10-29 - fix: present at the seam's DAC and delay points (intro fades):
   - the C presented only at input-poll and tick-ISR entry. `fn_PaletteFade`
     writes the DAC many times inside one tick, so every intermediate step was
     overwritten before the next pass: the logo fades cut instead of fading and
     DAC-paced effects (the twinkling starfield) lost their animation. The
-    original's seam presents at each palette write, at each palette block and
-    at `fn_DelayTicks` entry, which is what makes those steps frames;
+    original's seam presents at each palette write, at each palette block and at
+    `fn_DelayTicks` entry, which is what makes those steps frames;
   - `yt2_port_out8(3C8h)` now runs a pass before the DAC index changes (a
     completed write is already in `machine->palette`), INT 10h 1017h presents
     after staging its block, and `yt2_game_run` presents when it dispatches
-    `fn_DelayTicks` (S084D:0004 at runtime `YT2_LOAD_SEG + 084Dh`, i.e.
-    `184Dh`; the first version compared the unrelocated `084Dh` and never
-    fired), mirroring `fn_SeamPalette`, `fn_SeamSetDACBlockStub` and
-    `fn_SeamDelayStub`. `yt2_game_present` also
-    mirrors the seam's `SEAM_PASSES_PER_TICK` budget (three passes per BIOS
-    tick); a keyframe pass bypasses it, as `seam_forcepass` does;
-  - every DAC byte (3C9h) and every 1017h entry now also updates
-    `v_PalCurrent` (DGROUP:4124h), the table the scene code re-shows with a
-    block call. `fn_PaletteFade` modes 1/5 write through the 4D56h/4754h
-    staging buffer and leave 4124h alone, so a later full block write used to
-    put a stale (mostly black) palette over the story picture; the block write
-    at the story text now keeps the 246-entry palette the fade left on the
-    DAC;
+    `fn_DelayTicks` (S084D:0004 at runtime `YT2_LOAD_SEG + 084Dh`, i.e. `184Dh`;
+    the first version compared the unrelocated `084Dh` and never fired),
+    mirroring `fn_SeamPalette`, `fn_SeamSetDACBlockStub` and `fn_SeamDelayStub`.
+    `yt2_game_present` also mirrors the seam's `SEAM_PASSES_PER_TICK` budget
+    (three passes per BIOS tick); a keyframe pass bypasses it, as
+    `seam_forcepass` does;
+  - every DAC byte (3C9h) and every 1017h entry now also updates `v_PalCurrent`
+    (DGROUP:4124h), the table the scene code re-shows with a block call.
+    `fn_PaletteFade` modes 1/5 write through the 4D56h/4754h staging buffer and
+    leave 4124h alone, so a later full block write used to put a stale (mostly
+    black) palette over the story picture; the block write at the story text now
+    keeps the 246-entry palette the fade left on the DAC;
   - keyboard, traced end to end under Xvfb: ESC skips the intro, the mouse
     reaches the menu and the party screen, and `--trace-input` shows every key
     arriving at the DOS type-ahead queue. The main menu is mouse-driven in the
     original as well: Down and Enter do nothing there under DOSBox-X (only
-    Ctrl+Q/M/S are listed), so the port matches the original; in-game keys
-    use the same `fn_PollInput` queue;
+    Ctrl+Q/M/S are listed), so the port matches the original; in-game keys use
+    the same `fn_PollInput` queue;
   - verification: the Webfoot/Sierra fades now show ~14 steps each against the
-    recording, the title star at (206,5) ramps 0 -> 156 over frames 94-107
-    like the oracle's 130 -> 158, and the story text at frames 376+ no longer
-    dips to black. `tests/c/run.sh` (seven M3 checkpoints) and
-    `tests/c/game.sh` pass, and `tests/c/intro.sh` pins the three presentation
-    symptoms (logo ramp, star ramp, story palette); the Linux C bundle is
-    republished and smoke-tested.
+    recording, the title star at (206,5) ramps 0 -> 156 over frames 94-107 like
+    the oracle's 130 -> 158, and the story text at frames 376+ no longer dips to
+    black. `tests/c/run.sh` (seven M3 checkpoints) and `tests/c/game.sh` pass,
+    and `tests/c/intro.sh` pins the three presentation symptoms (logo ramp, star
+    ramp, story palette); the Linux C bundle is republished and smoke-tested.
 - 2026-10-29 - fix: keep every `frame_end`, not only the latest:
-  - the engine can write several complete frames inside one BIOS tick (the
-    intro fades, the title star and the orb's palette-cycled objects). The
-    client kept one `_presentPending` flag, so when the reader thread decoded
-    a burst before the render loop ran, the intermediate states were already
-    gone: the orb's single-tick objects and the star's twinkle were barely
-    visible even though the engine's present log had every step;
+  - the engine can write several complete frames inside one BIOS tick (the intro
+    fades, the title star and the orb's palette-cycled objects). The client kept
+    one `_presentPending` flag, so when the reader thread decoded a burst before
+    the render loop ran, the intermediate states were already gone: the orb's
+    single-tick objects and the star's twinkle were barely visible even though
+    the engine's present log had every step;
   - `ClientState` now queues complete frame replicas (bounded to eight; the
     oldest is dropped and counted as `dropped=` only if the display falls
-    behind) and `SnapshotFrame` returns one per call. Dirty rows travel with
-    the frame so xBRZ still scales the right rows; `--ppm` and `--dump-frame`
-    use `SnapshotCurrent`, which is the latest replica, not a queued one;
+    behind) and `SnapshotFrame` returns one per call. Dirty rows travel with the
+    frame so xBRZ still scales the right rows; `--ppm` and `--dump-frame` use
+    `SnapshotCurrent`, which is the latest replica, not a queued one;
   - the render loop holds a queued frame for one display slot (16 ms when a
-    window is open), so a three-frame burst is spread over refreshes instead
-    of being presented inside one; the headless path drains immediately;
+    window is open), so a three-frame burst is spread over refreshes instead of
+    being presented inside one; the headless path drains immediately;
   - `tests/c/live.sh` runs the engine live to the title star (320 ticks),
-    follows `OUTPUT.BIN` headless, and requires `shown >= frames`,
-    `dropped=0` and at least 100 frames. The old single-flag client fails it;
-    `tests/c/intro.sh`, `tests/replay/run.sh`, `tests/window/run.sh` and the
-    C bundle smoke test stay green.
+    follows `OUTPUT.BIN` headless, and requires `shown >= frames`, `dropped=0`
+    and at least 100 frames. The old single-flag client fails it;
+    `tests/c/intro.sh`, `tests/replay/run.sh`, `tests/window/run.sh` and the C
+    bundle smoke test stay green.
 - 2026-10-30 - fix: present after the full-screen work-buffer flush (attract
   shooting star):
-  - the attract gate's shooting star is not a sprite in the scene list.  At
+  - the attract gate's shooting star is not a sprite in the scene list. At
     `sub_052BF` the game starts at `(10Ch,8)` with colour `1Fh`, restores the
     previous pixel with `sub_060A5`, draws the next one with `sub_060B6`, and
-    flushes the whole work buffer to A000 with `fn_1A6B5` for every step;
-    the path is `x + y = 276`, two pixels left and two down per step.  All 32
-    steps run inside one BIOS tick, so the C port's present points (input
-    poll, tick ISR, DAC write, delay tick) sampled the scene before and after
-    the streak and never inside it;
+    flushes the whole work buffer to A000 with `fn_1A6B5` for every step; the
+    path is `x + y = 276`, two pixels left and two down per step. All 32 steps
+    run inside one BIOS tick, so the C port's present points (input poll, tick
+    ISR, DAC write, delay tick) sampled the scene before and after the streak
+    and never inside it;
   - `yt2_string_movs` now presents when a REP MOVSW copies the full `7D00h`
-    words to `A000h`, i.e. immediately after the game's frame flush.  The
-    three-pass-per-tick budget still applies, so the burst becomes three
-    frames like the original's 60 fps display, not 32 link frames;
+    words to `A000h`, i.e. immediately after the game's frame flush. The
+    three-pass-per-tick budget still applies, so the burst becomes three frames
+    like the original's 60 fps display, not 32 link frames;
   - verified against a 60 fps DOSBox-X capture of the original: the star is
-    visible for three samples at 9.83-9.87 s (frames 590-592) on the same
-    `x + y = 276` line, moving two pixels per sample.  The C run now presents
-    the first three positions `(268,8)`, `(266,10)`, `(264,12)` at tick 296;
-    the capture's phase lands later on the line, but both are the same
-    transient and it is no longer dropped.  The 20 fps stream recording never
-    caught it;
+    visible for three samples at 9.83-9.87 s (frames 590-592) on the same `x + y
+    = 276` line, moving two pixels per sample. The C run now presents the first
+    three positions `(268,8)`, `(266,10)`, `(264,12)` at tick 296; the capture's
+    phase lands later on the line, but both are the same transient and it is no
+    longer dropped. The 20 fps stream recording never caught it;
   - `tests/c/star.sh` stages the game, runs 400 ticks with a frame dump and
     requires at least two distinct single-pixel hits on the gate path, two
-    pixels apart; `tests/c/run.sh` includes it.  The seven M3 checkpoints,
+    pixels apart; `tests/c/run.sh` includes it. The seven M3 checkpoints,
     `tests/c/intro.sh` and `tests/c/live.sh` stay green, and the asm gate is
     untouched (no assembly changed).
 - 2026-10-30 - feat: VBE presentation (M4 first slice):
   - the live link skipped every mode except 13h, so the Spectrum Pacific
-    publisher logo (VBE 101h, 640x480x8) never reached the client.  Both VBE
+    publisher logo (VBE 101h, 640x480x8) never reached the client. Both VBE
     packed-pixel modes are now presented: 640x480 mode 101h and 640x400 mode
-    100h.  `yt2_video` carries the 640-wide picture; rows are assembled by
-    reading the active bank through the A000 aperture and the other banks
-    from `vbe_bank[]`, so a row may cross a 64 KB boundary without changing
-    the game's mapping;
-  - fixed the bank mirror while doing it: bank 0 was never saved when the
-    game mapped another bank (`vbe_bank_active == 0` was treated as "none"),
-    and mode 101h needs a fifth 64 KB page for the last 0xB000 bytes.  The
-    machine now keeps five banks, uses -1 as "no active bank", and accepts
-    4F05h page 4 in 640x480;
-  - a VBE mode set blanks the client and holds the rows until the loader
-    writes all 768 DAC bytes, because the logo decoder fills the hidden
-    banks first and loads the palette last.  A 60-tick grace prevents a
-    screen that never rewrites the palette from staying blank; 1017h block
-    writes of 256 entries release the hold too.  The blank pass is a
-    set_mode-only present (`yt2_video_present_blank`);
-  - separated the presentation budget from link state: the per-tick gate
-    used `yt2_video.force_full`, which only the link clears.  Headless mode
-    therefore bypassed the three-pass budget forever after a mode change and
-    the gate star emitted all 32 positions.  `present_force` is now the
-    engine-side "next pass bypasses the budget" flag and is consumed by
-    `yt2_game_present`; a mode change or keyframe sets it;
-  - verification: a 320-tick `--link` run records `set_mode(640,480,8)`,
-    a blank frame and the Spectrum Pacific logo, then `set_mode(320,200,8)`
-    on the way back; replaying `OUTPUT.BIN` with `tools/stream/replay.py`
-    renders the logo at 640x480 with 17,776 non-black pixels.  That final
-    frame is pixel-identical to the original's 20 fps stream recording
+    100h. `yt2_video` carries the 640-wide picture; rows are assembled by
+    reading the active bank through the A000 aperture and the other banks from
+    `vbe_bank[]`, so a row may cross a 64 KB boundary without changing the
+    game's mapping;
+  - fixed the bank mirror while doing it: bank 0 was never saved when the game
+    mapped another bank (`vbe_bank_active == 0` was treated as "none"), and mode
+    101h needs a fifth 64 KB page for the last 0xB000 bytes. The machine now
+    keeps five banks, uses -1 as "no active bank", and accepts 4F05h page 4 in
+    640x480;
+  - a VBE mode set blanks the client and holds the rows until the loader writes
+    all 768 DAC bytes, because the logo decoder fills the hidden banks first and
+    loads the palette last. A 60-tick grace prevents a screen that never
+    rewrites the palette from staying blank; 1017h block writes of 256 entries
+    release the hold too. The blank pass is a set_mode-only present
+    (`yt2_video_present_blank`);
+  - separated the presentation budget from link state: the per-tick gate used
+    `yt2_video.force_full`, which only the link clears. Headless mode therefore
+    bypassed the three-pass budget forever after a mode change and the gate star
+    emitted all 32 positions. `present_force` is now the engine-side "next pass
+    bypasses the budget" flag and is consumed by `yt2_game_present`; a mode
+    change or keyframe sets it;
+  - verification: a 320-tick `--link` run records `set_mode(640,480,8)`, a blank
+    frame and the Spectrum Pacific logo, then `set_mode(320,200,8)` on the way
+    back; replaying `OUTPUT.BIN` with `tools/stream/replay.py` renders the logo
+    at 640x480 with 17,776 non-black pixels. That final frame is pixel-identical
+    to the original's 20 fps stream recording
     (`build/runs/stream/20261028-204013/frames/frame_0010.png`): every RGB
-    channel matches (max diff 0).  The 640x400 path shares the same row
-    reader.  The live client follows the same transitions (`frames=122`,
-    `shown=124`, `dropped=0`).  `tests/c/check.py` now requires the game link
-    to start in 13h, enter a VBE mode and use only
-    320x200x8/640x480x8/640x400x8; the seven M3 checkpoints,
-    `tests/c/intro.sh`, `tests/c/star.sh` and `tests/c/live.sh` stay green.
-    The Linux C bundle is republished and its smoke test passes.
+    channel matches (max diff 0). The 640x400 path shares the same row reader.
+    The live client follows the same transitions (`frames=122`, `shown=124`,
+    `dropped=0`). `tests/c/check.py` now requires the game link to start in 13h,
+    enter a VBE mode and use only 320x200x8/640x480x8/640x400x8; the seven M3
+    checkpoints, `tests/c/intro.sh`, `tests/c/star.sh` and `tests/c/live.sh`
+    stay green. The Linux C bundle is republished and its smoke test passes.
     `tests/c/vbe.sh` replays the link output and pins the final 640x480 logo
     hash (`6a51cf21adb30266`) and 17,776 non-black pixels; `tests/c/run.sh`
-    includes it.  No assembly changed.
+    includes it. No assembly changed.
 - 2026-10-30 - fix: pace the gate star at the display, not the tick budget's
   first flushes (correction to the 2026-10-30 star entry):
-  - the older entry read the 60 fps capture as three samples two pixels
-    apart.  It is not: the attract star's second loop runs 20 more steps with
-    `dec v_0CC6`, so the streak is 52 steps from `(268,8)` to `(164,112)`,
-    with colour `1Fh` falling to `0Bh`.  The capture shows it at steps 8,
-    20, 31 and 43 (frames 590-593), 11-12 steps apart: the four copies take
-    ~1.3 ms each, and the star is only at the path start in the C run
-    because all 52 flushes ran inside one BIOS tick and the three-pass
-    budget took the first three;
-  - the C port now charges string instructions per iteration: DOSBox-X's
-    normal core at the oracle's 30,000 cycles/ms took 48 BIOS ticks for 2000
-    `REP MOVSW` of `7D00h` words, i.e. ~39.5k cycles (~1.32 ms) per 64 KB
-    screen copy, 1.25 cycles a word (the final model charges one cycle a
-    word while the copy runs; see 2026-11-03).  The flat per-instruction
-    charge had made `fn_1A6B5` almost free, which collapsed every
-    string-paced effect into one tick.  `yt2_string_cost` charged after the
-    copy; a tick that falls due presents the completed flush;
+  - the older entry read the 60 fps capture as three samples two pixels apart.
+    It is not: the attract star's second loop runs 20 more steps with `dec
+    v_0CC6`, so the streak is 52 steps from `(268,8)` to `(164,112)`, with
+    colour `1Fh` falling to `0Bh`. The capture shows it at steps 8, 20, 31 and
+    43 (frames 590-593), 11-12 steps apart: the four copies take ~1.3 ms each,
+    and the star is only at the path start in the C run because all 52 flushes
+    ran inside one BIOS tick and the three-pass budget took the first three;
+  - the C port now charges string instructions per iteration: DOSBox-X's normal
+    core at the oracle's 30,000 cycles/ms took 48 BIOS ticks for 2000 `REP
+    MOVSW` of `7D00h` words, i.e. ~39.5k cycles (~1.32 ms) per 64 KB screen
+    copy, 1.25 cycles a word (the final model charges one cycle a word while the
+    copy runs; see 2026-11-03). The flat per-instruction charge had made
+    `fn_1A6B5` almost free, which collapsed every string-paced effect into one
+    tick. `yt2_string_cost` charged after the copy; a tick that falls due
+    presents the completed flush;
   - the present gate still allows the seam's three passes per BIOS tick, but
-    takes at most one per 60 Hz client slot (`YT2_PRESENT_GAP_CYCLES`,
-    500,000 cycles) since the last emitted frame.  The passes are spread
-    across the tick instead of bursting at its start; a 52-flush streak
-    spanning ~70 ms is sampled at steps 0, 13, 26, 41 and 52 (ticks 296-297),
-    matching the original's 11-12-step sampling cadence and its fade to a dim
-    final pixel.  The seam only presents at game hooks, but the last flush
-    has no following hook, so `yt2_cycles` also emits a pending frame when a
-    display slot expires; that is the C port acting as the display, not an
-    extra game hook;
-  - verified against the 60 fps capture twice: the C headless frame dump
-    shows those five positions, and a live client capture on Xvfb at ~60 fps
-    shows the same positions with the palette falling 255 -> 182 -> 89,
-    close to the original's 255 -> 166 -> 89.  The star is a visible descent
-    over the whole line now, not a blink at `(268,8)`;
-  - `tests/c/star.sh` now walks the full 53-step path and requires at least
-    four sampled positions, starting at the top and ending at the bottom of
-    the path, with gaps of at least six steps.  `tests/c/intro.sh` anchors
-    the title-star twinkle on the title screen's first present rather than
-    fixed frame numbers, because the spread gate emits fewer frames during
-    short DAC bursts.  `tests/c/live.sh`'s floor is 60 frames for the same
-    reason; its real checks (`shown >= frames`, `dropped=0`) are unchanged.
-    `tests/c/run.sh` (seven M3 checkpoints, star, VBE), `tests/c/intro.sh`,
-    `tests/c/live.sh` and `tests/replay/run.sh` are green.  No assembly
-    changed.
-- 2026-10-30 - guest clock: 3,000 cycles/ms becomes the default and the
-  oracle (correction to the star entries above):
-  - DOSBox-X `cycles` counts instructions per millisecond, not MHz.  The
-    oracle profile inherited `fixed 30000` from M0; that is roughly a
-    486DX2-66/DX4-100, far above the machine the intro and attract pacing
-    were made for, and it is why the gate star collapsed into a ~70 ms
-    streak.  A DOSBox-X comparison at `fixed 3000` shows the intended
-    visible descent.  3,000 is the DOSBox-X default, about a 286 at
-    20-25 MHz, and the game's minimum class (`README.DOC` lists VGA,
-    2 MB, EMS and a mouse as requirements and recommends a 386/40).
-  - `yt2game` grows `--cycles-per-ms N` (default 3,000).  The BIOS tick,
-    VGA frame and retrace window, 60 Hz present slot and the live pacer
-    are derived from it at startup instead of being compile-time
-    constants; the per-instruction and per-string-iteration costs stay in
-    guest cycles, so a 64 KB `REP MOVSW` still costs ~40k cycles
-    (~13 ms at 3,000) and the star's 52 flushes descend over ~0.7 s.
+    takes at most one per 60 Hz client slot (`YT2_PRESENT_GAP_CYCLES`, 500,000
+    cycles) since the last emitted frame. The passes are spread across the tick
+    instead of bursting at its start; a 52-flush streak spanning ~70 ms is
+    sampled at steps 0, 13, 26, 41 and 52 (ticks 296-297), matching the
+    original's 11-12-step sampling cadence and its fade to a dim final pixel.
+    The seam only presents at game hooks, but the last flush has no following
+    hook, so `yt2_cycles` also emits a pending frame when a display slot
+    expires; that is the C port acting as the display, not an extra game hook;
+  - verified against the 60 fps capture twice: the C headless frame dump shows
+    those five positions, and a live client capture on Xvfb at ~60 fps shows the
+    same positions with the palette falling 255 -> 182 -> 89, close to the
+    original's 255 -> 166 -> 89. The star is a visible descent over the whole
+    line now, not a blink at `(268,8)`;
+  - `tests/c/star.sh` now walks the full 53-step path and requires at least four
+    sampled positions, starting at the top and ending at the bottom of the path,
+    with gaps of at least six steps. `tests/c/intro.sh` anchors the title-star
+    twinkle on the title screen's first present rather than fixed frame numbers,
+    because the spread gate emits fewer frames during short DAC bursts.
+    `tests/c/live.sh`'s floor is 60 frames for the same reason; its real checks
+    (`shown >= frames`, `dropped=0`) are unchanged. `tests/c/run.sh` (seven M3
+    checkpoints, star, VBE), `tests/c/intro.sh`, `tests/c/live.sh` and
+    `tests/replay/run.sh` are green. No assembly changed.
+- 2026-10-30 - guest clock: 3,000 cycles/ms becomes the default and the oracle
+  (correction to the star entries above):
+  - DOSBox-X `cycles` counts instructions per millisecond, not MHz. The oracle
+    profile inherited `fixed 30000` from M0; that is roughly a
+    486DX2-66/DX4-100, far above the machine the intro and attract pacing were
+    made for, and it is why the gate star collapsed into a ~70 ms streak. A
+    DOSBox-X comparison at `fixed 3000` shows the intended visible descent.
+    3,000 is the DOSBox-X default, about a 286 at 20-25 MHz, and the game's
+    minimum class (`README.DOC` lists VGA, 2 MB, EMS and a mouse as requirements
+    and recommends a 386/40).
+  - `yt2game` grows `--cycles-per-ms N` (default 3,000). The BIOS tick, VGA
+    frame and retrace window, 60 Hz present slot and the live pacer are derived
+    from it at startup instead of being compile-time constants; the
+    per-instruction and per-string-iteration costs stay in guest cycles, so a 64
+    KB `REP MOVSW` still costs ~40k cycles (~13 ms at 3,000) and the star's 52
+    flushes descend over ~0.7 s.
   - the oracle profile, both bundles' DOSBox-X configs and the docs move to
     `fixed 3000` with the cycles-as-instructions wording; the C
-    `server-start.sh` forwards its arguments, so
-    `--cycles-per-ms 30000` remains available for a fast-machine
-    comparison.
-  - gates at the default clock: `tests/c/star.sh` follows the dense descent
-    (27 samples at frames 334-363, steps 1..52, gaps 1..2); the same
-    instruction work now spans ten times as many BIOS ticks, so
-    `tests/c/game.sh` runs 3,600 ticks and `tests/c/intro.sh` 2,000.
-    `tests/c/intro.sh` no longer anchors the story check on a fixed text
-    hash (the story flame animation changes it); it walks back from the
-    settled story scene and requires the full-palette text run.  The title
-    twinkle is sampled over 200 frames because it starts later at the
-    slower clock.  `tests/c/run.sh`, `tests/c/game.sh`,
-    `tests/c/intro.sh`, `tests/c/star.sh`, `tests/c/vbe.sh` and
-    `tests/c/live.sh` are green.
-  - the `07ce087` sampling fix stands: at 3,000 cycles/ms the spread
-    present gate samples every one or two steps, so the star is a visible
-    descent instead of the five-step flash the 30,000 clock gave.  That
-    entry's `YT2_PRESENT_GAP_CYCLES` constant is now the per-machine
+    `server-start.sh` forwards its arguments, so `--cycles-per-ms 30000` remains
+    available for a fast-machine comparison.
+  - gates at the default clock: `tests/c/star.sh` follows the dense descent (27
+    samples at frames 334-363, steps 1..52, gaps 1..2); the same instruction
+    work now spans ten times as many BIOS ticks, so `tests/c/game.sh` runs 3,600
+    ticks and `tests/c/intro.sh` 2,000. `tests/c/intro.sh` no longer anchors the
+    story check on a fixed text hash (the story flame animation changes it); it
+    walks back from the settled story scene and requires the full-palette text
+    run. The title twinkle is sampled over 200 frames because it starts later at
+    the slower clock. `tests/c/run.sh`, `tests/c/game.sh`, `tests/c/intro.sh`,
+    `tests/c/star.sh`, `tests/c/vbe.sh` and `tests/c/live.sh` are green.
+  - the `07ce087` sampling fix stands: at 3,000 cycles/ms the spread present
+    gate samples every one or two steps, so the star is a visible descent
+    instead of the five-step flash the 30,000 clock gave. That entry's
+    `YT2_PRESENT_GAP_CYCLES` constant is now the per-machine
     `present_gap_cycles` field.
 - 2026-10-30 - M4 video subsystem port: codec-1 rows and scroll detection:
-  - `yt2_video` now keeps the asm seam's 32-bit row checksum (a 16-bit sum
-    plus a rotate/xor hash) instead of a byte shadow, and sends every changed
-    row through the C port of `sub_SeamEncodeRow`: runs of three or more use
+  - `yt2_video` now keeps the asm seam's 32-bit row checksum (a 16-bit sum plus
+    a rotate/xor hash) instead of a byte shadow, and sends every changed row
+    through the C port of `sub_SeamEncodeRow`: runs of three or more use
     `00`/`01`, one- and two-pixel runs become literals, long runs and literal
     chunks split at 255, and a following run can reuse the last literal with
-    `00`.  `yt2_payload_video_rect_rle` / `yt2_service_video_rect_rle` carry
-    the encoded row under codec 1; raw codec 0 stays for the stub and the
-    protocol fixtures;
-  - the whole-screen pan detector is the C port of `sub_SeamScrollCheck`:
-    mode 13h only, at least 32 changed rows, score no shift and every step in
-    +-8 rows, take a non-zero step only when it beats no shift and explains
-    at least 100 rows.  The scroll goes out before the row pass, the client's
-    checksum table is shifted with it, and the rows that slid in are poisoned
-    (complement checksums) so they are sent; rows that changed on their own
-    (a sprite over a panning background) still go out as rects;
+    `00`. `yt2_payload_video_rect_rle` / `yt2_service_video_rect_rle` carry the
+    encoded row under codec 1; raw codec 0 stays for the stub and the protocol
+    fixtures;
+  - the whole-screen pan detector is the C port of `sub_SeamScrollCheck`: mode
+    13h only, at least 32 changed rows, score no shift and every step in +-8
+    rows, take a non-zero step only when it beats no shift and explains at least
+    100 rows. The scroll goes out before the row pass, the client's checksum
+    table is shifted with it, and the rows that slid in are poisoned (complement
+    checksums) so they are sent; rows that changed on their own (a sprite over a
+    panning background) still go out as rects;
   - verification: `yt2core-tests` covers the six 640-pixel rows from
-    `tests/seam-rle/rltest.asm` and gets the asm encoder's exact lengths
-    (8, 647, 330, 647, 11, 564 bytes), plus 320-pixel literal/repeat/split
-    cases, pans of +2 (with an animated row), -3 and +8, the +9 repaint
-    fallback, an unchanged screen and a non-pan repaint.  The full
-    `tests/c/run.sh` game link now carries 5,780 codec-1 rows and 69 scroll
-    messages over 573 frames; `tests/c/check.py` requires both, and the gate
-    replays that `OUTPUT.BIN` through `tools/stream/replay.py` and the C#
-    client and compares the final PPM, so the C encoder, the Python decoder
-    and the client agree (5,780 rows, 69 scrolls, 573 frames);
+    `tests/seam-rle/rltest.asm` and gets the asm encoder's exact lengths (8,
+    647, 330, 647, 11, 564 bytes), plus 320-pixel literal/repeat/split cases,
+    pans of +2 (with an animated row), -3 and +8, the +9 repaint fallback, an
+    unchanged screen and a non-pan repaint. The full `tests/c/run.sh` game link
+    now carries 5,780 codec-1 rows and 69 scroll messages over 573 frames;
+    `tests/c/check.py` requires both, and the gate replays that `OUTPUT.BIN`
+    through `tools/stream/replay.py` and the C# client and compares the final
+    PPM, so the C encoder, the Python decoder and the client agree (5,780 rows,
+    69 scrolls, 573 frames);
   - `tests/seam-rle`, `tests/seam-scroll`, `tests/c/live.sh`,
-    `tests/c/intro.sh`, `tests/replay/run.sh` and the VBE gate stay green.
-    No assembly changed; `SWREG.EXE` remains MD5
+    `tests/c/intro.sh`, `tests/replay/run.sh` and the VBE gate stay green. No
+    assembly changed; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
   - docs: `engine/c/README.md` and `docs/client.md` no longer say the C server
     is mode-13h-only; `docs/protocol.md` records that both builds use codec 1
     and corrects the worst-case encoded row size (647 bytes for 640 pixels).
 - 2026-10-30 - fix: a live input record can no longer freeze the picture:
-  - report: the window stopped updating at the attract gate's shooting star
-    and the server log said `yt2: link lost; continuing without the client`.
-    The last recorded frame was 361 of the 52-step streak, so the engine had
-    stopped presenting, not the client reading;
-  - cause: the live folder link follows files that are recreated under it.
-    The client truncates `INPUT.BIN` for every session, and either side wraps
-    a pseudo-ring; the engine's read offset is a raw chunk offset, and if the
-    new file grows past the old size between two polls the offset lands
-    inside a record.  `yt2_folder_read_timed` treated the resulting bad event
-    header as `YT2_ERR`, `yt2_service_poll` marked the service failed, and
-    `yt2_link_poll` disabled the link - including the video path - so the
-    client kept its last frame forever.  A stale 112-byte `INPUT.BIN` plus
-    mouse motion reproduced it;
+  - report: the window stopped updating at the attract gate's shooting star and
+    the server log said `yt2: link lost; continuing without the client`. The
+    last recorded frame was 361 of the 52-step streak, so the engine had stopped
+    presenting, not the client reading;
+  - cause: the live folder link follows files that are recreated under it. The
+    client truncates `INPUT.BIN` for every session, and either side wraps a
+    pseudo-ring; the engine's read offset is a raw chunk offset, and if the new
+    file grows past the old size between two polls the offset lands inside a
+    record. `yt2_folder_read_timed` treated the resulting bad event header as
+    `YT2_ERR`, `yt2_service_poll` marked the service failed, and `yt2_link_poll`
+    disabled the link - including the video path - so the client kept its last
+    frame forever. A stale 112-byte `INPUT.BIN` plus mouse motion reproduced it;
   - fix: the timed reader now scans to the next plausible record (length in
-    range and the v0 frame magic), keeps the tail of a split header, retries
-    a short read instead of failing, and logs
-    `yt2: input resynchronised after N byte(s)`; `yt2_service_poll` no longer
-    poisons the write side on a read error, and `yt2_link_poll` keeps the
-    display link alive.  The client's `FollowStream` does the same scan when
-    a followed timed record is implausible and logs
-    `follow: resynchronised at byte N` instead of throwing away the reader
-    thread;
+    range and the v0 frame magic), keeps the tail of a split header, retries a
+    short read instead of failing, and logs `yt2: input resynchronised after N
+    byte(s)`; `yt2_service_poll` no longer poisons the write side on a read
+    error, and `yt2_link_poll` keeps the display link alive. The client's
+    `FollowStream` does the same scan when a followed timed record is
+    implausible and logs `follow: resynchronised at byte N` instead of throwing
+    away the reader thread;
   - verification: new `tests/c/link-resync.sh` (wired into `tests/c/run.sh`)
     opens a header+record `INPUT.BIN`, appends ten junk bytes and a valid key
-    record, and requires the resync line, the key, no `link lost` and at
-    least 50 frames; its second phase joins a header-only `OUTPUT.BIN`, adds
-    junk plus a `set_mode`/`frame_end`, and requires the client to recover
-    and decode one 320x200 frame.  The original 112-byte stale-file repro now
-    logs `input resynchronised after 6 byte(s)` and keeps presenting
-    (188 frames at 40 s) instead of freezing; the interactive `play-c.sh`
-    and the published bundle with the same stale file and continuous mouse
-    motion resynchronise by 4 and 2,953 bytes and keep presenting
-    (270-312 frames through 45 s) with no `link lost`.  The full
-    `tests/c/run.sh` stays green (7 checkpoints, star, VBE, link render),
-    `tests/c/live.sh`, `tests/c/intro.sh` and `tests/replay/run.sh` are
+    record, and requires the resync line, the key, no `link lost` and at least
+    50 frames; its second phase joins a header-only `OUTPUT.BIN`, adds junk plus
+    a `set_mode`/`frame_end`, and requires the client to recover and decode one
+    320x200 frame. The original 112-byte stale-file repro now logs `input
+    resynchronised after 6 byte(s)` and keeps presenting (188 frames at 40 s)
+    instead of freezing; the interactive `play-c.sh` and the published bundle
+    with the same stale file and continuous mouse motion resynchronise by 4 and
+    2,953 bytes and keep presenting (270-312 frames through 45 s) with no `link
+    lost`. The full `tests/c/run.sh` stays green (7 checkpoints, star, VBE, link
+    render), `tests/c/live.sh`, `tests/c/intro.sh` and `tests/replay/run.sh` are
     green, and no assembly changed; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-02 - fix: a mouse callback can no longer corrupt a draw in flight:
   - report: the intro's gate/guard animation turned into a garbled picture and
     the stream then stopped changing for about 29 s;
-  - cause: the INT 33h shim enters the game's mouse handler from a present
-    hook and wrote the event arguments into the live register file (AX=mask,
-    BX=buttons, CX=x, DX=y); `yt2_machine_call` restored only SP/CS/IP.  When
-    the event arrived between two rows of the mode-1 sprite copy in
-    `fn_19E12`, the handler preserved that entry BX (the button mask, 0) and
-    returned it to the draw: `mov cx, bx` made the row count 0, so each
-    `loop` wrapped to 65535 pixels.  The copy ran past the 64,000-byte work
-    buffer at `v_WorkSeg` (0x4118) into the scene list at `v_50B6` (0x50B9)
-    and kept writing for about 10.2M iterations (about 28.7 s at 3,000
-    cycles/ms);
-  - fix: the mouse wrapper saves the interrupted `yt2_registers` before it
-    loads the event arguments and restores the whole set when the handler
-    returns, as the real driver's ISR does; `yt2_machine_call` also runs the
-    callback with DF clear and restores the interrupted flags (an interrupt
-    restores FLAGS even though a retf handler does not push it);
-  - verification: a new `yt2game-tests` case plants a register set, enters
-    the game's handler through `yt2_mouse_abs`, and requires AX/BX/CX/DX,
+  - cause: the INT 33h shim enters the game's mouse handler from a present hook
+    and wrote the event arguments into the live register file (AX=mask,
+    BX=buttons, CX=x, DX=y); `yt2_machine_call` restored only SP/CS/IP. When the
+    event arrived between two rows of the mode-1 sprite copy in `fn_19E12`, the
+    handler preserved that entry BX (the button mask, 0) and returned it to the
+    draw: `mov cx, bx` made the row count 0, so each `loop` wrapped to 65535
+    pixels. The copy ran past the 64,000-byte work buffer at `v_WorkSeg`
+    (0x4118) into the scene list at `v_50B6` (0x50B9) and kept writing for about
+    10.2M iterations (about 28.7 s at 3,000 cycles/ms);
+  - fix: the mouse wrapper saves the interrupted `yt2_registers` before it loads
+    the event arguments and restores the whole set when the handler returns, as
+    the real driver's ISR does; `yt2_machine_call` also runs the callback with
+    DF clear and restores the interrupted flags (an interrupt restores FLAGS
+    even though a retf handler does not push it);
+  - verification: a new `yt2game-tests` case plants a register set, enters the
+    game's handler through `yt2_mouse_abs`, and requires AX/BX/CX/DX,
     SI/DI/BP/DS/ES, SP and FLAGS back; it fails on the old path with the four
-    event registers changed.  The captured wall-clock input that produced the
+    event registers changed. The captured wall-clock input that produced the
     garble now runs the gate animation through tick 1270: the old run's last
-    normal present was tick 1234 (hash `82D26253EE6C3A51`) and its next
-    present was the garbled frame at tick 1756 (`41DB3A87506AC501`), while the
-    fixed run keeps presenting every 5 ticks and all 446 present ticks up to
-    the old divergence are byte-identical.  The full `tests/c/run.sh` (unit
-    tests, 7 checkpoints, star, VBE, link render), `tests/c/live.sh`,
-    `tests/c/intro.sh`, `tests/c/link-resync.sh` and `tests/replay/run.sh`
-    stay green.  No assembly changed; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`.
+    normal present was tick 1234 (hash `82D26253EE6C3A51`) and its next present
+    was the garbled frame at tick 1756 (`41DB3A87506AC501`), while the fixed run
+    keeps presenting every 5 ticks and all 446 present ticks up to the old
+    divergence are byte-identical. The full `tests/c/run.sh` (unit tests, 7
+    checkpoints, star, VBE, link render), `tests/c/live.sh`, `tests/c/intro.sh`,
+    `tests/c/link-resync.sh` and `tests/replay/run.sh` stay green. No assembly
+    changed; `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-02 - fix: mouse clicks are no longer lost when the link poll lands
   inside a guest callback:
   - report: after the register fix, some physical clicks needed two or three
     presses before the game saw one;
   - cause: `yt2_game_present` polls the link before it presents, and the
-    per-instruction cycle hook can present from inside a nested guest
-    callback (it fired while the INT 33h handler was drawing the cursor).
-    `yt2_mouse_event` refuses to re-enter the game while `machine->nested`,
-    so the queued press was consumed and discarded; its release still
-    arrived on a later, safe pass.  The captured session lost the presses
-    for 3 of 14 clicks (ticks 3608, 3690, 3714), which is the 2-3 clicks the
-    report describes;
+    per-instruction cycle hook can present from inside a nested guest callback
+    (it fired while the INT 33h handler was drawing the cursor).
+    `yt2_mouse_event` refuses to re-enter the game while `machine->nested`, so
+    the queued press was consumed and discarded; its release still arrived on a
+    later, safe pass. The captured session lost the presses for 3 of 14 clicks
+    (ticks 3608, 3690, 3714), which is the 2-3 clicks the report describes;
   - fix: `yt2_link_poll` returns before it reads the transport when
-    `yt2_machine_call_safe` is false.  The records stay queued in the folder
+    `yt2_machine_call_safe` is false. The records stay queued in the folder
     transport and the next present outside guest callbacks delivers them in
     order; absolute motion needs no coalescing;
-  - verification: a new `yt2game-tests` case queues one mouse-button frame,
-    sets `nested`, and requires the transport not to be read; it then clears
-    the flag and requires the button callback once.  It fails without the
-    guard.  A 25 s wall-clock wiggle probe (49 clicks) went from 9 lost
-    presses and 2 lost releases to 49/49 delivered in order, and the full
-    captured input now delivers all 14 presses and 14 releases (the old run
-    delivered 11 and 14).  The same captured run still produces 2,416
-    frames.  `tests/c/run.sh` (unit tests, 7 checkpoints, star, VBE, link
-    render, link resync), `tests/c/live.sh`, `tests/c/intro.sh` and
-    `tests/replay/run.sh` are green.  No assembly changed; `SWREG.EXE`
-    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+  - verification: a new `yt2game-tests` case queues one mouse-button frame, sets
+    `nested`, and requires the transport not to be read; it then clears the flag
+    and requires the button callback once. It fails without the guard. A 25 s
+    wall-clock wiggle probe (49 clicks) went from 9 lost presses and 2 lost
+    releases to 49/49 delivered in order, and the full captured input now
+    delivers all 14 presses and 14 releases (the old run delivered 11 and 14).
+    The same captured run still produces 2,416 frames. `tests/c/run.sh` (unit
+    tests, 7 checkpoints, star, VBE, link render, link resync),
+    `tests/c/live.sh`, `tests/c/intro.sh` and `tests/replay/run.sh` are green.
+    No assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-03 - M4 timing: the DOSBox-X normal-core cycle model and sub-tick
   string charging:
   - **per-instruction cost**: the oracle profile runs `core=normal`, whose
-    `CPU_Core_Normal_Run` loop decrements `CPU_Cycles` once per instruction
-    and `DoString` once more per repeated-string iteration.  The C port was
-    charging a flat two cycles per emitted instruction, i.e. running the
-    guest at half the oracle's instruction rate.  `YT2_CYCLES_INSN` is now
-    one, and `YT2_CYCLES_STRING_ITER` one cycle per iteration;
-  - **retrace window**: DOSBox-X computes port 3DAh bit 3 from the CRTC
-    retrace start/end; the mode-13h mode set programs start = display end +
-    12 (412) and end = start + 2, so the bit is the two-scanline sync pulse
-    (~63.5 us), not the whole vertical blanking interval.  `YT2_VGA_RETRACE_US`
-    moves from 1,200 to 64.  The game's fades poll this bit before every DAC
-    pass, so the old wide window let two passes through each frame and made
-    the fades about twice as fast as the recorded 63-step ramps.  The
-    recorded fades now run one pass per frame (~16.4 ticks for 63 passes);
+    `CPU_Core_Normal_Run` loop decrements `CPU_Cycles` once per instruction and
+    `DoString` once more per repeated-string iteration. The C port was charging
+    a flat two cycles per emitted instruction, i.e. running the guest at half
+    the oracle's instruction rate. `YT2_CYCLES_INSN` is now one, and
+    `YT2_CYCLES_STRING_ITER` one cycle per iteration;
+  - **retrace window**: DOSBox-X computes port 3DAh bit 3 from the CRTC retrace
+    start/end; the mode-13h mode set programs start = display end + 12 (412) and
+    end = start + 2, so the bit is the two-scanline sync pulse (~63.5 us), not
+    the whole vertical blanking interval. `YT2_VGA_RETRACE_US` moves from 1,200
+    to 64. The game's fades poll this bit before every DAC pass, so the old wide
+    window let two passes through each frame and made the fades about twice as
+    fast as the recorded 63-step ramps. The recorded fades now run one pass per
+    frame (~16.4 ticks for 63 passes);
   - **sub-tick scheduling**: repeated-string helpers charge one cycle per
-    iteration *inside* the copy rather than the whole REP afterwards, so a
-    BIOS tick, a present pass or a link poll can fall between two copied
-    words at the cycle the original takes it.  The special full-screen
-    `REP MOVSW` flush still presents at its end, so the gate star keeps its
-    52 visible steps;
+    iteration *inside* the copy rather than the whole REP afterwards, so a BIOS
+    tick, a present pass or a link poll can fall between two copied words at the
+    cycle the original takes it. The special full-screen `REP MOVSW` flush still
+    presents at its end, so the gate star keeps its 52 visible steps;
   - **clock constants**: 65,536 PIT counts is 164,776 cycles at the default
-    3,000 cycles/ms (the earlier 1,647,765 figure was the 30,000 profile);
-    the new unit test pins the instruction/string costs, the 164,776-cycle
-    tick, the 42,804-cycle mode-13h frame, the 192-cycle (64 us) retrace and
-    the 50,000-cycle 60 Hz present slot, and proves a present inside a
-    100-word `REP MOVSW` sees a prefix of the copy;
-  - **scene holds**: the tick ISR reloads the scene countdowns `v_50EA`
-    and `v_50EC` with `5Bh` (91 ticks), and the four attract checkpoints
-    hold 93 ticks (the countdown plus the two ticks to the next presented
-    frame).  The C port already matched that; the stream recording's
-    ~137-tick holds are not an oracle, because the seam present runs
-    inside the ISR before the countdown and makes it lose BIOS ticks.
-    `tests/c/game_checkpoints.txt` now pins the four attract holds at
-    93 +/- 2 ticks, so a presentation or scheduling regression cannot
-    stretch them silently;
+    3,000 cycles/ms (the earlier 1,647,765 figure was the 30,000 profile); the
+    new unit test pins the instruction/string costs, the 164,776-cycle tick, the
+    42,804-cycle mode-13h frame, the 192-cycle (64 us) retrace and the
+    50,000-cycle 60 Hz present slot, and proves a present inside a 100-word `REP
+    MOVSW` sees a prefix of the copy;
+  - **scene holds**: the tick ISR reloads the scene countdowns `v_50EA` and
+    `v_50EC` with `5Bh` (91 ticks), and the four attract checkpoints hold 93
+    ticks (the countdown plus the two ticks to the next presented frame). The C
+    port already matched that; the stream recording's ~137-tick holds are not an
+    oracle, because the seam present runs inside the ISR before the countdown
+    and makes it lose BIOS ticks. `tests/c/game_checkpoints.txt` now pins the
+    four attract holds at 93 +/- 2 ticks, so a presentation or scheduling
+    regression cannot stretch them silently;
   - **known delta**: the intro's waits that test the sound driver status
-    (`v_0C2C`) still run long because SBFMDRV is not resident yet (M6).
-    A clean DOSBox-X run reaches the story/gate scenes in about 26 s of
-    guest time; the C port lands on `story-sleep` at tick 1368 (75 s).
-    That is the M6 dependency, not a cycle-model error.  No assembly
-    changed;
-  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star,
-    VBE, link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
-    `tests/replay/run.sh` are green.  The game run still matches the seven
-    checkpoints (webfoot at tick 105 held 64 ticks; attract holds 93 ticks)
-    and the star descends over 52 steps (30 samples, gaps 1..4).
-    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+    (`v_0C2C`) still run long because SBFMDRV is not resident yet (M6). A clean
+    DOSBox-X run reaches the story/gate scenes in about 26 s of guest time; the
+    C port lands on `story-sleep` at tick 1368 (75 s). That is the M6
+    dependency, not a cycle-model error. No assembly changed;
+  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star, VBE,
+    link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
+    `tests/replay/run.sh` are green. The game run still matches the seven
+    checkpoints (webfoot at tick 105 held 64 ticks; attract holds 93 ticks) and
+    the star descends over 52 steps (30 samples, gaps 1..4). `SWREG.EXE` remains
+    MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-04 - M4 hardening: string-instruction semantics, EMS probe, module
   boundary tests:
   - **CMPS source segment**: Capstone orders `CMPS` as `[si]` then `es:[di]`,
-    unlike `MOVS`, but the emitter took operand 1 as the source.  Every
-    generated `repe cmpsb` compared `ES:SI` with `ES:DI`; the EMS probe only
-    appeared to pass because both sides were zero.  The emitter now uses
-    operand 0, so the four sites read `DS:SI` (with any segment override);
-  - **CMPS flag order**: the helper subtracted destination minus source.
-    `CMPS` sets flags from `DS:SI - ES:DI`; equality happened to work, but an
-    ordered compare would have been inverted.  The helper now subtracts in
-    the x86 order, and the test checks CF/SF for `'A'` vs `'B'`;
+    unlike `MOVS`, but the emitter took operand 1 as the source. Every generated
+    `repe cmpsb` compared `ES:SI` with `ES:DI`; the EMS probe only appeared to
+    pass because both sides were zero. The emitter now uses operand 0, so the
+    four sites read `DS:SI` (with any segment override);
+  - **CMPS flag order**: the helper subtracted destination minus source. `CMPS`
+    sets flags from `DS:SI - ES:DI`; equality happened to work, but an ordered
+    compare would have been inverted. The helper now subtracts in the x86 order,
+    and the test checks CF/SF for `'A'` vs `'B'`;
   - **zero-count REP**: `REP MOVS/STOS/LODS/CMPS/SCAS/OUTS` with `CX=0` are
-    no-ops on x86.  The helpers used a do/while body and moved one element;
-    a zero-length copy could corrupt the next byte.  All six helpers return
-    before the body when the prefix is present and `CX=0`, charging no
-    string iteration;
+    no-ops on x86. The helpers used a do/while body and moved one element; a
+    zero-length copy could corrupt the next byte. All six helpers return before
+    the body when the prefix is present and `CX=0`, charging no string
+    iteration;
   - **EMS probe**: int 21h 35h for vector 67h pointed at `E000:000Ah`, which
-    held zeroes, not the `EMMXXXX0` device name the game compares.  The
-    sentinel paragraph now carries the name at offset 0Ah and the vector
-    answer points there; the real `repe cmpsb` path now passes on the name,
-    not on zeroed memory;
-  - **long-run pacing**: `pace_at` was 32-bit while the guest clock is
-    64-bit.  At 3,000 cycles/ms it wrapped after about 24 minutes and the
-    real-time pacer ran on every instruction until the next tick; the
-    deadline is now 64-bit and a unit test crosses the old boundary;
+    held zeroes, not the `EMMXXXX0` device name the game compares. The sentinel
+    paragraph now carries the name at offset 0Ah and the vector answer points
+    there; the real `repe cmpsb` path now passes on the name, not on zeroed
+    memory;
+  - **long-run pacing**: `pace_at` was 32-bit while the guest clock is 64-bit.
+    At 3,000 cycles/ms it wrapped after about 24 minutes and the real-time pacer
+    ran on every instruction until the next tick; the deadline is now 64-bit and
+    a unit test crosses the old boundary;
   - **shift/divide flags**: the shared shift helper tested bit 15 for every
-    width and applied the SHL overflow rule to SHR/SAR.  A masked count of
-    zero now leaves the flags untouched; SHL compares the new sign with the
-    carry, SHR keeps the original sign and SAR clears OF, for 8/16/32-bit
-    forms.  IDIV16 rejects `INT32_MIN / -1` as a divide overflow instead of
-    hitting C's undefined signed division;
+    width and applied the SHL overflow rule to SHR/SAR. A masked count of zero
+    now leaves the flags untouched; SHL compares the new sign with the carry,
+    SHR keeps the original sign and SAR clears OF, for 8/16/32-bit forms. IDIV16
+    rejects `INT32_MIN / -1` as a divide overflow instead of hitting C's
+    undefined signed division;
   - **DOS file shim**: the case-insensitive open fallback used to lowercase the
     whole host path, so a mixed-case `--game` root stopped resolving on Linux;
-    it now lowercases only the guest's DOS name.  A failed `ftell` after a
+    it now lowercases only the guest's DOS name. A failed `ftell` after a
     successful seek returns DOS error 1 instead of a garbage DX:AX offset;
-  - **payload boundaries**: `yt2_payload_video_rect_rle` compared
-    `9 + encoded_length` before checking the length, so a 32-bit wrap could
-    pass the bound; `yt2_payload_control_error` allowed a text of
-    `YT2_MAX_PAYLOAD - 2` and wrote one byte past its caller's 2,048-byte
-    buffer.  Both now compare against the remaining capacity first, with
-    tests at the largest legal size and one byte over;
+  - **payload boundaries**: `yt2_payload_video_rect_rle` compared `9 +
+    encoded_length` before checking the length, so a 32-bit wrap could pass the
+    bound; `yt2_payload_control_error` allowed a text of `YT2_MAX_PAYLOAD - 2`
+    and wrote one byte past its caller's 2,048-byte buffer. Both now compare
+    against the remaining capacity first, with tests at the largest legal size
+    and one byte over;
   - **module tests**: `yt2game-tests` now pins EMS allocate/map/flush/load/
     unmap/free and the 83h/8Ah/8Bh errors, the DOS arena's first-fit,
     coalescing, largest-free and resize paths, plus the string edge cases;
-  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star,
-    VBE, link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
-    `tests/replay/run.sh` are green; the sanitizer build and the 3,600-tick
-    game run are clean.  The checkpoints are unchanged (webfoot tick 105,
-    attract holds 93 ticks; star 52 steps).  No assembly changed;
-    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+  - **verification**: `tests/c/run.sh` (unit tests, 7 checkpoints, star, VBE,
+    link render and resync), `tests/c/live.sh`, `tests/c/intro.sh` and
+    `tests/replay/run.sh` are green; the sanitizer build and the 3,600-tick game
+    run are clean. The checkpoints are unchanged (webfoot tick 105, attract
+    holds 93 ticks; star 52 steps). No assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-04 - M4 hardening: clock, mouse and VBE boundary answers:
-  - **BIOS clock**: the tick handler reset the count at midnight without
-    raising the BIOS 24-hour flag, and `int 1Ah` answered from the internal
-    counter instead of `0040:006Ch`, so AL was always zero.  The tick now
-    sets `0040:0070h` on the wrap, and `int 1Ah AH=00h` returns the BDA
-    count, reports the flag in AL and clears it, matching DOSBox-X's
-    `INT1A_Handler`;
+  - **BIOS clock**: the tick handler reset the count at midnight without raising
+    the BIOS 24-hour flag, and `int 1Ah` answered from the internal counter
+    instead of `0040:006Ch`, so AL was always zero. The tick now sets
+    `0040:0070h` on the wrap, and `int 1Ah AH=00h` returns the BDA count,
+    reports the flag in AL and clears it, matching DOSBox-X's `INT1A_Handler`;
   - **VBE answers**: `4F02h` reported AX=004Fh for every mode, including
     unsupported ones, and `4F05h` left AX holding the call number even on
-    success.  Both now answer AL=4Fh with AH status (00h success, 01h
-    failure), the bank switch validates the window selector (DOSBox-X reads
-    BL) and the mode's bank count, and `4F03h` returns the current mode in
-    BX;
+    success. Both now answer AL=4Fh with AH status (00h success, 01h failure),
+    the bank switch validates the window selector (DOSBox-X reads BL) and the
+    mode's bank count, and `4F03h` returns the current mode in BX;
   - **mouse position**: `int 33h 04h` clamped unsigned, so -1 landed on the
     right/bottom edge; DOSBox-X (and the seam shim) read the coordinates as
-    signed, so -1 now clamps to 0.  Protocol absolute positions keep their
+    signed, so -1 now clamps to 0. Protocol absolute positions keep their
     unsigned range;
-  - **tests**: `yt2game-tests` pins the palette block's 6-bit masking, its
-    8-bit register wrap and its DGROUP copy; the midnight rollover and the
-    BDA answer; the 4F02/4F03/4F05 success and failure answers; and the
-    mouse ratio/counter/button/position paths;
-  - **verification**: `tests/c/run.sh` (7 checkpoints, holds 93, star 52
-    steps, VBE), `tests/c/live.sh` (206 frames, 0 dropped) and
-    `tests/c/intro.sh` (35 fade steps, 201 palette entries) are green, as
-    is `tests/replay/run.sh`.  The ASan/UBSan build, its unit tests and the
-    3,600-tick link run are clean.  No assembly changed; `SWREG.EXE`
-    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+  - **tests**: `yt2game-tests` pins the palette block's 6-bit masking, its 8-bit
+    register wrap and its DGROUP copy; the midnight rollover and the BDA answer;
+    the 4F02/4F03/4F05 success and failure answers; and the mouse
+    ratio/counter/button/position paths;
+  - **verification**: `tests/c/run.sh` (7 checkpoints, holds 93, star 52 steps,
+    VBE), `tests/c/live.sh` (206 frames, 0 dropped) and `tests/c/intro.sh` (35
+    fade steps, 201 palette entries) are green, as is `tests/replay/run.sh`. The
+    ASan/UBSan build, its unit tests and the 3,600-tick link run are clean. No
+    assembly changed; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-05 - M5 gameplay slice: scripted creation, walking and combat:
-  - **the seam's poll hook clobbered SI**: the file-backend oracle recorded
-    the name editor as "MEAT" after CONAN was typed.  `fn_PollInput` and
-    `fn_WaitKey` replace their `call fn_MusicService` with
-    `fn_SeamPresentMusic`, which presented and drained audio without saving
-    SI; the editor keeps its write pointer in SI across polls, so the typed
-    name was written to the wrong address.  The hook now saves and restores
-    the full register set before `fn_MusicService` runs.  With the fix the
-    original stores `CONAN` in DGROUP:9643 and displays the same preview as
-    the port (`6cf1cc7f08f0000e`); the earlier "MEAT" was a harness artifact,
-    not game behaviour;
+  - **the seam's poll hook clobbered SI**: the file-backend oracle recorded the
+    name editor as "MEAT" after CONAN was typed. `fn_PollInput` and `fn_WaitKey`
+    replace their `call fn_MusicService` with `fn_SeamPresentMusic`, which
+    presented and drained audio without saving SI; the editor keeps its write
+    pointer in SI across polls, so the typed name was written to the wrong
+    address. The hook now saves and restores the full register set before
+    `fn_MusicService` runs. With the fix the original stores `CONAN` in
+    DGROUP:9643 and displays the same preview as the port (`6cf1cc7f08f0000e`);
+    the earlier "MEAT" was a harness artifact, not game behaviour;
   - **deterministic harness**: `yt2game --input-script FILE` applies
     tick-stamped key/mouse events through the live link's input path, and
-    `--pin-dos-time N` answers `int 21h AH=2Ch` with a fixed value so the
-    game's clock-seeded RNG (`fn_1797C`) and the oracle's `TIMEFIX.COM` start
-    from the same seed.  `--dump` also writes the object table and map
-    segment for state comparisons;
-  - **M5 route**: title, class `FIGHTER`, portrait 1, the picked items,
-    name `CONAN` (the typed stages `C`/`CO`/`CON`/`CONA`/`CONAN` all match),
-    preview, keep, roster, game start, the 24-step walk from the starting
-    room to the garden and the two-worker-ant fight.  With this script the
-    solo fighter loses; the original and the port both return to the
-    Chapter II menu at tick 8743.  Mid-fight the oracle's memory dump has
-    the party at (175,37) facing east and `v_5062=0004`, `v_5064=B001`,
-    `v_50F6=F000`; the port's combat state matches.  The full-route end
-    dumps agree on the position, facing and `v_5062=0`, `v_5064=0001` (that
-    oracle script typed AN because it skipped the name-screen N); the
-    fixed-seam CONAN run confirms the typed name reaches slot 0, where the
-    port's gate also requires it;
-  - **gate**: `tests/c/game-m5.sh` runs the committed
-    `tests/c/m5_input.txt` and requires 21 checkpoint pairs from the fixed-
-    seam recordings: the static creation/name/preview screens and the room
-    pin both hashes; the six combat idle frames pin both hashes across the
-    palette cycle (107 common pairs); the attack-flash frames and the final
-    menu pin the framebuffer only, because their palette phase depends on
-    when the buffered attack keys land.  `game_frames.py` accepts `*` as a
-    palette wildcard and a `--globals m3|m5` state table; the M5 table also
-    checks the typed name in slot 0.  `tests/c/run.sh` now runs the M5 gate;
+    `--pin-dos-time N` answers `int 21h AH=2Ch` with a fixed value so the game's
+    clock-seeded RNG (`fn_1797C`) and the oracle's `TIMEFIX.COM` start from the
+    same seed. `--dump` also writes the object table and map segment for state
+    comparisons;
+  - **M5 route**: title, class `FIGHTER`, portrait 1, the picked items, name
+    `CONAN` (the typed stages `C`/`CO`/`CON`/`CONA`/`CONAN` all match), preview,
+    keep, roster, game start, the 24-step walk from the starting room to the
+    garden and the two-worker-ant fight. With this script the solo fighter
+    loses; the original and the port both return to the Chapter II menu at tick
+    8743. Mid-fight the oracle's memory dump has the party at (175,37) facing
+    east and `v_5062=0004`, `v_5064=B001`, `v_50F6=F000`; the port's combat
+    state matches. The full-route end dumps agree on the position, facing and
+    `v_5062=0`, `v_5064=0001` (that oracle script typed AN because it skipped
+    the name-screen N); the fixed-seam CONAN run confirms the typed name reaches
+    slot 0, where the port's gate also requires it;
+  - **gate**: `tests/c/game-m5.sh` runs the committed `tests/c/m5_input.txt` and
+    requires 21 checkpoint pairs from the fixed- seam recordings: the static
+    creation/name/preview screens and the room pin both hashes; the six combat
+    idle frames pin both hashes across the palette cycle (107 common pairs); the
+    attack-flash frames and the final menu pin the framebuffer only, because
+    their palette phase depends on when the buffered attack keys land.
+    `game_frames.py` accepts `*` as a palette wildcard and a `--globals m3|m5`
+    state table; the M5 table also checks the typed name in slot 0.
+    `tests/c/run.sh` now runs the M5 gate;
   - **verification**: `sh tests/c/game-m5.sh` -> 21 checkpoints match, M5
-    globals and `CONAN` slot 0 OK; `tests/c/game.sh --no-build` still
-    matches all 7 M3 checkpoints (holds 93 ticks); `yt2core-tests` and
-    `yt2game-tests` pass.  No `swreg.asm` change; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982` and the oracle build is byte-
-    identical.  The seam variants were rebuilt (`file`) for the oracle
-    recordings.
+    globals and `CONAN` slot 0 OK; `tests/c/game.sh --no-build` still matches
+    all 7 M3 checkpoints (holds 93 ticks); `yt2core-tests` and `yt2game-tests`
+    pass. No `swreg.asm` change; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982` and the oracle build is byte- identical.
+    The seam variants were rebuilt (`file`) for the oracle recordings.
 - 2026-11-09 - M5 extended slice: spider victory and chest loot:
   - **route**: the script now wins the garden fight instead of losing to the
-    worker ants.  Title, class `FIGHTER`, portrait 1, the sling and dagger
-    picked and dropped, `CONAN`, keep, roster 1/6/7/8, game start, the walk
-    to the garden, three sling rounds and nine melee rounds; the party wins,
-    the victory message runs, the party walks to the chest, the first
-    portrait opens it, the loot appears, and the chest is closed.  The gate
-    pins 32 checkpoint frames from the original's fixed-seam recording;
+    worker ants. Title, class `FIGHTER`, portrait 1, the sling and dagger picked
+    and dropped, `CONAN`, keep, roster 1/6/7/8, game start, the walk to the
+    garden, three sling rounds and nine melee rounds; the party wins, the
+    victory message runs, the party walks to the chest, the first portrait opens
+    it, the loot appears, and the chest is closed. The gate pins 32 checkpoint
+    frames from the original's fixed-seam recording;
   - **oracle input**: the fixed-seam file build takes the mouse events from
     `INPUT.BIN`; `tools/dosbox/drive.py` appends protocol-v0 `iabs`/`ibtn`
     records at the right frames, and `tools/dosbox/mouse.py` stays for
-    XTEST/Xvfb runs.  `TIMEFIX.COM` pins `int 21h AH=2Ch` so the game's
+    XTEST/Xvfb runs. `TIMEFIX.COM` pins `int 21h AH=2Ch` so the game's
     clock-seeded RNG (`fn_1797C`) starts from the same seed in both runs.
-    `MOUSEFIX.COM` is not loaded: the seam's INT 33h shim owns the game's
-    `0Ch` handler, so the integration-device TSR cannot reach the game.  Its
-    source now documents the real limitation (XTEST under Xvfb produces no
-    usable relative motion, not that DOSBox-X ignores captured host motion)
-    and stays available for stock `SWREG.EXE` runs;
+    `MOUSEFIX.COM` is not loaded: the seam's INT 33h shim owns the game's `0Ch`
+    handler, so the integration-device TSR cannot reach the game. Its source now
+    documents the real limitation (XTEST under Xvfb produces no usable relative
+    motion, not that DOSBox-X ignores captured host motion) and stays available
+    for stock `SWREG.EXE` runs;
   - **gate details**: `tests/c/m5_checkpoints.txt` pins the creation, name,
-    roster and chest screens and the combat idle frames.  `game_frames.py`
+    roster and chest screens and the combat idle frames. `game_frames.py`
     measures a checkpoint's hold up to the next *framebuffer* change, so the
-    palette phases of one image no longer count as a new screen, and it
-    accepts a `*` final checkpoint without comparing the end-dump palette,
-    which keeps cycling after the last present.  `tests/c/m5_input.txt` is
-    the extended script; the gate default is 9000 ticks;
+    palette phases of one image no longer count as a new screen, and it accepts
+    a `*` final checkpoint without comparing the end-dump palette, which keeps
+    cycling after the last present. `tests/c/m5_input.txt` is the extended
+    script; the gate default is 9000 ticks;
   - **end state**: the original's save state at the chest screen
     (`build/tmp/orstate/saves/1.sav`) and the port's end dump agree:
-    `v_94E7=00A1`, `v_94E9=0022`, `v_94E5=4000` (facing south),
-    `v_5062=0644`, `v_5064=0001`, and slot 0 holds `CONAN`;
+    `v_94E7=00A1`, `v_94E9=0022`, `v_94E5=4000` (facing south), `v_5062=0644`,
+    `v_5064=0001`, and slot 0 holds `CONAN`;
   - **verification**: `sh tests/c/game-m5.sh --no-build` -> 32 checkpoints
-    match, M5 globals and `CONAN` slot 0 OK.  The oracle recording is
-    `build/tmp/or3` (file build MD5 `c0df060c455ca6ee390c6871392d4974`).
-    No `swreg.asm` change; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`, and the seam build is intentionally
-    not byte-identical.
+    match, M5 globals and `CONAN` slot 0 OK. The oracle recording is
+    `build/tmp/or3` (file build MD5 `c0df060c455ca6ee390c6871392d4974`). No
+    `swreg.asm` change; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`, and the seam build is intentionally not
+    byte-identical.
 - 2026-11-10 - M6 sound: resident SBFMDRV and the audio boundary:
   - **resident emulation**: `engine/c/src/game/game_sound.c` implements the
-    SBFMDRV 1.34 resident API from `docs/sbfmdrv.md` (the commands the game
-    uses plus pause/resume, volume and repeat, and the timer-ISR-driven
-    sequencer, voice/percussion allocation, PIT divisor handling).
-    `yt2_sound_init` installs
-    the `"FMDRV"` signature and the driver's own instrument, percussion, note,
-    F-number and velocity tables at their CS offsets in segment `F100`; the
-    game's INT 21h 35h scan finds the vector and patches its `int 0` stub as
-    usual.  The install leaves `reg 1 = 20h` (waveform select) and `reg 8 = 0`;
-    command 8 mirrors `sub_0D51` (stop, gate fill `101h`, instrument table
-    `CS:0159`, 96 Hz divisor `48D3h`, transpose 0), and the default-patch
-    loader keeps the shipped `[02CEh+voice]+voice` connection-register quirk.
+    SBFMDRV 1.34 resident API from `docs/sbfmdrv.md` (the commands the game uses
+    plus pause/resume, volume and repeat, and the timer-ISR-driven sequencer,
+    voice/percussion allocation, PIT divisor handling). `yt2_sound_init`
+    installs the `"FMDRV"` signature and the driver's own instrument,
+    percussion, note, F-number and velocity tables at their CS offsets in
+    segment `F100`; the game's INT 21h 35h scan finds the vector and patches its
+    `int 0` stub as usual. The install leaves `reg 1 = 20h` (waveform select)
+    and `reg 8 = 0`; command 8 mirrors `sub_0D51` (stop, gate fill `101h`,
+    instrument table `CS:0159`, 96 Hz divisor `48D3h`, transpose 0), and the
+    default-patch loader keeps the shipped `[02CEh+voice]+voice`
+    connection-register quirk.
   - **boundary**: every OPL write leaves as an AUDIO `opl_batch_timed` message
     with its 8253 channel-0 timebase; music start/stop emits the AUDIO control
-    byte, and port 61h gate edges emit speaker messages.  INT 80h is the only
+    byte, and port 61h gate edges emit speaker messages. INT 80h is the only
     driver interface: `v_SoundEntry` stays the vestigial zero far call and the
     emitter turns its `lcall [0F7AEh]` into a no-op (`docs/sbfmdrv.md` §7).
     Sound is on by default (`--sound`, the CH2.BAT path) and the game parses
     `SOUND`/`BLASTER` from the PSP environment; `--no-sound` leaves the
-    environment empty.  The checkpoint gates pin `--no-sound` because the
+    environment empty. The checkpoint gates pin `--no-sound` because the
     resident driver changes intro/script timing.
   - **PC speaker**: `game_machine.c` tracks the port 61h gate and PIT channel 2
     divisors; `fn_SpeakerBeep` (S06E7) now produces the `S` gate/divisor pair
@@ -1994,193 +2190,189 @@ items now live in `docs/roadmap.md`).
     dispatcher and requires divisor 662 and the four-tick on window.
   - **disassembly fix**: `S187E:0314` is authored as a four-byte `db` plus a
     relocated `dw S1DEA`; `tools/port/program.py`'s new `add_relocated_code`
-    merges the pair into one synthetic instruction so the port no longer
-    reports `bad entry at 187E:031C`.
+    merges the pair into one synthetic instruction so the port no longer reports
+    `bad entry at 187E:031C`.
   - **verification**: `tests/c/audio.py` compares the engine's `--audio-log`
     with `tests/data/music-walk.dro`: the register state at the first key-on
     matches the capture snapshot, all 740 effective writes (after the DRO's
     last-value cache) match, and 161 note-ons stop after 1119.0 ticks against
-    the reference's 96 Hz timeline (1118.976).  `tests/c/run.sh` includes the
+    the reference's 96 Hz timeline (1118.976). `tests/c/run.sh` includes the
     audio gate, and the live-link check now accepts AUDIO records and requires
-    at least one.  `engine/asm/sbfmdrv/tools/tables.py`
-    regenerates `sound_tables.h` from the reference image (`--check` proves it
-    is current).
-  - **gates**: `sh tests/c/game.sh --no-build` (7 checkpoints),
-    `sh tests/c/game-m5.sh --no-build` (32 checkpoints) and
-    `sh tests/c/run.sh --no-build` are green; `yt2game-tests` covers the
-    speaker path.  No `swreg.asm` change: `engine/asm/swreg/tools/verify.sh`
-    still prints `SWREG.EXE: OK` + `IDENTICAL` (MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`); the SBFMDRV disassembly still
-    reassembles byte-identically (`0f679017d543b0947fc5a33456ba38a7`).
+    at least one. `engine/asm/sbfmdrv/tools/tables.py` regenerates
+    `sound_tables.h` from the reference image (`--check` proves it is current).
+  - **gates**: `sh tests/c/game.sh --no-build` (7 checkpoints), `sh
+    tests/c/game-m5.sh --no-build` (32 checkpoints) and `sh tests/c/run.sh
+    --no-build` are green; `yt2game-tests` covers the speaker path. No
+    `swreg.asm` change: `engine/asm/swreg/tools/verify.sh` still prints
+    `SWREG.EXE: OK` + `IDENTICAL` (MD5 `c3bdd3054e55a1e0b57c9780654dc982`); the
+    SBFMDRV disassembly still reassembles byte-identically
+    (`0f679017d543b0947fc5a33456ba38a7`).
 - 2026-11-10 - fix: the C server reports the game's WORLD.DAT sound effects:
-  - **report**: music played, but effects were silent in the client (for
-    example the combat shooting effect).  The C server emitted only OPL
-    batches, control bytes and speaker edges.  The transliterated
-    `fn_PlaySFX` tested `v_SoundState` bit 3, which the vestigial far-entry
-    detect never sets, so it fell through to the id-3 PC-speaker beep and
-    79 of the 80 authored effects never reached the client.  The seam build
-    already reported every call.
-  - **fix**: the emitter inserts `yt2_sound_sample(...)` at `fn_PlaySFX`'s
-    first `TEST` (`S187E:0194`), mirroring `fn_SeamPlaySFX`.  The helper
-    reads the 4-byte VOC offset from the game's `DS:0CF51h` table for ids
-    1..80 and sends `AUDIO sample(id, offset, PIT)` when sound is enabled.
-    The client already decodes the VOC record from WORLD.DAT and mixes it on
-    the PIT timeline; effect 3 still emits the speaker pair, which the client
-    drops when the sample is present.
+  - **report**: music played, but effects were silent in the client (for example
+    the combat shooting effect). The C server emitted only OPL batches, control
+    bytes and speaker edges. The transliterated `fn_PlaySFX` tested
+    `v_SoundState` bit 3, which the vestigial far-entry detect never sets, so it
+    fell through to the id-3 PC-speaker beep and 79 of the 80 authored effects
+    never reached the client. The seam build already reported every call.
+  - **fix**: the emitter inserts `yt2_sound_sample(...)` at `fn_PlaySFX`'s first
+    `TEST` (`S187E:0194`), mirroring `fn_SeamPlaySFX`. The helper reads the
+    4-byte VOC offset from the game's `DS:0CF51h` table for ids 1..80 and sends
+    `AUDIO sample(id, offset, PIT)` when sound is enabled. The client already
+    decodes the VOC record from WORLD.DAT and mixes it on the PIT timeline;
+    effect 3 still emits the speaker pair, which the client drops when the
+    sample is present.
   - **verification**: a new `yt2game-tests` case drives the generated
-    `fn_PlaySFX` with effect 16 and checks that the log line carries the
-    table offset; the new `tests/c/sfx.sh` runs the scripted opening with
-    sound and requires every logged offset to land on a "Creative Voice File"
-    record in WORLD.DAT (`tests/c/run.sh` includes it).  A 3000-tick scripted
-    run logs the first sample (id 6, offset `0A26AAh`), and the C# client
-    decodes 11 samples over the 9000-tick run with `unknown=0`.  No assembly
-    changed; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`.
+    `fn_PlaySFX` with effect 16 and checks that the log line carries the table
+    offset; the new `tests/c/sfx.sh` runs the scripted opening with sound and
+    requires every logged offset to land on a "Creative Voice File" record in
+    WORLD.DAT (`tests/c/run.sh` includes it). A 3000-tick scripted run logs the
+    first sample (id 6, offset `0A26AAh`), and the C# client decodes 11 samples
+    over the 9000-tick run with `unknown=0`. No assembly changed; `SWREG.EXE`
+    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - save/load panel regression gate:
   - **route**: the M5 opening runs through the chest loot, then the game's own
-    disk panel: save slot 1, walk four steps back, save slot 2, load slot 1
-    back and save the restored state to slot 3.
+    disk panel: save slot 1, walk four steps back, save slot 2, load slot 1 back
+    and save the restored state to slot 3.
   - **check**: `tests/c/saveload.sh` drives the disk keys and
-    `tests/c/saveload.py` reads the 77509-byte `MITHWARE PARTY` blob.  The
-    slot-1 team sits at `(A1h,22h)` facing `4000h`; slot 2 carries the
-    four-step walk `(A1h,1Eh)`; slot 3 restores slot 1 from the first party
-    record (`1F4h`) to the end of the blob, and the end-of-run `--dump` has
-    the live party back at `(A1h,22h)` with `CONAN` in slot 0.  Without the
-    load the walk stays in the live state, so the check is not blind.
-  - **verification**: `sh tests/c/run.sh --no-build` is `c: OK`
-    (`saveload: saved (00A1,0022), walked to (00A1,001E), load restored
-    (00A1,0022); 77009 party bytes match`).  No assembly changed;
-    `SWREG.EXE` remains MD5
+    `tests/c/saveload.py` reads the 77509-byte `MITHWARE PARTY` blob. The slot-1
+    team sits at `(A1h,22h)` facing `4000h`; slot 2 carries the four-step walk
+    `(A1h,1Eh)`; slot 3 restores slot 1 from the first party record (`1F4h`) to
+    the end of the blob, and the end-of-run `--dump` has the live party back at
+    `(A1h,22h)` with `CONAN` in slot 0. Without the load the walk stays in the
+    live state, so the check is not blind.
+  - **verification**: `sh tests/c/run.sh --no-build` is `c: OK` (`saveload:
+    saved (00A1,0022), walked to (00A1,001E), load restored (00A1,0022); 77009
+    party bytes match`). No assembly changed; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-11 - M7/B1 milestone: typed file/save records, Windows x64 build and the B1 gates:
+- 2026-11-11 - M7/B1 milestone: typed file/save records, Windows x64 build and
+  the B1 gates:
   - **typed records**: `engine/c/include/yt2/data.h` describes the seven
     `CURGAME`/`SAVEGAMEn` chunks, the party header, the nine 500-byte slots
     (both stat blocks, pack, equipment, effects and containers), the DOS file
     struct, picture-cache classes, `CTMF` music blocks and the SFX table, with
     compile-time offset/size asserts; `src/data.c` owns the chunk table and the
     only file-bytes-to-struct copies; `yt2saveinfo` reads a real save through
-    them.  The layout is documented in `docs/structures.md`.
+    them. The layout is documented in `docs/structures.md`.
   - **protocol/session views**: `yt2_bin_header`, `yt2_timed_record`,
     `yt2_session_header` and `yt2_session_event` are typed and size-asserted in
     `yt2/transport.h`; protocol v0 and the data model are frozen.
   - **Windows x64**: `engine/c/tools/build-mingw.sh` (`build.bat` wrapper)
-    cross-builds the core, stub, both test binaries, `yt2game` and
-    `yt2saveinfo` as PE32+; `tests/c/windows.sh` checks the images, runs the
-    unit tests under Wine and requires byte-identical 700-tick logs/dumps and
-    save-reader output to Linux.  `publish-win.sh --server c` stages the
-    Windows engine bundle.  Text-mode logs are opened `"wb"` and the console
-    streams are set binary, so Windows newlines cannot leak into the compared
-    output.
+    cross-builds the core, stub, both test binaries, `yt2game` and `yt2saveinfo`
+    as PE32+; `tests/c/windows.sh` checks the images, runs the unit tests under
+    Wine and requires byte-identical 700-tick logs/dumps and save-reader output
+    to Linux. `publish-win.sh --server c` stages the Windows engine bundle.
+    Text-mode logs are opened `"wb"` and the console streams are set binary, so
+    Windows newlines cannot leak into the compared output.
   - **verification**: `sh tests/c/run.sh --no-build` -> `c: OK` (status 0),
     including the save/load, M5, sound/star/VBE and the default Windows gate.
-    `sh tests/c/windows.sh --full` needs more than 10 minutes under Wine and
-    is kept as an optional slower check.  No assembly changed; `SWREG.EXE`
-    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-11 - plan correction: B1 is the executable spec, B2 is the C deliverable:
+    `sh tests/c/windows.sh --full` needs more than 10 minutes under Wine and is
+    kept as an optional slower check. No assembly changed; `SWREG.EXE` remains
+    MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-11 - plan correction: B1 is the executable spec, B2 is the C
+  deliverable:
   - **what B1 is**: the emitted instruction-level C in `engine/c/` runs the
-    original over guest registers, guest memory and a segment:offset
-    dispatcher; the decode is hoisted to build time, but it is still an
-    emulator-shaped executable spec.  It is the M7 milestone and the
-    differential oracle, not the C port and not the deliverable.
+    original over guest registers, guest memory and a segment:offset dispatcher;
+    the decode is hoisted to build time, but it is still an emulator-shaped
+    executable spec. It is the M7 milestone and the differential oracle, not the
+    C port and not the deliverable.
   - **three stages codified**: `docs/porting.md` now separates B1 (pseudo-port,
     M7, done), B2 (minimal-but-real, hand-written, idiomatic C with typed game
-    state and no asm/guest CPU/memory/dispatch/emulation glue; M8, next) and
-    the C# port (M10, written from B2, the real forward effort).
-    `docs/roadmap.md`, `README.md`, `CONTRIBUTING.md`, `docs/layout.md`,
-    `docs/structures.md`, `docs/client.md`, `docs/protocol.md` and
-    `engine/c/README.md` are reframed to match.
+    state and no asm/guest CPU/memory/dispatch/emulation glue; M8, next) and the
+    C# port (M10, written from B2, the real forward effort). `docs/roadmap.md`,
+    `README.md`, `CONTRIBUTING.md`, `docs/layout.md`, `docs/structures.md`,
+    `docs/client.md`, `docs/protocol.md` and `engine/c/README.md` are reframed
+    to match.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 first slice: live party state and the save container:
-  - **new tree**: `engine/port/` is the hand-written B2 engine.  It is
-    ordinary C11 (`-Wall -Wextra -Wpedantic -Werror`) and has no generated
-    code, guest memory, registers, segment dispatch or B1 link.  The B1
-    executable spec stays in `engine/c/` as the oracle.
-  - **live model**: `yt2/party.h` names the party header, the nine roster
-    slots, the attributes/combat skills blocks and the pack/equipment/effect
-    containers.  `party.c` parses the 5000-byte block into that state; the
-    byte offsets live in the parser, not in the live structs.
-  - **container**: `yt2/savefile.h` owns the seven-chunk `CURGAME`/
-    `SAVEGAMEn` image and validates that the chunks tile the 77509 bytes.
-    Only the party block is decoded so far; the other chunks stay typed spans
-    until their models land.
-  - **verification**: `sh engine/port/tests/run.sh` builds and runs
-    `yt2p-tests: OK` and requires `yt2p-info` output to be byte-identical to
-    B1's `yt2saveinfo` on the real `SAVGAME1` from the save/load gate
-    (`port: save/party output matches B1`, status 0).  No assembly changed;
-    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+  - **new tree**: `engine/port/` is the hand-written B2 engine. It is ordinary
+    C11 (`-Wall -Wextra -Wpedantic -Werror`) and has no generated code, guest
+    memory, registers, segment dispatch or B1 link. The B1 executable spec stays
+    in `engine/c/` as the oracle.
+  - **live model**: `yt2/party.h` names the party header, the nine roster slots,
+    the attributes/combat skills blocks and the pack/equipment/effect
+    containers. `party.c` parses the 5000-byte block into that state; the byte
+    offsets live in the parser, not in the live structs.
+  - **container**: `yt2/savefile.h` owns the seven-chunk `CURGAME`/ `SAVEGAMEn`
+    image and validates that the chunks tile the 77509 bytes. Only the party
+    block is decoded so far; the other chunks stay typed spans until their
+    models land.
+  - **verification**: `sh engine/port/tests/run.sh` builds and runs `yt2p-tests:
+    OK` and requires `yt2p-info` output to be byte-identical to B1's
+    `yt2saveinfo` on the real `SAVGAME1` from the save/load gate (`port:
+    save/party output matches B1`, status 0). No assembly changed; `SWREG.EXE`
+    remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 save writer and round-trip gate:
   - **writer**: `yt2_party_write` writes the modeled header/slot fields back
-    over a party block; `yt2_save_write` copies the container image, applies
-    the live party, and writes the 77509 bytes through the B2 file service.
-    Reserved spans, containers and the other six chunks are preserved, never
+    over a party block; `yt2_save_write` copies the container image, applies the
+    live party, and writes the 77509 bytes through the B2 file service. Reserved
+    spans, containers and the other six chunks are preserved, never
     reinterpreted.
   - **gate**: the B2 gate now writes the loaded `SAVEGAME1` back and requires
-    `cmp` identity with the original.  It then moves the party to
-    `1234:5678`, requires B1's `yt2saveinfo` to read that position, requires
-    every other decoded field to stay the same and `cmp -l` to show exactly
-    the four position bytes changed (`port: writer applies live state and
-    preserves everything else`).  Unit tests cover the serializer on a
-    synthetic block: all modeled fields round trip and reserved bytes stay
-    put.
-  - **verification**: `sh engine/port/tests/run.sh` -> `port: OK`, status 0;
-    no assembly changed, `SWREG.EXE` remains MD5
+    `cmp` identity with the original. It then moves the party to `1234:5678`,
+    requires B1's `yt2saveinfo` to read that position, requires every other
+    decoded field to stay the same and `cmp -l` to show exactly the four
+    position bytes changed (`port: writer applies live state and preserves
+    everything else`). Unit tests cover the serializer on a synthetic block: all
+    modeled fields round trip and reserved bytes stay put.
+  - **verification**: `sh engine/port/tests/run.sh` -> `port: OK`, status 0; no
+    assembly changed, `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 `WORLD.DAT` map loader:
   - **layout**: the map database is a flat prefix of `WORLD.DAT`: 115 200
     four-byte tiles (20×6 maps of 40×24, row-major), then 120 six-byte map
-    descriptors (four-char suffix, name index, type 0/1/2) and 70 fixed
-    20-byte names.  The prefix is `0x71048` bytes; music and SFX records
-    follow.  Documented in `docs/structures.md`.
+    descriptors (four-char suffix, name index, type 0/1/2) and 70 fixed 20-byte
+    names. The prefix is `0x71048` bytes; music and SFX records follow.
+    Documented in `docs/structures.md`.
   - **model**: `yt2/world.h` decodes the prefix into `yt2_tile` records and
-    `yt2_map`/name tables, keeps the rest of the file for the audio loaders,
-    and offers bounds-checked map/tile accessors.  `yt2p-world` prints the
-    counts and every non-filler map with its name.
-  - **gate**: the unit tests build a synthetic image to pin parsing and
-    bounds behaviour, then load the shipped `WORLD.DAT` and require 90 126
-    non-zero tiles, 48 filler / 25 world / 47 dungeon maps, map 21
-    `YENDOR-PORT HOPE`, map 24 dungeon `PORT HOPE` and the known tile values
-    at maps 21 and 20.  `sh engine/port/tests/run.sh` -> `port: OK`, status 0.
+    `yt2_map`/name tables, keeps the rest of the file for the audio loaders, and
+    offers bounds-checked map/tile accessors. `yt2p-world` prints the counts and
+    every non-filler map with its name.
+  - **gate**: the unit tests build a synthetic image to pin parsing and bounds
+    behaviour, then load the shipped `WORLD.DAT` and require 90 126 non-zero
+    tiles, 48 filler / 25 world / 47 dungeon maps, map 21 `YENDOR-PORT HOPE`,
+    map 24 dungeon `PORT HOPE` and the known tile values at maps 21 and 20. `sh
+    engine/port/tests/run.sh` -> `port: OK`, status 0.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 picture loader:
   - **format**: `PICTURES.VGA` is ten groups of tightly packed 8-bit pictures
-    (318×198×23, 210×105×101, 140×155×215, 190×110×162, 224×74×18,
-    224×62×12, 56×136×55, 32×32×270, 16×16×510, 8×8×576).  The sizes sum
-    exactly to the 13 054 330-byte file.  The class sizes match the game's
-    cache-init sizes (`0F5F4h`, `5622h`, ...), and the group order follows the
-    cache classes.  Documented in `docs/structures.md`.
+    (318×198×23, 210×105×101, 140×155×215, 190×110×162, 224×74×18, 224×62×12,
+    56×136×55, 32×32×270, 16×16×510, 8×8×576). The sizes sum exactly to the 13
+    054 330-byte file. The class sizes match the game's cache-init sizes
+    (`0F5F4h`, `5622h`, ...), and the group order follows the cache classes.
+    Documented in `docs/structures.md`.
   - **model**: `yt2/pictures.h` exposes the group table and a pointer to each
     raw picture, with bounds checks; `yt2p-pictures` prints the bounds and an
     FNV-1a checksum per group.
   - **gate**: unit tests build a synthetic 13 MB image to pin the offset math,
     then load the shipped file and require every group's offset/size and a
-    checksum (`70F8CD07`, `0F255152`, ... `DFB96320`).  The shell gate pins the
-    totals and the first/last group lines.  `sh engine/port/tests/run.sh` ->
+    checksum (`70F8CD07`, `0F255152`, ... `DFB96320`). The shell gate pins the
+    totals and the first/last group lines. `sh engine/port/tests/run.sh` ->
     `port: OK`, status 0.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 palettes, surface and the first rendered title frame:
   - **palettes**: `WORLD.DAT` holds nine 768-byte 6-bit palettes at `8270Ah`,
-    loaded by `fn_1821A` (offset table at DS:0CE6F, record size `300h`).  The
-    B2 world loader parses all nine; palette 0 is the title/attract palette
-    with FNV-1a 64 `E3275EE3AE459FB5`.  The story intro uses the same table
-    but fades only selected ranges (the settled story palette is palette 0
-    with only entries `90h..9Fh` lit).
+    loaded by `fn_1821A` (offset table at DS:0CE6F, record size `300h`). The B2
+    world loader parses all nine; palette 0 is the title/attract palette with
+    FNV-1a 64 `E3275EE3AE459FB5`. The story intro uses the same table but fades
+    only selected ranges (the settled story palette is palette 0 with only
+    entries `90h..9Fh` lit).
   - **surface**: `yt2/surface.c` is an ordinary 320x200 8-bit indexed surface
-    with a clipped blit, no screen segment or video memory.  `yt2p-render`
-    blits one picture with one palette and writes a PPM.
+    with a clipped blit, no screen segment or video memory. `yt2p-render` blits
+    one picture with one palette and writes a PPM.
   - **first frame**: the title screen is group 0 picture 22 at (1,0) with
-    palette 0.  The gate renders it and requires the original's exact frame
-    hash `09BEC5E9162924EF` and palette hash `E3275EE3AE459FB5`, plus the PPM
-    size.  `sh engine/port/tests/run.sh` -> `port: OK`, status 0.
+    palette 0. The gate renders it and requires the original's exact frame hash
+    `09BEC5E9162924EF` and palette hash `E3275EE3AE459FB5`, plus the PPM size.
+    `sh engine/port/tests/run.sh` -> `port: OK`, status 0.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 main-menu frame:
   - **oracle capture**: letting the intro finish and pressing Tab reaches the
-    main menu.  The captured 320x200 frame is group 0 picture 2 at (1,1) with
+    main menu. The captured 320x200 frame is group 0 picture 2 at (1,1) with
     palette 0; only 89 pixels near (229..237, 179..194) differ from the raw
-    picture (the sound/status overlay).  The menu options are baked into the
+    picture (the sound/status overlay). The menu options are baked into the
     picture, so the menu background needs no font renderer.
   - **gate**: `yt2p-render ... 0 2 0 ... 1 1` must print frame hash
     `6ADE1397DAE95BC0` and palette hash `E3275EE3AE459FB5`.
@@ -2188,92 +2380,91 @@ items now live in `docs/roadmap.md`).
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 text face and clue-book shell:
   - **trigger**: F8 is handled globally in `fn_PollInput` (`cmp al,42h` ->
-    `fn_00952` unless `v_5064` bit 8 is set); Tab from the main menu reaches
-    the same page through `fn_04B70` key `9`.  A B1 run with F8 at tick 7600
-    opens "DARK UNION : THE ON-LINE CLUE BOOK" at tick ~7728.
+    `fn_00952` unless `v_5064` bit 8 is set); Tab from the main menu reaches the
+    same page through `fn_04B70` key `9`. A B1 run with F8 at tick 7600 opens
+    "DARK UNION : THE ON-LINE CLUE BOOK" at tick ~7728.
   - **composition**: group 0 picture 13 at (1,1) + the standard 6x6 face
     (DGROUP:`021Ch`, bank 0 of the `0214h` table) + seven 16x16 command icons
     (group 8: `20h,145h,147h,153h,149h,14Bh,14Dh`) at `(62+30n,180)`, palette
-    0.  Text is transparent; the title/help colour is `0Dh`, the Tab line
-    `59h`, the list `08h`.  Documented in `docs/structures.md`.
-  - **oracle capture**: 3200-tick `--link` run, F8 at 7600; the presented
-    frame `7F29E8DA4ED08B2F` contains the hand cursor at (24,170).  The
-    cursor-free page checksum (FNV-1a 64) is `07D368FE31D7447F`, palette
-    `E3275EE3AE459FB5`.  The seven-phase palette rotation only touches
-    `D0h..DFh`, which the page never uses.
+    0. Text is transparent; the title/help colour is `0Dh`, the Tab line `59h`,
+       the list `08h`. Documented in `docs/structures.md`.
+  - **oracle capture**: 3200-tick `--link` run, F8 at 7600; the presented frame
+    `7F29E8DA4ED08B2F` contains the hand cursor at (24,170). The cursor-free
+    page checksum (FNV-1a 64) is `07D368FE31D7447F`, palette `E3275EE3AE459FB5`.
+    The seven-phase palette rotation only touches `D0h..DFh`, which the page
+    never uses.
   - **model**: `yt2/text.h` owns the font table and transparent line drawing;
-    `yt2/cluebook.h` composes the page.  `yt2_surface_blit_transparent` is the
-    ordinary masked blit.  `yt2p-cluebook` renders the page to a PPM.
+    `yt2/cluebook.h` composes the page. `yt2_surface_blit_transparent` is the
+    ordinary masked blit. `yt2p-cluebook` renders the page to a PPM.
   - **gate**: unit tests pin the 'A' glyph, clipping and masked blits, and the
-    real page checksum; `sh engine/port/tests/run.sh` requires
-    `cluebook: frame 07D368FE31D7447F palette-fnv E3275EE3AE459FB5` and
-    `port: OK`.
+    real page checksum; `sh engine/port/tests/run.sh` requires `cluebook: frame
+    07D368FE31D7447F palette-fnv E3275EE3AE459FB5` and `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 boot-scene sources identified (for the next slice):
   - **webfoot logo**: group 0 picture 16 at (1,1), exact match at tick 89
     (`c5b1519ef4c1133a`), its own palette (`089875ebab4d4c6f`).
   - **attract vignettes**: group 0 pictures 17, 18, 19, 20 at (1,0), exact
-    matches at ticks 2956/3080/3205/3329, palette 0.  They are displayed by
+    matches at ticks 2956/3080/3205/3329, palette 0. They are displayed by
     `fn_0617A` (indices `11h..16h`, twenty ticks each).
   - **story text screens**: the `story-sleep`/`story-knock` checkpoints are
-    green 6x6 text on black at ticks 1353/2691, not pictures.  The animated
-    story itself is `sub_05D5B` + `sub_052BF` + `sub_054B1` with object and
-    palette animation; the group 2 story picture follows later.
+    green 6x6 text on black at ticks 1353/2691, not pictures. The animated story
+    itself is `sub_05D5B` + `sub_052BF` + `sub_054B1` with object and palette
+    animation; the group 2 story picture follows later.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-11 - M8/B2 static start-up scenes:
-  - **scenes**: the ten settled compositions before play are now typed:
-    webfoot (group 0 picture 16 at (1,1), palette 8), the sleep and knock story
-    text screens (black, palette 0 entries `90h..9Fh`, standard 6x6 face,
-    shadow `93h` at `(x,y)` and body `98h` at `(x-1,y-1)`), attract pictures
-    17-21 at (1,0), title picture 22 at (1,0) and the menu picture 2 at (1,1),
-    all on palette 0.  Documented in `docs/structures.md`.
+  - **scenes**: the ten settled compositions before play are now typed: webfoot
+    (group 0 picture 16 at (1,1), palette 8), the sleep and knock story text
+    screens (black, palette 0 entries `90h..9Fh`, standard 6x6 face, shadow
+    `93h` at `(x,y)` and body `98h` at `(x-1,y-1)`), attract pictures 17-21 at
+    (1,0), title picture 22 at (1,0) and the menu picture 2 at (1,1), all on
+    palette 0. Documented in `docs/structures.md`.
   - **model**: `yt2/boot.h` exposes the scene enum, composition and palette
     derivation; `yt2p-boot` renders every scene to a PPM and prints its
-    frame/palette checksums.  No guest video state is involved.
+    frame/palette checksums. No guest video state is involved.
   - **oracle**: every composition matches the original's checkpoint pair
     exactly: `C5B1519EF4C1133A`/`089875EBAB4D4C6F` (webfoot),
-    `FB816B027A864AD1`/`033C9733AF00EB97` with `16E60732045316F6`
-    (story text), the five attract pictures with `E3275EE3AE459FB5`, and
-    title `09BEC5E9162924EF` / menu `6ADE1397DAE95BC0`.
-  - **gate**: unit tests pin all ten frame and palette checksums;
-    `sh engine/port/tests/run.sh` diffs `yt2p-boot` against the expected
-    records and still reports `port: OK`.
+    `FB816B027A864AD1`/`033C9733AF00EB97` with `16E60732045316F6` (story text),
+    the five attract pictures with `E3275EE3AE459FB5`, and title
+    `09BEC5E9162924EF` / menu `6ADE1397DAE95BC0`.
+  - **gate**: unit tests pin all ten frame and palette checksums; `sh
+    engine/port/tests/run.sh` diffs `yt2p-boot` against the expected records and
+    still reports `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 clue-book map catalog and overhead map (F1):
-  - **world grid corrected**: the tiles are one 800x144 world grid in
-    row-major order, not per-map blocks; map (`map_x`, `map_y`) tile
-    (`tile_x`, `tile_y`) is world row `map_y * 24 + tile_y`, world column
-    `map_x * 40 + tile_x`.  Display names append the descriptor suffix:
-    `0   ` none, `0n  ` reads `MAP n`, anything else `LEVEL n`.
+  - **world grid corrected**: the tiles are one 800x144 world grid in row-major
+    order, not per-map blocks; map (`map_x`, `map_y`) tile (`tile_x`, `tile_y`)
+    is world row `map_y * 24 + tile_y`, world column `map_x * 40 + tile_x`.
+    Display names append the descriptor suffix: `0 ` none, `0n ` reads `MAP n`,
+    anything else `LEVEL n`.
   - **catalog**: DGROUP:`0E95Ch` holds the count word (`0x37`) and 55 DWORD
-    entries (one-based map index, flags word) in reading order; ranks 30..32
-    and 53..54 carry flags bit 15 (drawn, cannot be opened).  The page is
-    group 0 picture 14 at (1,1), the `DARK UNION` / `MAPS` header, fourteen
-    names at (40,27) stepping 10 (selected `8Ah`, rest `0Ah`), the `MORE`
-    arrows and the seven command icons.  Documented in `docs/structures.md`.
+    entries (one-based map index, flags word) in reading order; ranks 30..32 and
+    53..54 carry flags bit 15 (drawn, cannot be opened). The page is group 0
+    picture 14 at (1,1), the `DARK UNION` / `MAPS` header, fourteen names at
+    (40,27) stepping 10 (selected `8Ah`, rest `0Ah`), the `MORE` arrows and the
+    seven command icons. Documented in `docs/structures.md`.
   - **overhead records**: the game's record table (dword offsets at
     DGROUP:`D201h`, word sizes at DGROUP:`D21Dh`) names record 1 (144x100
-    visibility bits at `155918`, MSB first) and record 4 (405 eight-byte
-    legend entries at `165890`: 1-based map, global x/y, text line).  The
-    record's last three slots are the following text record's digit run and
-    never match a map; the game reads all 405 slots all the same.  Icons come
-    from the executable's tables at DGROUP:`E5B3h` (terrain) and `E1D7h`
-    (object), both verified byte-exact against the image.
+    visibility bits at `155918`, MSB first) and record 4 (405 eight-byte legend
+    entries at `165890`: 1-based map, global x/y, text line). The record's last
+    three slots are the following text record's digit run and never match a map;
+    the game reads all 405 slots all the same. Icons come from the executable's
+    tables at DGROUP:`E5B3h` (terrain) and `E1D7h` (object), both verified
+    byte-exact against the image.
   - **oracle**: the B1 catalog framebuffer is B2's composition plus the 103
-    hand-cursor pixels at (24,170); the captured palette is palette 0 except
-    one byte of the animated `D0h..DFh` range.  A replay of the game's own
-    1018-icon B1 draw trace reproduces B2's overhead composition with zero
-    differences.  A scripted DOS run (ESC, F8, F1, Enter) shows the DOS
-    original presenting the same full catalog and the same full overhead map,
-    so B2 matches the true oracle on both screens; the B1 run's truncated
-    overhead (first icons only) is a B1-only presentation artifact.
+    hand-cursor pixels at (24,170); the captured palette is palette 0 except one
+    byte of the animated `D0h..DFh` range. A replay of the game's own 1018-icon
+    B1 draw trace reproduces B2's overhead composition with zero differences. A
+    scripted DOS run (ESC, F8, F1, Enter) shows the DOS original presenting the
+    same full catalog and the same full overhead map, so B2 matches the true
+    oracle on both screens; the B1 run's truncated overhead (first icons only)
+    is a B1-only presentation artifact.
   - **gate**: `yt2p-catalog` pins map 67 at rank 0, enabled, frame
     `064C1427810F47E3`; `yt2p-mapview` pins map 67 `ANCIENT RUINS` frame
-    `725194639EB33B4F` with palette `E3275EE3AE459FB5`;
-    `sh engine/port/tests/run.sh` -> `port: OK`.
+    `725194639EB33B4F` with palette `E3275EE3AE459FB5`; `sh
+    engine/port/tests/run.sh` -> `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 cursor overlay and palette rotation:
@@ -2282,1473 +2473,1329 @@ items now live in `docs/roadmap.md`).
     from input, the rotation phase from the tick clock - with no B2 owner yet.
     Emulating the clock or the pointer inside the composers would break B2's
     no-emulation rule, so both land as pure parameterized units: index and
-    position in, phase in.  Tick stepping and pointer tracking stay for the
+    position in, phase in. Tick stepping and pointer tracking stay for the
     display/input layer.
   - **cursor**: the id is the group-8 picture index (class entry 8: 256-byte
-    blocks at `C4A37A`); the hand is `1Dh`, matched uniquely by overlaying
-    every group-8 picture onto the B1 catalog capture.  Drawn masked at the
-    position as-is (the hotspot is pre-applied by the game's move logic),
-    right/bottom clipped; the x=0 bottom-overflow quirk writes off-screen and
-    is not reproduced.  Documented in `docs/structures.md`.
+    blocks at `C4A37A`); the hand is `1Dh`, matched uniquely by overlaying every
+    group-8 picture onto the B1 catalog capture. Drawn masked at the position
+    as-is (the hotspot is pre-applied by the game's move logic), right/bottom
+    clipped; the x=0 bottom-overflow quirk writes off-screen and is not
+    reproduced. Documented in `docs/structures.md`.
   - **rotation**: sub_100F3 rewrites D0h..DFh every 5 ticks from the 48-byte
-    base at WORLD.DAT `82EBA` (head of the 768-byte record read into
-    DS:4A56h; last byte `11h`, not palette 0's `1Bh`): four groups of four,
-    one step forward per call, four phases.  A port trace proves the guest
-    emits only clean 16-entry writes, so B1's interleaved single-D0 messages
-    are present-path sampling with no hardware meaning.  This corrects the
-    old seven-phase note.
+    base at WORLD.DAT `82EBA` (head of the 768-byte record read into DS:4A56h;
+    last byte `11h`, not palette 0's `1Bh`): four groups of four, one step
+    forward per call, four phases. A port trace proves the guest emits only
+    clean 16-entry writes, so B1's interleaved single-D0 messages are
+    present-path sampling with no hardware meaning. This corrects the old
+    seven-phase note.
   - **gate**: catalog plus hand at (24,170) reproduces the B1 framebuffer
-    `BC1E5BFF608CB41B` (tick 8050), help page plus hand `7F29E8DA4ED08B2F`
-    (tick 7718); the base and all four phases are pinned byte-exact.
-    `sh engine/port/tests/run.sh` -> `port: OK`.
+    `BC1E5BFF608CB41B` (tick 8050), help page plus hand `7F29E8DA4ED08B2F` (tick
+    7718); the base and all four phases are pinned byte-exact. `sh
+    engine/port/tests/run.sh` -> `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 speaks protocol v0 over the folder link:
-  - **boundary**: fresh B2 implementation of the frozen spec - v0 framing,
-    VIDEO set_mode/palette/rect/frame_end, CONTROL hello, INPUT decode,
-    timed YT2B writer/follower with wrap handling.  Presents coalesce the
-    palette span and send one raw rect per row (the client's 2048-byte
-    payload cap forbids whole-frame rects).  No B1 code is linked.
+  - **boundary**: fresh B2 implementation of the frozen spec - v0 framing, VIDEO
+    set_mode/palette/rect/frame_end, CONTROL hello, INPUT decode, timed YT2B
+    writer/follower with wrap handling. Presents coalesce the palette span and
+    send one raw rect per row (the client's 2048-byte payload cap forbids
+    whole-frame rects). No B1 code is linked.
   - **player**: `yt2p-play DIR` composes five scenes, tracks the cursor from
-    mouse input, answers hello/keyframe, and steps the palette rotation on
-    the engine tick (every 5 ticks, the original's cadence), so animated
-    phases leave the engine as palette events.  INPUT type 3 follows the
-    established length rule (five bytes: absolute pointer, else quit).
+    mouse input, answers hello/keyframe, and steps the palette rotation on the
+    engine tick (every 5 ticks, the original's cadence), so animated phases
+    leave the engine as palette events. INPUT type 3 follows the established
+    length rule (five bytes: absolute pointer, else quit).
   - **gates**: unit tests pin every payload byte and the present/keyframe
-    sequences; `check_stream.py` decodes the player's OUTPUT.BIN to the
-    oracle framebuffer `BC1E5BFF608CB41B`; the C# client and the Python
-    decoder render it byte-identically; `tests/port-live/run.sh` proves the
-    mapped window, the first frame and the input round trip on Xvfb.
-    `sh engine/port/tests/run.sh` -> `port: OK`.
+    sequences; `check_stream.py` decodes the player's OUTPUT.BIN to the oracle
+    framebuffer `BC1E5BFF608CB41B`; the C# client and the Python decoder render
+    it byte-identically; `tests/port-live/run.sh` proves the mapped window, the
+    first frame and the input round trip on Xvfb. `sh engine/port/tests/run.sh`
+    -> `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 presents diff rows against a shadow:
-  - the first boundary cut sent every row every present (64 KB a frame);
-    the presenter now keeps a shadow of what the client has and sends one
-    raw rect per changed row, so a rotation step costs its 16-entry palette
-    span (~60 bytes) and a cursor move costs its dozen rows; keyframes still
-    send mode, full palette and every row;
-  - **gate**: the present tests pin the new sequences (bare frame_end on
-    idle, palette-only on rotation, exactly the touched row); the player,
-    replay-agreement and live gates stay green.
-    `sh engine/port/tests/run.sh` -> `port: OK`.
+  - the first boundary cut sent every row every present (64 KB a frame); the
+    presenter now keeps a shadow of what the client has and sends one raw rect
+    per changed row, so a rotation step costs its 16-entry palette span (~60
+    bytes) and a cursor move costs its dozen rows; keyframes still send mode,
+    full palette and every row;
+  - **gate**: the present tests pin the new sequences (bare frame_end on idle,
+    palette-only on rotation, exactly the touched row); the player,
+    replay-agreement and live gates stay green. `sh engine/port/tests/run.sh` ->
+    `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 input following repaired, game keys wired:
-  - **two transport bugs**: a header arriving after the attach was parsed as
-    a record (poisoning the stream) and the handed-out frame pointer was
-    invalidated by the staging shift (batched records decoded shifted by
-    one).  The follower now consumes the header and retires records only on
-    the next poll; the unit test covers multi-record batches.
-  - **game keys**: the demo answered 1-5/Q only, while a human presses
-    arrows and Enter.  F1 opens the catalog, Up/Down move the gold
-    selection, Enter opens the selected map (disabled rows refuse), ESC
-    goes back with the selection kept - all verified against scripted DOS
-    screenshots.  Left-click selects a catalog row or the icon bar (map
-    opens the catalog, EXIT quits); keys drain one per tick through a
-    15-deep ring like the BIOS queue.  `tests/port-input/run.sh` drives the
-    whole flow from a canned INPUT.BIN.
-  - **gate**: `sh tests/port-input/run.sh` -> `port-input: OK`;
-    `sh engine/port/tests/run.sh` -> `port: OK`;
-    `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **two transport bugs**: a header arriving after the attach was parsed as a
+    record (poisoning the stream) and the handed-out frame pointer was
+    invalidated by the staging shift (batched records decoded shifted by one).
+    The follower now consumes the header and retires records only on the next
+    poll; the unit test covers multi-record batches.
+  - **game keys**: the demo answered 1-5/Q only, while a human presses arrows
+    and Enter. F1 opens the catalog, Up/Down move the gold selection, Enter
+    opens the selected map (disabled rows refuse), ESC goes back with the
+    selection kept - all verified against scripted DOS screenshots. Left-click
+    selects a catalog row or the icon bar (map opens the catalog, EXIT quits);
+    keys drain one per tick through a 15-deep ring like the BIOS queue.
+    `tests/port-input/run.sh` drives the whole flow from a canned INPUT.BIN.
+  - **gate**: `sh tests/port-input/run.sh` -> `port-input: OK`; `sh
+    engine/port/tests/run.sh` -> `port: OK`; `sh tests/port-live/run.sh` ->
+    `port-live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 port bundle (`--server port`):
-  - `tools/publish-linux.sh` stages `yt2p-play` with its data and the
-    standard launchers (`server-start.sh`, `client-start.sh`, `play.sh`,
-    `smoke-test.sh`); the shared client launcher accepts the new engine.
-    Windows stays asm/c: B2 has no Windows build yet.
-  - **verified**: published bundle smoke-tested, window mapped and first
-    frame shown on Xvfb through the bundle's own scripts.
+  - `tools/publish-linux.sh` stages `yt2p-play` with its data and the standard
+    launchers (`server-start.sh`, `client-start.sh`, `play.sh`,
+    `smoke-test.sh`); the shared client launcher accepts the new engine. Windows
+    stays asm/c: B2 has no Windows build yet.
+  - **verified**: published bundle smoke-tested, window mapped and first frame
+    shown on Xvfb through the bundle's own scripts.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - one-command runs: `tools/play-port.sh`, publisher `--build`:
-  - `sh tools/play-port.sh` builds the player and client, stages
-    `build/play/` and opens the live link (args pass to the client);
-    `tools/publish-linux.sh` gained `--build` for all three server kinds so
-    a cold tree publishes in one step (it refuses `--server-dir`, which
-    names a prebuilt tree).
-  - **verified**: `play-port.sh` shows the catalog window on Xvfb;
-    `--server port --build` publishes, and both error paths (bad kind,
-    `--build` with `--server-dir`) fail loudly.
+  - `sh tools/play-port.sh` builds the player and client, stages `build/play/`
+    and opens the live link (args pass to the client); `tools/publish-linux.sh`
+    gained `--build` for all three server kinds so a cold tree publishes in one
+    step (it refuses `--server-dir`, which names a prebuilt tree).
+  - **verified**: `play-port.sh` shows the catalog window on Xvfb; `--server
+    port --build` publishes, and both error paths (bad kind, `--build` with
+    `--server-dir`) fail loudly.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 monster statistics list (F2):
-  - **records**: 61 fixed 106-byte records at WORLD.DAT `1A7994`: two
-    13-byte name fields plus 80 stat bytes.  The list is the joined names
-    byte-sorted (no order table in the executable); a DOS capture pins the
-    first page and B1 captures pin the first and last, the last showing
-    the expected five rows with the up-only MORE.
+  - **records**: 61 fixed 106-byte records at WORLD.DAT `1A7994`: two 13-byte
+    name fields plus 80 stat bytes. The list is the joined names byte-sorted (no
+    order table in the executable); a DOS capture pins the first page and B1
+    captures pin the first and last, the last showing the expected five rows
+    with the up-only MORE.
   - **composer**: the F1 list layout is now the shared `lists` unit (frame,
     header, fourteen rows, MORE, icons); the catalog renders through it
-    unchanged (its gate hash is untouched) and F2 supplies the
-    `MONSTER STATISTICS` header at x=208 with icons
-    `20 146 147 153 149 14B 14D`, each matched exactly against group 8.
+    unchanged (its gate hash is untouched) and F2 supplies the `MONSTER
+    STATISTICS` header at x=208 with icons `20 146 147 153 149 14B 14D`, each
+    matched exactly against group 8.
   - **gate**: `yt2p-monsters` pins rank 0 `D5B4C34273DCD369` and rank 60
     `6E3F491525EA591E`; both reproduce their B1 framebuffers with the hand
-    cursor at (24,170).  The player gained scene 5 (F2/`6`, own selection,
-    click rows) and the input gate drives it.
-    `sh engine/port/tests/run.sh` -> `port: OK`.
+    cursor at (24,170). The player gained scene 5 (F2/`6`, own selection, click
+    rows) and the input gate drives it. `sh engine/port/tests/run.sh` -> `port:
+    OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 spell information list (F3):
-  - **records**: 105 fixed 80-byte records at WORLD.DAT `1AA65E`: a
-    21-byte space-padded name plus NUL and 58 stat bytes.  The list order
-    is the original's frozen quirk - alphabetical except BLOCK OF POWER
-    (record 87) sits at ranks 5 and 11 while BEAM OF DEATH (record 86)
-    never appears; no such order table exists in either binary.  A
-    105-Down B1 run matched every rank by template (the port's own font
-    at x=40), and the DOS first page shows the same doubled ranks.
-  - **composer**: F3 renders through the shared `lists` unit with the
-    `SPELL INFORMATION` header at x=213 and icons
-    `20 145 148 153 149 14B 14D` (gold scroll, matched exactly against
-    group 8).  The last page holds ranks 98-104; rank 98's page turn
-    presents one transitional frame (stale rows 12-13) before settling.
+  - **records**: 105 fixed 80-byte records at WORLD.DAT `1AA65E`: a 21-byte
+    space-padded name plus NUL and 58 stat bytes. The list order is the
+    original's frozen quirk - alphabetical except BLOCK OF POWER (record 87)
+    sits at ranks 5 and 11 while BEAM OF DEATH (record 86) never appears; no
+    such order table exists in either binary. A 105-Down B1 run matched every
+    rank by template (the port's own font at x=40), and the DOS first page shows
+    the same doubled ranks.
+  - **composer**: F3 renders through the shared `lists` unit with the `SPELL
+    INFORMATION` header at x=213 and icons `20 145 148 153 149 14B 14D` (gold
+    scroll, matched exactly against group 8). The last page holds ranks 98-104;
+    rank 98's page turn presents one transitional frame (stale rows 12-13)
+    before settling.
   - **gate**: `yt2p-spells` pins ranks 0/14/98/104
     `336AED2DF4355F25`/`4E0021E2C76A7281`/`14A80E5E78EF674E`/
     `EB4FF720BE73034E`; plus the hand at (24,170) they reproduce the B1
-    framebuffers `CFDBBECC9F9F16B5`, `2429157AFD25AAC1`,
-    `EE0BBBD290210786`, `C4B3A494D5A4A386`.  The player gained scene 6
-    (F3, own selection, scroll-icon entry, click rows) and the input gate
-    drives it.  `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
+    framebuffers `CFDBBECC9F9F16B5`, `2429157AFD25AAC1`, `EE0BBBD290210786`,
+    `C4B3A494D5A4A386`. The player gained scene 6 (F3, own selection,
+    scroll-icon entry, click rows) and the input gate drives it. `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-12 - M8/B2 magic users (F4 list and spell-by-class details):
-  - **records**: the exe carries three tiers of nine class names
-    (10 bytes padded plus NUL) at `29625h`/`2A0D7h`/`2A13Ah`; the F4
-    list shows base classes 3-8 as `TIER1 / TIER2 / TIER3` triples.
-    Each line's spells (52/50/32/47/47/31) are the original's fixed
-    assignment, captured spell by spell from B1 detail runs - no
-    per-spell mask field yields it - and byte-sorted, a true sort
-    (mage holds BEAM OF DEATH, druid holds BLOCK OF POWER once).
-  - **composer**: both screens render through the shared `lists` unit:
-    list header `MAGIC USER INFORMATION` at x=183, no MORE line on one
-    page (new composer rule, no-op for F1-F3), detail header
-    `SPELL INFORMATION` at x=213 with a `d LIST` footer at (11,185)
-    in `0Fh` (`d` is the font's left arrow), icons
-    `20 145 147 154 149 14B 14D` throughout.  ESC from either F4
-    screen returns to gameplay (the demo maps it to the previous
-    scene); F4 from gameplay does nothing, it needs the help screen.
+  - **records**: the exe carries three tiers of nine class names (10 bytes
+    padded plus NUL) at `29625h`/`2A0D7h`/`2A13Ah`; the F4 list shows base
+    classes 3-8 as `TIER1 / TIER2 / TIER3` triples. Each line's spells
+    (52/50/32/47/47/31) are the original's fixed assignment, captured spell by
+    spell from B1 detail runs - no per-spell mask field yields it - and
+    byte-sorted, a true sort (mage holds BEAM OF DEATH, druid holds BLOCK OF
+    POWER once).
+  - **composer**: both screens render through the shared `lists` unit: list
+    header `MAGIC USER INFORMATION` at x=183, no MORE line on one page (new
+    composer rule, no-op for F1-F3), detail header `SPELL INFORMATION` at x=213
+    with a `d LIST` footer at (11,185) in `0Fh` (`d` is the font's left arrow),
+    icons `20 145 147 154 149 14B 14D` throughout. ESC from either F4 screen
+    returns to gameplay (the demo maps it to the previous scene); F4 from
+    gameplay does nothing, it needs the help screen.
   - **gate**: `yt2p-classes` pins the list ranks 0/5
-    `635F5999F0C8700A`/`3E56F34BA5FD770A` and each detail's
-    first/last ranks; plus the hand at (24,170) they reproduce all
-    14 B1 framebuffers (list `7AFA214601883F62`,
-    `55F1BAF7B6BD4662`).  The player gained scenes 7 (F4 list) and 8
-    (detail, footer click returns), and the input gate drives the
-    F4/Down/Enter/Down/click/ESC flow.
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
-  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-13 - M8/B2 inventory items (F5 categories, details, infos):
-  - **records**: 744 fixed 58-byte records at WORLD.DAT `7114B`: three
-    13-byte name fields plus 19 stat bytes.  Six categories list fixed
-    subsets (41/52/43/13/27/24 items; no stat byte, pair or triple
-    yields the assignment) in captured, quirked orders (swapped
-    neighbors, trailing SAPHIRE).  Attribute enhancers and
-    transportations are fixed info screens; creature records in the
-    exe at `2946Ch` carry value/uses/time-window (FLYING RUG unused).
-  - **composer**: the category list renders through the shared `lists`
-    unit (header at x=225, gold chest `14Ah`); details swap the title
-    sides (section left, category right-aligned to 315 - new composer
-    title override) with the `d LIST` footer; infos compose over
-    picture 13 with measured text geometry, colors and group-8 icons.
-  - **gate**: `yt2p-items` pins the list ranks 0/7, each detail's
-    first/last ranks and both info frames; plus the hand at (24,170)
-    they reproduce 16 B1 framebuffers, and both info compositions
-    also match B1's own cursor-free ESC transitionals.  The player
-    gained scenes 9 (categories) and 10 (detail/info) and the input
-    gate drives the F5 flow.
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
-  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-13 - M8/B2 complete walk through (F6):
-  - **records**: 31 pages of 25 lines of 51 bytes at WORLD.DAT
-    `159158h` (fifty characters plus NUL); the last line of every page
-    is its footer, typos included (pages 20-31 read "N 0F 31").
-    Percent and tilde render literally.  A nine-page ordering-info
-    document follows in the same format, shown by no clue-book screen.
-  - **composer**: dedicated screen (picture 13, titles, 25 verbatim
-    rows at (10,23+6r) in `0Dh`, standard MORE, gold quill `14Ch`).
-    PgDn/PgUp turn pages, arrows and Enter do nothing; every page turn
-    presents a transitional plus the settled frame.  All 31 pages
-    verified row-by-row against the data by template.
-  - **gate**: `yt2p-walkthrough` pins pages 0/1/14/19/30; plus the hand
-    at (24,170) they reproduce the B1 framebuffers, and pages 0-1 also
-    match B1's own cursor-free ESC transitionals.  The player gained
-    scene 11 (F6/PgDn/PgUp/quill icon) and the input gate drives it.
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
-  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
-    `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-13 - M8/B2 monster detail view (F2 Enter):
-  - **records**: the 80 stats bytes behind each 106-byte record hold
-    everything the detail shows: word 0 is the portrait base picture,
-    four BCD big-endian dwords (gold/nuore/ore/exp at +50/+54/+58/+62),
-    seven plain words (2/4/5/6/7/12/13), and the immune/resistant masks
-    (words 37/38).  All slots were correlated exactly across 58
-    captured details; the SPECIAL abilities strings (pink, `PARTY
-    ATTACK` etc.) are frozen per monster.
-  - **composer**: static chrome (picture 13, title, footer, F2 icon
-    bar), 22 stat rows per `sub_04022`, and the tinted portrait drawn
-    last.  Portraits cycle or ping-pong six pictures with a held
-    base+8 excursion; group-2 art blits unclipped; every monster has a
-    fitted high-nibble remap.  `yt2p-monsters detail RANK PIC` renders
-    any state; the player gained scene 12 (Enter/ESC/footer, animated
-    from the nominal phase model) and the input gate drives it.
-  - **gate**: six cursor-free compositions pinned
-    (`C54C6B3F0E9A2EF3` etc.); all 61 excursion states reproduce the
-    B1 framebuffers with the hand at (24,170) (gator
-    `F6B7F3AC18A1FFC3`).  `sh engine/port/tests/run.sh` -> `port:
+    `635F5999F0C8700A`/`3E56F34BA5FD770A` and each detail's first/last ranks;
+    plus the hand at (24,170) they reproduce all 14 B1 framebuffers (list
+    `7AFA214601883F62`, `55F1BAF7B6BD4662`). The player gained scenes 7 (F4
+    list) and 8 (detail, footer click returns), and the input gate drives the
+    F4/Down/Enter/Down/click/ESC flow. `sh engine/port/tests/run.sh` -> `port:
     OK`, `sh tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 inventory items (F5 categories, details, infos):
+  - **records**: 744 fixed 58-byte records at WORLD.DAT `7114B`: three 13-byte
+    name fields plus 19 stat bytes. Six categories list fixed subsets
+    (41/52/43/13/27/24 items; no stat byte, pair or triple yields the
+    assignment) in captured, quirked orders (swapped neighbors, trailing
+    SAPHIRE). Attribute enhancers and transportations are fixed info screens;
+    creature records in the exe at `2946Ch` carry value/uses/time-window (FLYING
+    RUG unused).
+  - **composer**: the category list renders through the shared `lists` unit
+    (header at x=225, gold chest `14Ah`); details swap the title sides (section
+    left, category right-aligned to 315 - new composer title override) with the
+    `d LIST` footer; infos compose over picture 13 with measured text geometry,
+    colors and group-8 icons.
+  - **gate**: `yt2p-items` pins the list ranks 0/7, each detail's first/last
+    ranks and both info frames; plus the hand at (24,170) they reproduce 16 B1
+    framebuffers, and both info compositions also match B1's own cursor-free ESC
+    transitionals. The player gained scenes 9 (categories) and 10 (detail/info)
+    and the input gate drives the F5 flow. `sh engine/port/tests/run.sh` ->
+    `port: OK`, `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 complete walk through (F6):
+  - **records**: 31 pages of 25 lines of 51 bytes at WORLD.DAT `159158h` (fifty
+    characters plus NUL); the last line of every page is its footer, typos
+    included (pages 20-31 read "N 0F 31"). Percent and tilde render literally. A
+    nine-page ordering-info document follows in the same format, shown by no
+    clue-book screen.
+  - **composer**: dedicated screen (picture 13, titles, 25 verbatim rows at
+    (10,23+6r) in `0Dh`, standard MORE, gold quill `14Ch`). PgDn/PgUp turn
+    pages, arrows and Enter do nothing; every page turn presents a transitional
+    plus the settled frame. All 31 pages verified row-by-row against the data by
+    template.
+  - **gate**: `yt2p-walkthrough` pins pages 0/1/14/19/30; plus the hand at
+    (24,170) they reproduce the B1 framebuffers, and pages 0-1 also match B1's
+    own cursor-free ESC transitionals. The player gained scene 11
+    (F6/PgDn/PgUp/quill icon) and the input gate drives it. `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-13 - M8/B2 monster detail view (F2 Enter):
+  - **records**: the 80 stats bytes behind each 106-byte record hold everything
+    the detail shows: word 0 is the portrait base picture, four BCD big-endian
+    dwords (gold/nuore/ore/exp at +50/+54/+58/+62), seven plain words
+    (2/4/5/6/7/12/13), and the immune/resistant masks (words 37/38). All slots
+    were correlated exactly across 58 captured details; the SPECIAL abilities
+    strings (pink, `PARTY ATTACK` etc.) are frozen per monster.
+  - **composer**: static chrome (picture 13, title, footer, F2 icon bar), 22
+    stat rows per `sub_04022`, and the tinted portrait drawn last. Portraits
+    cycle or ping-pong six pictures with a held base+8 excursion; group-2 art
+    blits unclipped; every monster has a fitted high-nibble remap.
+    `yt2p-monsters detail RANK PIC` renders any state; the player gained scene
+    12 (Enter/ESC/footer, animated from the nominal phase model) and the input
+    gate drives it.
+  - **gate**: six cursor-free compositions pinned (`C54C6B3F0E9A2EF3` etc.); all
+    61 excursion states reproduce the B1 framebuffers with the hand at (24,170)
+    (gator `F6B7F3AC18A1FFC3`). `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-13 - M8/B2 hintbook click parity (F1 legend, double-click, MORE):
-  - **legend**: clicking an overhead-map marker shows its text
-    (`sub_03F6B`: icon `73h` at (161,0), record-5 line bytes at (170,1)
-    in color 123 over black; 9x9 inclusive hit boxes, first entry wins,
-    misses change nothing).  DOS-verified pixels
-    (`BONES OF TRAVIS`); B2 pins map 67 + lines 116/30 and hit-tests
-    the marker edges.
-  - **clicks**: single press selects, a second press within 6 ticks
-    opens (the `fn_PollInput` kind-6 latch, DOS/B1-verified), the stale
-    latch re-fires once next tick (gated via a row/marker coincidence
-    on map 91); `MORE` arrows page ±14 (down clamps to the last row);
-    icons switch pages; detail footers return.  Left/Right/PgDn/PgUp
-    stay ignored on lists (B1 answers PgDn, B1-only).
-  - **fixes**: the catalog "disabled" gate was wrong (flags bit 15
-    gates nothing; every rank opens, DOS/B1-verified) and is removed;
-    row hit zones are x 40..279 with 6-pixel bands, not full rows.
-  - **open**: B1 pages MORE-up twice per click pair (-28); the game
-    code shows no release/double path, so B2 ships symmetric -14;
-    re-verify MORE-up on DOS when X11 recovers (one-line flip).
-    Resolved 2026-11-15: DOS, the asm build and B2 all page ±14 rows;
-    the -28 was a B1-run glitch.  No flip needed.
-  - **gate**: `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK` (legend, MORE,
-    double-click, stale-latch steps).
+  - **legend**: clicking an overhead-map marker shows its text (`sub_03F6B`:
+    icon `73h` at (161,0), record-5 line bytes at (170,1) in color 123 over
+    black; 9x9 inclusive hit boxes, first entry wins, misses change nothing).
+    DOS-verified pixels (`BONES OF TRAVIS`); B2 pins map 67 + lines 116/30 and
+    hit-tests the marker edges.
+  - **clicks**: single press selects, a second press within 6 ticks opens (the
+    `fn_PollInput` kind-6 latch, DOS/B1-verified), the stale latch re-fires once
+    next tick (gated via a row/marker coincidence on map 91); `MORE` arrows page
+    ±14 (down clamps to the last row); icons switch pages; detail footers
+    return. Left/Right/PgDn/PgUp stay ignored on lists (B1 answers PgDn,
+    B1-only).
+  - **fixes**: the catalog "disabled" gate was wrong (flags bit 15 gates
+    nothing; every rank opens, DOS/B1-verified) and is removed; row hit zones
+    are x 40..279 with 6-pixel bands, not full rows.
+  - **open**: B1 pages MORE-up twice per click pair (-28); the game code shows
+    no release/double path, so B2 ships symmetric -14; re-verify MORE-up on DOS
+    when X11 recovers (one-line flip). Resolved 2026-11-15: DOS, the asm build
+    and B2 all page ±14 rows; the -28 was a B1-run glitch. No flip needed.
+  - **gate**: `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK` (legend, MORE, double-click,
+    stale-latch steps).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-13 - M8/B2 spell detail pages (F3 Enter):
-  - **records**: the 80-byte spell records' words 1-3 are the
-    MP/NUORE/ORE costs (105/105); words[0] is the mage's level when a
-    mage casts the spell, else the first row's (105/105).  Class rows
-    (1-6 per page) are the original's fixed per-spell assignment,
-    captured row by row from 105 B1 detail screens; two spells diverge
-    from the F4 membership (idx 7/34 show PALADIN off-list), so rows
-    are frozen per rank, not derived.  AFFECTS (scope/middle/target),
-    WHEN and the five EFFECT slots are frozen per rank too; EFFECT
-    lines mix the normal face with eighteen private symbol glyphs from
-    the executable's second font bank at `2233Ch` (one rank prints the
-    developer's `BK1_CH2` build path).
-  - **composer**: `spell_detail.c` renders over picture 13 with the
-    measured geometry (class block, costs, AFFECTS/WHEN/EFFECT, `d
-    LIST` footer, the list's seven icons); `yt2p-spells detail RANK`
-    renders one page and the player gained scene 13 (Enter opens,
-    double-click opens, footer/ESC return).
-  - **gate**: seven detail compositions pinned (ranks 0/3/31/60/85/101/
-    104); plus the hand at (24,170) they reproduce the B1
-    framebuffers, and all 105 ranks match their B1 framebuffers byte
-    for byte.  The input gate drives Enter/double-click/footer/ESC.
-    `sh engine/port/tests/run.sh` -> `port: OK`,
+  - **records**: the 80-byte spell records' words 1-3 are the MP/NUORE/ORE costs
+    (105/105); words[0] is the mage's level when a mage casts the spell, else
+    the first row's (105/105). Class rows (1-6 per page) are the original's
+    fixed per-spell assignment, captured row by row from 105 B1 detail screens;
+    two spells diverge from the F4 membership (idx 7/34 show PALADIN off-list),
+    so rows are frozen per rank, not derived. AFFECTS (scope/middle/target),
+    WHEN and the five EFFECT slots are frozen per rank too; EFFECT lines mix the
+    normal face with eighteen private symbol glyphs from the executable's second
+    font bank at `2233Ch` (one rank prints the developer's `BK1_CH2` build
+    path).
+  - **composer**: `spell_detail.c` renders over picture 13 with the measured
+    geometry (class block, costs, AFFECTS/WHEN/EFFECT, `d LIST` footer, the
+    list's seven icons); `yt2p-spells detail RANK` renders one page and the
+    player gained scene 13 (Enter opens, double-click opens, footer/ESC return).
+  - **gate**: seven detail compositions pinned (ranks 0/3/31/60/85/101/ 104);
+    plus the hand at (24,170) they reproduce the B1 framebuffers, and all 105
+    ranks match their B1 framebuffers byte for byte. The input gate drives
+    Enter/double-click/footer/ESC. `sh engine/port/tests/run.sh` -> `port: OK`,
     `sh tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-13 - M8/B2 per-class spell details (F4 Enter):
-  - **behavior**: Enter (or double-click) on a class-detail row opens
-    the spell's file-indexed detail page (B1-verified: same body as the
-    F3 page, F4 icon bar `20h 145h 147h 154h 149h 14Bh 14Dh`); file 86
-    (`BEAM OF DEATH`, mage rank 3) opens although it has no F3 rank.
-    Footer returns to the class list (B1-verified); ESC returns to the
-    opener in the demo (gameplay in the original).
-  - **composer**: the detail tables are reindexed by file (ranks 5/11
-    share file 87); `yt2_spell_detail_render_index` takes a chrome
-    flag, the rank renderer wraps it.  Player scene 13 shows a file
-    index from either list; the input gate drives both flows.
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **behavior**: Enter (or double-click) on a class-detail row opens the
+    spell's file-indexed detail page (B1-verified: same body as the F3 page, F4
+    icon bar `20h 145h 147h 154h 149h 14Bh 14Dh`); file 86 (`BEAM OF DEATH`,
+    mage rank 3) opens although it has no F3 rank. Footer returns to the class
+    list (B1-verified); ESC returns to the opener in the demo (gameplay in the
+    original).
+  - **composer**: the detail tables are reindexed by file (ranks 5/11 share file
+    87); `yt2_spell_detail_render_index` takes a chrome flag, the rank renderer
+    wraps it. Player scene 13 shows a file index from either list; the input
+    gate drives both flows. `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 item detail pages (F5 Enter, all 6 types):
-  - **white-box**: the page mains (fn_02D9E/02E27/02E9B) and their
-    bodies were read from the verified disassembly, not guessed from
-    pixels: records at WORLD `71138h` + file*58 (19 stat bytes, then
-    3x13 names), params from `7C81Eh`/`7DCD2h`/`7D502h` plus the
-    struct+0 byte offset, protections/adds from `7BD2Eh` plus
-    struct+2, names from exe `7B34h`/`7DCAh`.  +N boxes navigate to
-    file+N records (no enhancement formula exists); the oracle served
-    only as verification (17/17 pages plus a +5 state match B1
+  - **white-box**: the page mains (fn_02D9E/02E27/02E9B) and their bodies were
+    read from the verified disassembly, not guessed from pixels: records at
+    WORLD `71138h` + file*58 (19 stat bytes, then 3x13 names), params from
+    `7C81Eh`/`7DCD2h`/`7D502h` plus the struct+0 byte offset, protections/adds
+    from `7BD2Eh` plus struct+2, names from exe `7B34h`/`7DCAh`. +N boxes
+    navigate to file+N records (no enhancement formula exists); the oracle
+    served only as verification (17/17 pages plus a +5 state match B1
     framebuffers byte for byte).
-  - **fixes**: scrolls rank 27 is file 736, not 576 (both named
-    `SCROLL OF FORGERY`; v_5110 disambiguates); the old name-matched
-    table entry was wrong.
-  - **composer**: `item_detail.c` renders from disk bytes (no frozen
-    per-item data); `yt2p-items page CAT RANK PLUS` renders one page
-    and the player gained scene 14 (Enter/double-click opens, footer
-    and ESC return, +N boxes clickable with code-exact hit zones).
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
+  - **fixes**: scrolls rank 27 is file 736, not 576 (both named `SCROLL OF
+    FORGERY`; v_5110 disambiguates); the old name-matched table entry was wrong.
+  - **composer**: `item_detail.c` renders from disk bytes (no frozen per-item
+    data); `yt2p-items page CAT RANK PLUS` renders one page and the player
+    gained scene 14 (Enter/double-click opens, footer and ESC return, +N boxes
+    clickable with code-exact hit zones). `sh engine/port/tests/run.sh` ->
+    `port: OK`, `sh tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - YT2 spell-effect source (white-box) + YT3 descriptions:
-  - **mechanism**: `sub_03988` draws EFFECT from WORLD files 6+7
-    (chunk table `0D201h`): `(start,count)` index at `16762Eh`, slot
-    `file+1`, 39-byte records at `167822h`.  The index chains perfectly;
-    the text area was never authored (script bytes, item names, a
-    `BK1_CH2` dev path) - that is the vanilla bug, byte-proven
-    (file 31 renders the dev path + `STEEL CHEST KEY` exactly).
-  - **YT3**: its WORLD.DAT holds the same structure twice with REAL
-    English descriptions (copy A `3D4AEFh`/`3D4C9Fh`, truncated by copy B
-    at record 61; copy B `3D5631h`/`3D57E1h`, all 354 records clean;
-    `B[i]==A[i+1]`).  107 spell records at `41B5BFh`, same 80-byte
-    format.  No YT3 executable, so the live chunk choice stays unknown;
-    `tools/yt3_spells.py` dumps either copy per file.
+  - **mechanism**: `sub_03988` draws EFFECT from WORLD files 6+7 (chunk table
+    `0D201h`): `(start,count)` index at `16762Eh`, slot `file+1`, 39-byte
+    records at `167822h`. The index chains perfectly; the text area was never
+    authored (script bytes, item names, a `BK1_CH2` dev path) - that is the
+    vanilla bug, byte-proven (file 31 renders the dev path + `STEEL CHEST KEY`
+    exactly).
+  - **YT3**: its WORLD.DAT holds the same structure twice with REAL English
+    descriptions (copy A `3D4AEFh`/`3D4C9Fh`, truncated by copy B at record 61;
+    copy B `3D5631h`/`3D57E1h`, all 354 records clean; `B[i]==A[i+1]`). 107
+    spell records at `41B5BFh`, same 80-byte format. No YT3 executable, so the
+    live chunk choice stays unknown; `tools/yt3_spells.py` dumps either copy per
+    file.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 boundary: codec 1 + AUDIO encoders:
   - **codec 1**: the presenter emits run-coded row rects
-    (`yt2_video_encode_rect_runs`, fresh spec implementation); three B1
-    seam rows from `sample-video-rle.bin` (seq 138/139/197) are frozen
-    byte-for-byte, `check_stream.py` decodes runs, and the port gate's own
-    replay step plus `tests/port-live/run.sh` prove the C# client renders
-    the bytes.
-  - **AUDIO**: all six family encoders (opl_write/batch/timed, ctrl,
-    speaker, sample) with spec-pinned unit vectors; a throwaway probe fed
-    them to the headless client (`audio=5w/2b/1c speaker=2 samples=1`,
-    zero unknowns).  No live source yet - that waits for M9's sequencer.
-  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`.
+    (`yt2_video_encode_rect_runs`, fresh spec implementation); three B1 seam
+    rows from `sample-video-rle.bin` (seq 138/139/197) are frozen byte-for-byte,
+    `check_stream.py` decodes runs, and the port gate's own replay step plus
+    `tests/port-live/run.sh` prove the C# client renders the bytes.
+  - **AUDIO**: all six family encoders (opl_write/batch/timed, ctrl, speaker,
+    sample) with spec-pinned unit vectors; a throwaway probe fed them to the
+    headless client (`audio=5w/2b/1c speaker=2 samples=1`, zero unknowns). No
+    live source yet - that waits for M9's sequencer.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK`, `sh tests/port-live/run.sh` ->
+    `port-live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - YT2 spell-description patch (official + complete tables):
-  - **match**: 97 of 105 YT2 spells name-match YT3's; `REGISTER.EXE` is
-    the YT3 game (SW.BAT runs it) pointing at description copy B, and
-    YT3's ERROR slots 59/71/80 keep the BLOCK texts.  Description numbers
-    map to record words (damage w12, beneficial w6, ailment w8).
-  - **official** (`tools/yt2_spelltext.py` + `.tsv`): 92 spells with YT2's
-    own numbers substituted (incl. two stale YT3 texts fixed to the true
-    stats); durations and YT2-only spells keep vanilla bytes.
-  - **complete** (`--complete` + `_complete.tsv`): all 105 spells - BLOCKs
-    from the ERROR slots, durations assumed, five spells invented from
-    the YT2 records.  351/351 text records; `--check` re-derives every
-    line.
+  - **match**: 97 of 105 YT2 spells name-match YT3's; `REGISTER.EXE` is the YT3
+    game (SW.BAT runs it) pointing at description copy B, and YT3's ERROR slots
+    59/71/80 keep the BLOCK texts. Description numbers map to record words
+    (damage w12, beneficial w6, ailment w8).
+  - **official** (`tools/yt2_spelltext.py` + `.tsv`): 92 spells with YT2's own
+    numbers substituted (incl. two stale YT3 texts fixed to the true stats);
+    durations and YT2-only spells keep vanilla bytes.
+  - **complete** (`--complete` + `_complete.tsv`): all 105 spells - BLOCKs from
+    the ERROR slots, durations assumed, five spells invented from the YT2
+    records. 351/351 text records; `--check` re-derives every line.
   - **proof**: B1 with the patched WORLD.DAT runs the full M5 slice plus
-    F8/F3/Enter to the detail page and renders ACID RAIN's substituted
-    145 glyph-exact (2592/2592 pixels, diffs only in EFFECT bands).
+    F8/F3/Enter to the detail page and renders ACID RAIN's substituted 145
+    glyph-exact (2592/2592 pixels, diffs only in EFFECT bands).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 spelltext play option + gate:
   - **port**: `--spelltext` reads EFFECT lines live from WORLD files 6+7
-    (`yt2_spells_effect_lines`, `render_world` variants, 32-entry
-    canonical map with zero conflicts); vanilla renders pixel-identical,
-    patched worlds show their text.  `yt2p-play`/`yt2p-spells` take the
-    flag; both play scripts take `--spelltext`/`--spelltext-complete`.
-  - **gate**: `run.sh` builds both patched worlds and the unit tests pin
-    the reader strings (HEAL/ACID/FEET, POWER/STAKE), prove world==frozen
-    pixels for all 105 vanilla files, and check patched/unpatched wiring.
-  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`.
+    (`yt2_spells_effect_lines`, `render_world` variants, 32-entry canonical map
+    with zero conflicts); vanilla renders pixel-identical, patched worlds show
+    their text. `yt2p-play`/`yt2p-spells` take the flag; both play scripts take
+    `--spelltext`/`--spelltext-complete`.
+  - **gate**: `run.sh` builds both patched worlds and the unit tests pin the
+    reader strings (HEAL/ACID/FEET, POWER/STAKE), prove world==frozen pixels for
+    all 105 vanilla files, and check patched/unpatched wiring.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - CREATE FOOD experiment (how much food?):
   - **setup**: boot truncates CURGAME unread, so saves can't be doctored;
-    `tools/doctor_world.py` doctors WORLD.DAT's NPC records instead
-    (spellbook byte 0xCB, MP 200, casting 90; template ORE/NUORE 99).
-    `play-c.sh` takes `PLAY_WORLD=` to stage it.
-  - **spellbook**: per-slot 14-byte bitmask at slot+0xCA, bit[file]
-    MSB-first (`sub_17FD1`); proven live (menu lists doctored spells).
-  - **verdict so far**: the cast pays MP-8/ORE-8, sets amount v_40E2=55
-    (= item file, not a count) and arms the food cursor, but nothing is
-    granted anywhere (packs/counters/objects/map/saves/messages all
-    clean; MINER'S LIGHT control shows effects work).  Grant count w13
-    reads 0 in shipped data.  Delivery needs a placement click whose
-    target is still unknown.
+    `tools/doctor_world.py` doctors WORLD.DAT's NPC records instead (spellbook
+    byte 0xCB, MP 200, casting 90; template ORE/NUORE 99). `play-c.sh` takes
+    `PLAY_WORLD=` to stage it.
+  - **spellbook**: per-slot 14-byte bitmask at slot+0xCA, bit[file] MSB-first
+    (`sub_17FD1`); proven live (menu lists doctored spells).
+  - **verdict so far**: the cast pays MP-8/ORE-8, sets amount v_40E2=55 (= item
+    file, not a count) and arms the food cursor, but nothing is granted anywhere
+    (packs/counters/objects/map/saves/messages all clean; MINER'S LIGHT control
+    shows effects work). Grant count w13 reads 0 in shipped data. Delivery needs
+    a placement click whose target is still unknown.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 boundary: scroll detection:
-  - **prescan**: the presenter scores +-8 shifts against the full shadow
-    (exact rows, not checksums; same 32/100 thresholds and tie order as
-    the seam/C detector, at any height) and emits scroll + residue rects;
-    keyframes always go out as rows.  `check_stream.py` applies scroll
-    and reads raw fixtures; the pan fixtures decode to twelve identical
-    frames both ways.
+  - **prescan**: the presenter scores +-8 shifts against the full shadow (exact
+    rows, not checksums; same 32/100 thresholds and tie order as the seam/C
+    detector, at any height) and emits scroll + residue rects; keyframes always
+    go out as rows. `check_stream.py` applies scroll and reads raw fixtures; the
+    pan fixtures decode to twelve identical frames both ways.
   - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 boundary: TICK stream (boundary completion done):
-  - **wire**: `tick(n)` after every frame (codec 0, 6B payload, monotonic
-    mod 2^32, gaps allowed only for never-presented composes), `pace(ms)`
-    once per session + after hello re-send; the player paces itself with
-    nanosleep against the 55 ms budget.
+  - **wire**: `tick(n)` after every frame (codec 0, 6B payload, monotonic mod
+    2^32, gaps allowed only for never-presented composes), `pace(ms)` once per
+    session + after hello re-send; the player paces itself with nanosleep
+    against the 55 ms budget.
   - **receivers**: the C# client applies ticks in `ApplyTick` (renders
-    unchanged) and echoes `ticks=`/`paces=`; `replay.py` counts and
-    paces; `check_stream.py` checks adjacency, monotonicity and
-    pace-stability.
-  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`.
+    unchanged) and echoes `ticks=`/`paces=`; `replay.py` counts and paces;
+    `check_stream.py` checks adjacency, monotonicity and pace-stability.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`, `sh
+    tests/port-input/run.sh` -> `port-input: OK`, `sh tests/port-live/run.sh` ->
+    `port-live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 boot/menu + animated story intro (attract loop):
-  - **engine**: `engine/port/src/intro.c` ports the boot/menu state machine
-    and the attract cutscene from the B1 spec (BIOS-tick timing, no
-    B1-calibrated seeds); `yt2p-intro` renders frames plus the audio
-    trigger log; unit tests in `engine/port/tests/test_intro.c`.
+  - **engine**: `engine/port/src/intro.c` ports the boot/menu state machine and
+    the attract cutscene from the B1 spec (BIOS-tick timing, no B1-calibrated
+    seeds); `yt2p-intro` renders frames plus the audio trigger log; unit tests
+    in `engine/port/tests/test_intro.c`.
   - **menu**: the menu loop lives in `yt2/titlemenu.*` (`fn_0D36C`, boot flow
-    `fn_01BE8`); `intro.c` keeps sequences and primitives. It polls and
-    acts at once (clicks act on capture, one logical tick per poll for
-    the script clock, wall-clock idle fuse ~12.4s). Menu table matches
-    DS:5AFAh exactly.
+    `fn_01BE8`); `intro.c` keeps sequences and primitives. It polls and acts at
+    once (clicks act on capture, one logical tick per poll for the script clock,
+    wall-clock idle fuse ~12.4s). Menu table matches DS:5AFAh exactly.
   - **gate**: `engine/port/tests/check_intro.py` checks two attract cycles
-    behaviorally against B1 (`intro_ref.log`, 6712 frames): statics in
-    script order, loop counts, wait/pose sets and cycle walks, scroll
-    rows pinned to `intro_rows_c1.txt`, audio order+ids exact, 34 listed
-    B1-only artifacts (tears/races/leaks).  B1's fade pacing, wait
-    lengths and palette values are host timing, not script.
-  - **gates**: `check_intro.py` -> `intro-gate: OK`,
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    behaviorally against B1 (`intro_ref.log`, 6712 frames): statics in script
+    order, loop counts, wait/pose sets and cycle walks, scroll rows pinned to
+    `intro_rows_c1.txt`, audio order+ids exact, 34 listed B1-only artifacts
+    (tears/races/leaks). B1's fade pacing, wait lengths and palette values are
+    host timing, not script.
+  - **gates**: `check_intro.py` -> `intro-gate: OK`, `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`, `sh tests/port-live/run.sh` -> `port-live: OK`,
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 play boots through the intro (+ boot fixes):
-  - **wire-up**: `yt2p-play` runs `yt2_menu_boot` first (paced by tick
-    stamp, input bridged with a typeahead FIFO, audio triggers logged),
-    then falls through to the scene demo on menu transitions; `--no-intro`
-    keeps the old direct-to-scenes path.  Checkpoint polls peek for ESC
-    so menu keys pressed mid-cutscene survive; leftover keys carry into
-    the demo; pacing covers every tick (holds/menu render as holds).
-  - **VESA**: no VBE and no LOGO.PCX exist on this boundary (B1 shows
-    black too), so the 6 s dead-air hold collapses to a short ESC-polled
-    beat; the palette seeding stays.
+  - **wire-up**: `yt2p-play` runs `yt2_menu_boot` first (paced by tick stamp,
+    input bridged with a typeahead FIFO, audio triggers logged), then falls
+    through to the scene demo on menu transitions; `--no-intro` keeps the old
+    direct-to-scenes path. Checkpoint polls peek for ESC so menu keys pressed
+    mid-cutscene survive; leftover keys carry into the demo; pacing covers every
+    tick (holds/menu render as holds).
+  - **VESA**: no VBE and no LOGO.PCX exist on this boundary (B1 shows black
+    too), so the 6 s dead-air hold collapses to a short ESC-polled beat; the
+    palette seeding stays.
   - **SW logo**: the asm 90-tick ESC-polled hold the transcription skipped
-    (fn_11B00 loc_11C58) is back, so the logo holds ~5 s; B1's capture
-    skips it via sound-driver idle, which the port cannot model yet.
-  - **star**: the 53-flush flight shared one tick stamp (an instant burst
-    live); reimagined slow-but-steady, one step per two ticks (~6 s),
-    same path/colors/frames, ESC-skippable, background held.
-  - **gates**: intro-gate pins updated for the retime (C2 L1 16 after the
-    ragged loop-exit draw rejoins it, landmark lower band 0.1);
-    port-input/port-live script ESC,ESC,C through the boot and pin the
-    `create` transition; run.sh uses `--no-intro` for the scene check.
-  - **gates**: `check_intro.py` -> `intro-gate: OK`,
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`,
+    (fn_11B00 loc_11C58) is back, so the logo holds ~5 s; B1's capture skips it
+    via sound-driver idle, which the port cannot model yet.
+  - **star**: the 53-flush flight shared one tick stamp (an instant burst live);
+    reimagined slow-but-steady, one step per two ticks (~6 s), same
+    path/colors/frames, ESC-skippable, background held.
+  - **gates**: intro-gate pins updated for the retime (C2 L1 16 after the ragged
+    loop-exit draw rejoins it, landmark lower band 0.1); port-input/port-live
+    script ESC,ESC,C through the boot and pin the `create` transition; run.sh
+    uses `--no-intro` for the scene check.
+  - **gates**: `check_intro.py` -> `intro-gate: OK`, `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`, `sh tests/port-live/run.sh` -> `port-live: OK`,
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 VBE logo + star retune:
-  - **logo**: LOGO.PCX is WORLD.DAT file 0 (`0x1AE0F6`, 29214 bytes; the
-    game extracts it at boot and deletes it after the show, which is why
-    no copy exists on disk).  New `yt2_pcx` decoder + `yt2_world_logo`
-    accessor; the intro shows it at 640x480 over a mode switch, holds
-    63/90 ticks ESC-polled, re-shows on keyframe request for clients
-    attaching mid-hold.  Decoded pixels are bit-identical to B1's live
-    VBE frame; pinned by unit test.
+  - **logo**: LOGO.PCX is WORLD.DAT file 0 (`0x1AE0F6`, 29214 bytes; the game
+    extracts it at boot and deletes it after the show, which is why no copy
+    exists on disk). New `yt2_pcx` decoder + `yt2_world_logo` accessor; the
+    intro shows it at 640x480 over a mode switch, holds 63/90 ticks ESC-polled,
+    re-shows on keyframe request for clients attaching mid-hold. Decoded pixels
+    are bit-identical to B1's live VBE frame; pinned by unit test.
   - **star**: one step per tick now (~3 s across, was two).
   - **gates**: intro-gate log takes `W H` columns; L1 counts its rejoined
     loop-exit draw (phase-proof 17); port-live pins first-frame 640x480.
-  - **gates**: `check_intro.py` -> `intro-gate: OK`,
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK` (twice),
+  - **gates**: `check_intro.py` -> `intro-gate: OK`, `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`, `sh tests/port-live/run.sh` -> `port-live: OK` (twice),
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 star 2x + smooth gate pan:
   - **star**: two plots per tick now (~1.5 s across), all 53 plots kept.
-  - **pan**: the vanilla 55/62-step inter-group fades land on two tick
-    stamps, strobing as 0.1 s flickers between smooth pans.  The sweep
-    now runs straight through at two rows per frame (uniform frame per
-    tick, ~5.5 s vs ~11 s), each fade replaced by one palette cut: the
-    fade runs silently to its exact end state (verified byte-equal
-    against the old fade ends) and a single flush shows it.
-  - **gates**: scroll pins re-measured (C1 16/2/19/2/63, C2 15/2/19/2/62),
-    rows fixture regenerated (100 rows), audio pin goes prefix (the
-    frame cap overruns further now).
-  - **gates**: `check_intro.py` -> `intro-gate: OK`,
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`,
+  - **pan**: the vanilla 55/62-step inter-group fades land on two tick stamps,
+    strobing as 0.1 s flickers between smooth pans. The sweep now runs straight
+    through at two rows per frame (uniform frame per tick, ~5.5 s vs ~11 s),
+    each fade replaced by one palette cut: the fade runs silently to its exact
+    end state (verified byte-equal against the old fade ends) and a single flush
+    shows it.
+  - **gates**: scroll pins re-measured (C1 16/2/19/2/63, C2 15/2/19/2/62), rows
+    fixture regenerated (100 rows), audio pin goes prefix (the frame cap
+    overruns further now).
+  - **gates**: `check_intro.py` -> `intro-gate: OK`, `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`, `sh tests/port-live/run.sh` -> `port-live: OK`,
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - M8/B2 star 4x + even pan beats:
   - **star**: four plots per tick now (~0.7 s across), all 53 plots kept.
-  - **pan**: the two leftover hitches were the odd single-row steps
-    (rows1/rows2 ended 15x2+1 and 19x2+1) plus deduped identical draws
-    dropping beats.  Groups repartitioned even (32/38/128, same journey,
-    cuts land one row off), and scroll steps force-emit holds instead of
-    dropping ticks: 97 uniform 55 ms beats plus the two instant palette
-    cuts, verified frame by frame.
-  - **gates**: scroll pins re-measured (C1 16/2/18/2/62, C2 15/2/18/2/62),
-    rows fixture regenerated (98 rows).
-  - **gates**: `check_intro.py` -> `intro-gate: OK`,
-    `sh engine/port/tests/run.sh` -> `port: OK`,
-    `sh tests/port-input/run.sh` -> `port-input: OK`,
-    `sh tests/port-live/run.sh` -> `port-live: OK`,
+  - **pan**: the two leftover hitches were the odd single-row steps (rows1/rows2
+    ended 15x2+1 and 19x2+1) plus deduped identical draws dropping beats. Groups
+    repartitioned even (32/38/128, same journey, cuts land one row off), and
+    scroll steps force-emit holds instead of dropping ticks: 97 uniform 55 ms
+    beats plus the two instant palette cuts, verified frame by frame.
+  - **gates**: scroll pins re-measured (C1 16/2/18/2/62, C2 15/2/18/2/62), rows
+    fixture regenerated (98 rows).
+  - **gates**: `check_intro.py` -> `intro-gate: OK`, `sh
+    engine/port/tests/run.sh` -> `port: OK`, `sh tests/port-input/run.sh` ->
+    `port-input: OK`, `sh tests/port-live/run.sh` -> `port-live: OK`,
     `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-15 - M8/B2 first gameplay slice (creation + roster):
-  - **engine**: `engine/port/src/create.c` (`yt2_create`/`yt2_roster`,
-    ~2400 lines) ports `fn_13EC4` (class/portrait/sheet/items/name/
-    preview/keep), `fn_1C354` (roster grid/toggle/DONE) and `fn_13F2E`
-    (sheet viewer + delete) verbatim: RNG `fn_1797C`, roll/derive/equip
-    formulas, rating rule, spell grants, name editor (12-char cap,
-    empty-reject, rtrim), all seven mouse tables, carried-cursor +8
-    hotspot, re-pick mode, quirks kept (sex label shows the toggle
-    target, items-Q leaks its slot, delete reads effects stride 4).
-  - **model fixes**: `+12h` is the portrait pic (not age), `+14h` the
-    portrait index, `+16h` the level; new `experience`/`spellbook`
-    fields; B1's `yt2saveinfo` fixed to match; 9 classes, not 8.
-  - **wiring**: `yt2p-play` runs the menu loop (C creation, A roster,
-    `CURGAME` persistence, embark/rules markers); the scene demo moved
-    behind `--no-intro`; `port-input` tours the demo direct,
-    `port-live` drives live creation (F/1) through the client.
-  - **model**: party assignment is one persistent record: `yt2_party`
-    owns `assigned[4]` (header `0x1EC`) and `active[5]` (header `0xA4`),
-    parsed and written; the roster operates on them directly (no
-    session copy, no seeding) - toggles flip flag and entry together,
-    DONE compacts in place, `party_ok` derives from the sum. A written
-    save reloads to the same party; B1 reads B2 saves byte-identically
-    (unit round-trip test pins it).
-  - **gates**: 19/19 M5 creation/roster framebuffer checkpoints match
-    B1 bit-for-bit (cursor composited at B1's own positions; name and
-    setup frames are cursor-free); `yt2p-tests: OK`, `port: OK`,
-    `port-input: OK`, `port-live: OK`.
-  - **fades**: the menu re-entry fade-out darkens the outgoing session
-    screen: `yt2_intro_adopt_screen` hands the live screen to the intro
-    at every menu entry instead of a stale intro frame.
-  - **cursor**: mouse moves coalesce to one present per input drain (a
-    30-move burst adds a single present over idle).
+  - **engine**: `engine/port/src/create.c` (`yt2_create`/`yt2_roster`, ~2400
+    lines) ports `fn_13EC4` (class/portrait/sheet/items/name/ preview/keep),
+    `fn_1C354` (roster grid/toggle/DONE) and `fn_13F2E` (sheet viewer + delete)
+    verbatim: RNG `fn_1797C`, roll/derive/equip formulas, rating rule, spell
+    grants, name editor (12-char cap, empty-reject, rtrim), all seven mouse
+    tables, carried-cursor +8 hotspot, re-pick mode, quirks kept (sex label
+    shows the toggle target, items-Q leaks its slot, delete reads effects stride
+    4).
+  - **model fixes**: `+12h` is the portrait pic (not age), `+14h` the portrait
+    index, `+16h` the level; new `experience`/`spellbook` fields; B1's
+    `yt2saveinfo` fixed to match; 9 classes, not 8.
+  - **wiring**: `yt2p-play` runs the menu loop (C creation, A roster, `CURGAME`
+    persistence, embark/rules markers); the scene demo moved behind
+    `--no-intro`; `port-input` tours the demo direct, `port-live` drives live
+    creation (F/1) through the client.
+  - **model**: party assignment is one persistent record: `yt2_party` owns
+    `assigned[4]` (header `0x1EC`) and `active[5]` (header `0xA4`), parsed and
+    written; the roster operates on them directly (no session copy, no seeding)
+    - toggles flip flag and entry together, DONE compacts in place, `party_ok`
+    derives from the sum. A written save reloads to the same party; B1 reads B2
+    saves byte-identically (unit round-trip test pins it).
+  - **gates**: 19/19 M5 creation/roster framebuffer checkpoints match B1
+    bit-for-bit (cursor composited at B1's own positions; name and setup frames
+    are cursor-free); `yt2p-tests: OK`, `port: OK`, `port-input: OK`,
+    `port-live: OK`.
+  - **fades**: the menu re-entry fade-out darkens the outgoing session screen:
+    `yt2_intro_adopt_screen` hands the live screen to the intro at every menu
+    entry instead of a stale intro frame.
+  - **cursor**: mouse moves coalesce to one present per input drain (a 30-move
+    burst adds a single present over idle).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - spurious menu fade on title Credits (R / row 4):
-  - **found**: the reporter's session shows a full fade-out/in
-    with no content after clicking Credits. R and row 4 returned
-    the RULES transition for B1 fn_01488 (unported credits screen),
-    and tool_play re-ran the title menu for it (fades on entry).
-    B1 fades to real content (title card, credits list).
-  - **fix**: R and row 4 fall through like unbound keys (no
-    transition, no fade, stays on title); the dead rules branch
-    is gone. The credits screen itself (fn_01488) stays a
-    follow-up. Verified headless: click + R produce no transition
-    and the brightness profile matches a pure-idle run (the
-    remaining fade-out/logo cycle is B1's attract loop).
-  - **gates**: `yt2p-tests: OK`, `port: OK`,
-    `port-combat/cancel/input/live: OK`.
+  - **found**: the reporter's session shows a full fade-out/in with no content
+    after clicking Credits. R and row 4 returned the RULES transition for B1
+    fn_01488 (unported credits screen), and tool_play re-ran the title menu for
+    it (fades on entry). B1 fades to real content (title card, credits list).
+  - **fix**: R and row 4 fall through like unbound keys (no transition, no fade,
+    stays on title); the dead rules branch is gone. The credits screen itself
+    (fn_01488) stays a follow-up. Verified headless: click + R produce no
+    transition and the brightness profile matches a pure-idle run (the remaining
+    fade-out/logo cycle is B1's attract loop).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
+    OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-15 - M8/B2 embark/walk slice (room + explore + movement):
   - **spec**: `docs/structures.md` gains the Exploration section (window,
-    terrain/object tables, perspective blitter, gather/occlusion, render
-    passes, runtime objects, explore UI, movement/collision, clock/date,
-    embark flow), ported from the B1 oracle's room path.
+    terrain/object tables, perspective blitter, gather/occlusion, render passes,
+    runtime objects, explore UI, movement/collision, clock/date, embark flow),
+    ported from the B1 oracle's room path.
   - **room**: new `engine/port/src/room.c` (`yt2/room.h`) + `tool_room.c`
-    renders the first-person view cursor-free and pixel-exact vs B1 frame
-    1743 outside the 9x16 cursor box (FNV pixels `166202CD198B9900`,
-    palette `EA991CB49988BA23`); movement/time follow `fn_00FBA` and the
-    scene clock; `yt2p-room` gate added to `run.sh`.
-  - **portraits**: `fn_1274F` reads the live roster like vanilla reads
-    DGROUP (file image is persistence only): `yt2_character` models
-    `ready` (+0x1E), `buffs[9]` (+0x20), `icon_sel` (+0xB4) and
-    `overlay` (+0x15E) with parse/write, pinned by the round-trip
-    test; a created hero's portrait paints pixel-exact in explore.
-  - **wiring**: `yt2p-play` runs explore as session 3 (embark marker,
-    room tick, arrow/ESC keys, walk SFX, `CURGAME` persistence); the menu
-    embark returns EMBARK once the party is set.
-  - **live**: new `engine/port/tests/live_explore.py` drives the full
-    loop marker-based (roster 1 6 7 8, single E embark, 3 walks, ESC,
-    quit): `live-explore: OK (1 embark, 3 walks)`; choreography notes
-    (11s post-roster gap, no ESC-blast before E) live in its header.
+    renders the first-person view cursor-free and pixel-exact vs B1 frame 1743
+    outside the 9x16 cursor box (FNV pixels `166202CD198B9900`, palette
+    `EA991CB49988BA23`); movement/time follow `fn_00FBA` and the scene clock;
+    `yt2p-room` gate added to `run.sh`.
+  - **portraits**: `fn_1274F` reads the live roster like vanilla reads DGROUP
+    (file image is persistence only): `yt2_character` models `ready` (+0x1E),
+    `buffs[9]` (+0x20), `icon_sel` (+0xB4) and `overlay` (+0x15E) with
+    parse/write, pinned by the round-trip test; a created hero's portrait paints
+    pixel-exact in explore.
+  - **wiring**: `yt2p-play` runs explore as session 3 (embark marker, room tick,
+    arrow/ESC keys, walk SFX, `CURGAME` persistence); the menu embark returns
+    EMBARK once the party is set.
+  - **live**: new `engine/port/tests/live_explore.py` drives the full loop
+    marker-based (roster 1 6 7 8, single E embark, 3 walks, ESC, quit):
+    `live-explore: OK (1 embark, 3 walks)`; choreography notes (11s post-roster
+    gap, no ESC-blast before E) live in its header.
   - **gates**: `yt2p-tests: OK`, `port: OK` (room smoke included).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-16 - M8/B2 in-game menu + vanilla file roles (parity-driven):
-  - **found by matrix**: B2 loaded `CURGAME` at boot while B1 rewrites it
-    fresh; B2 wrote at DONE, B1 never; B2 skipped the in-game menu `fn_0EBD6`
-    (save/load/options between menu E and explore); B2 ended explore on
-    ESC, vanilla ignores it; B2 marked a 3x3, vanilla marks facing 2x3
-    strips; B2 leaked skill means into file bytes, vanilla keeps them in
-    DGROUP; B2's stream TICK ran two counters backwards across sessions.
+  - **found by matrix**: B2 loaded `CURGAME` at boot while B1 rewrites it fresh;
+    B2 wrote at DONE, B1 never; B2 skipped the in-game menu `fn_0EBD6`
+    (save/load/options between menu E and explore); B2 ended explore on ESC,
+    vanilla ignores it; B2 marked a 3x3, vanilla marks facing 2x3 strips; B2
+    leaked skill means into file bytes, vanilla keeps them in DGROUP; B2's
+    stream TICK ran two counters backwards across sessions.
   - **fix**: `engine/port/src/ingamemenu.c` ports `fn_0EBD6` whole (options with
-    `v_505E` masks 0x9D/0x71/0xFE, slot browser, 23-char editor, confirms,
-    save `sub_0F823`, load flow); boot writes fresh bytes; DONE is
-    memory-only (delete flushes at confirm); explore ignores ESC/Q, `D`
-    opens the panel; embark persists exactly the visited bytes; TICK is
-    one monotonic timeline. Saves/loads are byte-identical with B1.
-  - **gates**: menu frames pixel-exact (base/list/editor/confirm +
-    load-list region); `SAVGAME1` md5-pinned; boot bytes unit-pinned;
-    `yt2p-tests: OK`, `port: OK`, `port-input: OK`, live loop reworked
-    onto save/load (`live-explore: OK` both modes).
+    `v_505E` masks 0x9D/0x71/0xFE, slot browser, 23-char editor, confirms, save
+    `sub_0F823`, load flow); boot writes fresh bytes; DONE is memory-only
+    (delete flushes at confirm); explore ignores ESC/Q, `D` opens the panel;
+    embark persists exactly the visited bytes; TICK is one monotonic timeline.
+    Saves/loads are byte-identical with B1.
+  - **gates**: menu frames pixel-exact (base/list/editor/confirm + load-list
+    region); `SAVGAME1` md5-pinned; boot bytes unit-pinned; `yt2p-tests: OK`,
+    `port: OK`, `port-input: OK`, live loop reworked onto save/load
+    (`live-explore: OK` both modes).
   - **known gaps**: in-explore `R` menu (`fn_0E7B2`, next slice); B1's DOS
-    findfirst is stubbed so the 0x71 menu is unit+review covered only;
-    delete drops (vanilla spills items) unported.
-  - **pacing**: the menu re-entry forward-syncs the intro clock for
-    stream monotonicity and rebases wall pacing at the jump
-    (`play_intro_resync`) instead of sleeping through the session.
+    findfirst is stubbed so the 0x71 menu is unit+review covered only; delete
+    drops (vanilla spills items) unported.
+  - **pacing**: the menu re-entry forward-syncs the intro clock for stream
+    monotonicity and rebases wall pacing at the jump (`play_intro_resync`)
+    instead of sleeping through the session.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - B1 DOS FindFirst stubbed (play-c saves invisible):
-  - **found**: DOS AH=4Eh unconditionally returned error 2, so the
-    boot save-slot scan (sub_01D84) never marked slots found and
-    every load list showed "- EMPTY -" even with saves on disk
-    (saving itself always worked - files are written and the
-    scripted load-by-name passes). The game probes six literal
-    SAVGAMEd names and never reads the DTA nor calls FindNext.
-  - **fix**: FindFirst answers literal existence via the existing
-    host-path mapping (case-insensitive, directories excluded);
-    wildcards report not found and FindNext reports error 18
-    (no search state is kept - the only caller never continues).
-    Staged saves now show by name in the load list (screenshot:
-    slot 4 "SMITHWARE PARTY" over five "- EMPTY -" rows).
-  - **gates**: new `yt2game-tests` DOS case (found exact/upper,
-    missing, wildcard, FindNext; 6 failures with the fix
-    reverted), new `tests/c/ffscan.sh` boot-scan gate wired into
-    `tests/c/run.sh`, full `tests/c/run.sh: OK` incl. the Windows
-    cross-build.
-  - **not changed**: no assembly edit (`swreg.asm` untouched; the
-    C build re-assembles it clean as part of emission);
-    `SWREG.EXE` remains MD5 `c3bdd3054e55a1e0b57c9780654dc982`.
+  - **found**: DOS AH=4Eh unconditionally returned error 2, so the boot
+    save-slot scan (sub_01D84) never marked slots found and every load list
+    showed "- EMPTY -" even with saves on disk (saving itself always worked -
+    files are written and the scripted load-by-name passes). The game probes six
+    literal SAVGAMEd names and never reads the DTA nor calls FindNext.
+  - **fix**: FindFirst answers literal existence via the existing host-path
+    mapping (case-insensitive, directories excluded); wildcards report not found
+    and FindNext reports error 18 (no search state is kept - the only caller
+    never continues). Staged saves now show by name in the load list
+    (screenshot: slot 4 "SMITHWARE PARTY" over five "- EMPTY -" rows).
+  - **gates**: new `yt2game-tests` DOS case (found exact/upper, missing,
+    wildcard, FindNext; 6 failures with the fix reverted), new
+    `tests/c/ffscan.sh` boot-scan gate wired into `tests/c/run.sh`, full
+    `tests/c/run.sh: OK` incl. the Windows cross-build.
+  - **not changed**: no assembly edit (`swreg.asm` untouched; the C build
+    re-assembles it clean as part of emission); `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-17 - M8/B2 combat rounds (S missiles, formal melee, victory):
-  - **decode**: `S` sets `v_5062` bit `0x100` and runs `fn_0D620`'s main
-    path (per-member missile build from equipment[0], five column bands,
-    `fn_15D89` margin/damage with resistance halving, portrait erase per
-    shot); `A` in explore is a pure skip, in formal combat (`v_5064`
-    bit `0x1000`) the main loop runs `fn_06382` whose member turns take
-    `A` as a raw-HP melee strike; contact moves the record to the
-    engaged row and raises `0x1000`; the death scan zeroes kills,
-    accumulates the loot BCDs, and victory clears `0x1000`, credits XP
-    per survivor and prints the award side panel. Kills credit XP only; the
-    shown gold/ore/nuore never reach the party (vanilla quirk, kept).
-  - **port**: `engine/port/src/combat.c` owns the S round, the formal
-    driver (queue build/sort/target pick, member melee, death scan,
-    victory), the award side panel, the engaged label, the attacker
-    highlight and the compass-bar blank; `room.c` gains the combat
-    object fields (defense/vuln/name/loot/initiative from the
-    def+`0x32` mapping), the column-hit check, the exported monster
-    turn with death callback, `v_94F1` shade selection, engaged
-    no-anim, window flag hygiene and spawn taken-bits; `party.c`
-    gains the weapon-wear counters and drops the bogus `weight` byte
+  - **decode**: `S` sets `v_5062` bit `0x100` and runs `fn_0D620`'s main path
+    (per-member missile build from equipment[0], five column bands, `fn_15D89`
+    margin/damage with resistance halving, portrait erase per shot); `A` in
+    explore is a pure skip, in formal combat (`v_5064` bit `0x1000`) the main
+    loop runs `fn_06382` whose member turns take `A` as a raw-HP melee strike;
+    contact moves the record to the engaged row and raises `0x1000`; the death
+    scan zeroes kills, accumulates the loot BCDs, and victory clears `0x1000`,
+    credits XP per survivor and prints the award side panel. Kills credit XP
+    only; the shown gold/ore/nuore never reach the party (vanilla quirk, kept).
+  - **port**: `engine/port/src/combat.c` owns the S round, the formal driver
+    (queue build/sort/target pick, member melee, death scan, victory), the award
+    side panel, the engaged label, the attacker highlight and the compass-bar
+    blank; `room.c` gains the combat object fields
+    (defense/vuln/name/loot/initiative from the def+`0x32` mapping), the
+    column-hit check, the exported monster turn with death callback, `v_94F1`
+    shade selection, engaged no-anim, window flag hygiene and spawn taken-bits;
+    `party.c` gains the weapon-wear counters and drops the bogus `weight` byte
     (`+0x1B` is XP's top BCD byte, it clobbered XP writes).
-  - **gates**: `tests/port-combat/run.sh` pins five quiescent B1
-    actions (bytes, cumulative SFX, palette hash, masked video hash);
-    `yt2p-combat` replays S/A to quiescence with setup/render-state
-    transplants; live S/S/S/A/A verified structurally
-    (`live-combat: OK`); `port: OK`, `port-input: OK`, `live-explore:
-    OK` stay green.
-  - **known gaps**: monster turns, monster missiles, second engager,
-    the transient S panel and missile sprite, hit flashes, the
-    formal grid/icons/arrows panel (menu slice), wall-column `0x800`
-    semantics, the `0xE54B` table, gold crediting (ask before
-    "fixing"), record persistence across save/load.
+  - **gates**: `tests/port-combat/run.sh` pins five quiescent B1 actions (bytes,
+    cumulative SFX, palette hash, masked video hash); `yt2p-combat` replays S/A
+    to quiescence with setup/render-state transplants; live S/S/S/A/A verified
+    structurally (`live-combat: OK`); `port: OK`, `port-input: OK`,
+    `live-explore: OK` stay green.
+  - **known gaps**: monster turns, monster missiles, second engager, the
+    transient S panel and missile sprite, hit flashes, the formal
+    grid/icons/arrows panel (menu slice), wall-column `0x800` semantics, the
+    `0xE54B` table, gold crediting (ask before "fixing"), record persistence
+    across save/load.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-18 - M8/B2 chest search/loot + prompt cancel + live wiring:
-  - **mechanism (emu watchpoints, all temporary and reverted)**:
-    open-chest sprite is `[v_5560]+2` (`sub_07B1D`) aliasing
-    gathered-view column 46/49's object word (4→5, close flips back);
-    the side-panel/compass split across `fn_06EA4` (WorkSeg+EMS iff bit
-    `0x100`, consumes), `fn_06F86` (VGA direct, no flags) and
-    `fn_076AC` (paints iff `v_5060 & 0x80`, sets `0x100`):
-    currency takes present+VGA-clear+receipt (`fn_070EA`), item
-    takes keep the stale compass (`fn_11F83`, gated clear no-ops),
-    quick access drops clear and stay silent (`fn_176EC`, `0x100` consumed),
-    `0x2000` drops refuse with the screen untouched, prompt cancel
-    (`ax` 0) wipes and explore repaints `SOUTH`;
+  - **mechanism (emu watchpoints, all temporary and reverted)**: open-chest
+    sprite is `[v_5560]+2` (`sub_07B1D`) aliasing gathered-view column 46/49's
+    object word (4→5, close flips back); the side-panel/compass split across
+    `fn_06EA4` (WorkSeg+EMS iff bit `0x100`, consumes), `fn_06F86` (VGA direct,
+    no flags) and `fn_076AC` (paints iff `v_5060 & 0x80`, sets `0x100`):
+    currency takes present+VGA-clear+receipt (`fn_070EA`), item takes keep the
+    stale compass (`fn_11F83`, gated clear no-ops), quick access drops clear and
+    stay silent (`fn_176EC`, `0x100` consumed), `0x2000` drops refuse with the
+    screen untouched, prompt cancel (`ax` 0) wipes and explore repaints `SOUTH`;
   - **port**: `engine/port/src/combat.c` gains the chest modal
     (search/prompt/open/loot/quick access/portraits/close/trap/RNG/BCD), the
-    per-action side-panel-compass flag, the explore-return fresh bit and
-    the cursor save/draw/write/restore dump order (`fn_1A6B5`);
-    `tool_play.c` wires live SPACE (search/prompt/close), N/ESC
-    prompt cancel, modal clicks and the carried-item cursor;
-  - **gates**: `tests/port-combat` pins 16 quiescent B1 actions
-    (bytes, SFX, palette, masked video; the 7 chest stops also match
-    unmasked bit-for-bit); new `tests/port-cancel` forks step 9 and
-    pins the N cancel against B1-CANCEL-esc (exact SFX match proves
-    the silence); live smoke (create/roster/embark/steps/SPACE-miss)
-    reaches explore with no unported warnings;
-  - **known gaps**: monster turns/missiles, melee depth, F-key
-    opener, Y/CR keyboard confirm, explore clicks
-    (arrows/portraits/viewport), modal right-click, floor pickup,
-    pack pickup/swap side panel text (B1 stages it WorkSeg-side, shows at
-    the next present), record persistence across save/load;
+    per-action side-panel-compass flag, the explore-return fresh bit and the
+    cursor save/draw/write/restore dump order (`fn_1A6B5`); `tool_play.c` wires
+    live SPACE (search/prompt/close), N/ESC prompt cancel, modal clicks and the
+    carried-item cursor;
+  - **gates**: `tests/port-combat` pins 16 quiescent B1 actions (bytes, SFX,
+    palette, masked video; the 7 chest stops also match unmasked bit-for-bit);
+    new `tests/port-cancel` forks step 9 and pins the N cancel against
+    B1-CANCEL-esc (exact SFX match proves the silence); live smoke
+    (create/roster/embark/steps/SPACE-miss) reaches explore with no unported
+    warnings;
+  - **known gaps**: monster turns/missiles, melee depth, F-key opener, Y/CR
+    keyboard confirm, explore clicks (arrows/portraits/viewport), modal
+    right-click, floor pickup, pack pickup/swap side panel text (B1 stages it
+    WorkSeg-side, shows at the next present), record persistence across
+    save/load;
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - chest opener prompt ignores F1-F4 (mouse only):
-  - **found**: B1's member picker (fn_0A834, loc_0A9D3) answers
-    F1-F4 (scancodes 3Bh-3Eh) wherever a person is picked; the
-    port routed explore F-keys to "unported" (seen twice in the
-    user's own input log).
-  - **fix**: yt2_combat_fkey (prompt-only today, same pick gates
-    as clicks: unassigned silent, unfit buzzes) wired into the
-    mode-3 dispatch. live_chest now opens with F1; click mapping
-    stays pinned by unit tests.
+  - **found**: B1's member picker (fn_0A834, loc_0A9D3) answers F1-F4 (scancodes
+    3Bh-3Eh) wherever a person is picked; the port routed explore F-keys to
+    "unported" (seen twice in the user's own input log).
+  - **fix**: yt2_combat_fkey (prompt-only today, same pick gates as clicks:
+    unassigned silent, unfit buzzes) wired into the mode-3 dispatch. live_chest
+    now opens with F1; click mapping stays pinned by unit tests.
   - **gates**: `yt2p-tests: OK`, `live-chest: OK`.
 - 2026-11-18 - M8/B2 explore mouse (arrows, strafes, right search):
-  - **trigger**: `play-port` died at explore start for mouse
-    players: the arrow buttons and viewport clicks were unported,
-    so the chest slice was unreachable outside test tools;
-  - **mechanism**: arrow buttons (`0x6420`) drive `fn_00FBA`
-    through KeyCodes `0x48/0x4B/0x4D/0x73/0x50/0x74`
-    (forward/turns plus the mouse-only strafe pair, lateral
-    vectors verified on all four facings, flash pics
-    `0x14/0x13` through `0x1C/0x1B`); viewport right-click shares
-    `loc_003F3` with SPACE (identical dispatch, proven identical
-    screens); the explore quick access pane repaints the six-line
-    currency trio (rows 96/102/114/120/132/138, SFX 2, stale
-    frame, no gather); `v_505E` bit 8 is persistent sticky
-    (takes/pickups/swaps/drop-backs/currency set, gated clears
-    consume) across close/cancel;
-  - **port**: `room.c` gains the strafe arms;
-    `engine/port/src/combat.c` gains the explore click dispatch
-    (arrows via `room_key`, right-click via the shared search
-    body, formal quick access via the shared handler), the six-line
-    explicit-row side panel, the sticky bit, the no-gather repaint
-    flag, and the S modal guard; `tool_play.c` logs room SFX and
-    syncs the party block on clicks;
-  - **harness notes**: B1 clicks land +(1,8) (cursor min-bound
-    clamp after the park move); the emu eats clicks whose latch
-    lands between `fn_PollInput` tests and its epilogue clear
-    (transfer-per-label interleave) — shifting the click tick
-    fixes it; the matrix seed (11312) differs from B1's pin
-    (`0x1234`), so combat/trap RNG outcomes pin B2-side while
-    the formulas stay identical;
-  - **gates**: `port-combat` (16), `port-cancel` (10), units,
-    `live_explore`, `live_combat`, `port-live` stay green;
-    `live_chest.py` now walks by arrow buttons, round-trips the
-    turns, and searches by right-click (all chained through the
-    taken byte);
-  - **known gaps**: icon row (camp/map/rest UIs), portraits/equip
-    (`fn_16044`), message link, member/item inspect, formal quick access
-    pane pixels, modal right-click, floor pickup, save/load
-    persistence (party block flush timing);
+  - **trigger**: `play-port` died at explore start for mouse players: the arrow
+    buttons and viewport clicks were unported, so the chest slice was
+    unreachable outside test tools;
+  - **mechanism**: arrow buttons (`0x6420`) drive `fn_00FBA` through KeyCodes
+    `0x48/0x4B/0x4D/0x73/0x50/0x74` (forward/turns plus the mouse-only strafe
+    pair, lateral vectors verified on all four facings, flash pics `0x14/0x13`
+    through `0x1C/0x1B`); viewport right-click shares `loc_003F3` with SPACE
+    (identical dispatch, proven identical screens); the explore quick access
+    pane repaints the six-line currency trio (rows 96/102/114/120/132/138, SFX
+    2, stale frame, no gather); `v_505E` bit 8 is persistent sticky
+    (takes/pickups/swaps/drop-backs/currency set, gated clears consume) across
+    close/cancel;
+  - **port**: `room.c` gains the strafe arms; `engine/port/src/combat.c` gains
+    the explore click dispatch (arrows via `room_key`, right-click via the
+    shared search body, formal quick access via the shared handler), the
+    six-line explicit-row side panel, the sticky bit, the no-gather repaint
+    flag, and the S modal guard; `tool_play.c` logs room SFX and syncs the party
+    block on clicks;
+  - **harness notes**: B1 clicks land +(1,8) (cursor min-bound clamp after the
+    park move); the emu eats clicks whose latch lands between `fn_PollInput`
+    tests and its epilogue clear (transfer-per-label interleave) — shifting the
+    click tick fixes it; the matrix seed (11312) differs from B1's pin
+    (`0x1234`), so combat/trap RNG outcomes pin B2-side while the formulas stay
+    identical;
+  - **gates**: `port-combat` (16), `port-cancel` (10), units, `live_explore`,
+    `live_combat`, `port-live` stay green; `live_chest.py` now walks by arrow
+    buttons, round-trips the turns, and searches by right-click (all chained
+    through the taken byte);
+  - **known gaps**: icon row (camp/map/rest UIs), portraits/equip (`fn_16044`),
+    message link, member/item inspect, formal quick access pane pixels, modal
+    right-click, floor pickup, save/load persistence (party block flush timing);
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-19 - M8/B2 live combat parity (panel, purse, flash, blood, clicks, pose):
-  - **trigger**: live play diverged from the reference (explore
-    chrome in formal combat, no button states, silent monster
-    turns, walking in formal). B1's M5 run (3406 frames) plus a
-    parked formal run are the reference; every fix ports the
-    B1/asm routine as written.
-  - **formal panel**: `yt2_combat_repaint` paints `fn_1755C` (quick access
-    grid via the shared chest painter), `fn_1261F` (swords icon,
-    group-8 pic 3) and the `fn_06EA4` formal side panel clear (x
-    240-312, y 86-194, wipes the arrows) ahead of the engaged
-    names. Pixel-exact vs B1's parked formal frame (0 diffs);
-    `tests/port-combat` pins the panel bytes against new
+- 2026-11-19 - M8/B2 live combat parity (panel, purse, flash, blood, clicks,
+  pose):
+  - **trigger**: live play diverged from the reference (explore chrome in formal
+    combat, no button states, silent monster turns, walking in formal). B1's M5
+    run (3406 frames) plus a parked formal run are the reference; every fix
+    ports the B1/asm routine as written.
+  - **formal panel**: `yt2_combat_repaint` paints `fn_1755C` (quick access grid
+    via the shared chest painter), `fn_1261F` (swords icon, group-8 pic 3) and
+    the `fn_06EA4` formal side panel clear (x 240-312, y 86-194, wipes the
+    arrows) ahead of the engaged names. Pixel-exact vs B1's parked formal frame
+    (0 diffs); `tests/port-combat` pins the panel bytes against new
     `golden/formal-panel.bin` (B1-derived).
-  - **purse**: victory credits the DGROUP purse (`fn_1345B`: gold
-    += [0], ore += [2], nuore += [1]) - the "never credited"
-    quirk note was wrong (the purse never reaches the SAVE, but
-    the grid and currency pane read it live). `setup.txt` purse
-    is 0 now; 35/1/1 derives from play. Currency icons gate on
-    BCD nonzero (`fn_1755C`/`fn_09B42`) in chest and formal
-    alike. Fixed the ore/nuore swap in the `loot`/`award`
-    comments (`fn_12EA0`: +4 goes to nuore, +8 to ore; the
-    spider's 1/1 hid it).
-  - **A verb**: `combat_melee` flashes pressed swords (pic 4),
-    stages `fn_18C1C` injury bits, presents the blood frame,
-    plays the weapon SFX, subtracts HP, and restores pic 3 onto
-    the retained frame (B1's blood lingers past the restore).
-    Fixed the injury overlay mapping (minor 0x12/medium
-    0x13/major 0x20 from `v_5184/86/88`; was rotated) and the
-    missing flags-bit-1 consume in the renderer.
-  - **S round**: flashes pressed campfire (pic 2) when anyone
-    fires; S hits carry no blood in B1 either (verified: no
-    `fn_18C1C` on that path). Missile flight sprites plus
-    per-band presents deferred.
-  - **formal clicks** (`0x669E`): viewport silent (empty cursor),
-    quick access grid handler, icon verbs (swords runs A; sun/disk
-    deferred with the cast/menu slices), side panel target select plus
-    status tags (`0x6606`, `loc_06706` verbatim), bottom strip
-    deferred. Right clicks re-poll. `yt2_combat_click` takes
-    present/context for verb presents. Formal D nests the menu
-    with mask 0x5E plus the combat wide clear (B2's menu already
-    had the combat arm).
-  - **monster turn** (`sub_0690D` minus damage): DoT tick
-    (`fn_12FF7` verbatim), `0xF010` ack, attack pose plus three
-    presents, pic restore; melee damage/SFX/death stay in the
-    effects slice (effect records `0x90AB`, `fn_08172`). TPK
-    loop guards added (unreachable until damage lands). Pose
-    verified via a temporary force-pose probe (reverted):
-    attack sprite renders, 7k-pixel diff vs idle.
-  - **gates**: `port-combat` (16 plus panel bytes),
-    `port-cancel` (10), units, `port-input`, `port-live`,
-    `live_explore`, `live_combat`, `live_chest` green. Live
-    streams show the pressed campfire/swords frames.
-  - **known gaps**: monster melee damage/effects/SFX/member
-    death, S plus monster missile flight, C cast UI, P sheet UI,
-    1-4/portrait inspect, game over, inter-round
-    `fn_13056`/`fn_12A96` in formal;
+  - **purse**: victory credits the DGROUP purse (`fn_1345B`: gold += [0], ore +=
+    [2], nuore += [1]) - the "never credited" quirk note was wrong (the purse
+    never reaches the SAVE, but the grid and currency pane read it live).
+    `setup.txt` purse is 0 now; 35/1/1 derives from play. Currency icons gate on
+    BCD nonzero (`fn_1755C`/`fn_09B42`) in chest and formal alike. Fixed the
+    ore/nuore swap in the `loot`/`award` comments (`fn_12EA0`: +4 goes to nuore,
+    +8 to ore; the spider's 1/1 hid it).
+  - **A verb**: `combat_melee` flashes pressed swords (pic 4), stages `fn_18C1C`
+    injury bits, presents the blood frame, plays the weapon SFX, subtracts HP,
+    and restores pic 3 onto the retained frame (B1's blood lingers past the
+    restore). Fixed the injury overlay mapping (minor 0x12/medium 0x13/major
+    0x20 from `v_5184/86/88`; was rotated) and the missing flags-bit-1 consume
+    in the renderer.
+  - **S round**: flashes pressed campfire (pic 2) when anyone fires; S hits
+    carry no blood in B1 either (verified: no `fn_18C1C` on that path). Missile
+    flight sprites plus per-band presents deferred.
+  - **formal clicks** (`0x669E`): viewport silent (empty cursor), quick access
+    grid handler, icon verbs (swords runs A; sun/disk deferred with the
+    cast/menu slices), side panel target select plus status tags (`0x6606`,
+    `loc_06706` verbatim), bottom strip deferred. Right clicks re-poll.
+    `yt2_combat_click` takes present/context for verb presents. Formal D nests
+    the menu with mask 0x5E plus the combat wide clear (B2's menu already had
+    the combat arm).
+  - **monster turn** (`sub_0690D` minus damage): DoT tick (`fn_12FF7` verbatim),
+    `0xF010` ack, attack pose plus three presents, pic restore; melee
+    damage/SFX/death stay in the effects slice (effect records `0x90AB`,
+    `fn_08172`). TPK loop guards added (unreachable until damage lands). Pose
+    verified via a temporary force-pose probe (reverted): attack sprite renders,
+    7k-pixel diff vs idle.
+  - **gates**: `port-combat` (16 plus panel bytes), `port-cancel` (10), units,
+    `port-input`, `port-live`, `live_explore`, `live_combat`, `live_chest`
+    green. Live streams show the pressed campfire/swords frames.
+  - **known gaps**: monster melee damage/effects/SFX/member death, S plus
+    monster missile flight, C cast UI, P sheet UI, 1-4/portrait inspect, game
+    over, inter-round `fn_13056`/`fn_12A96` in formal;
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-19 - M8/B2 enemy acts plus missile flight (damage, wipe, stones):
-  - **trigger**: live play still diverged (enemy never acted,
-    no missile animation). Both systems ported whole from B1,
-    no deferred holes inside them.
-  - **monster melee**: `sub_0690D` complete (single arm via
-    `sub_06DD9` resolve, `0x1000` multi arm over live members,
-    miss leg, spell-slot wear tail). Damage pipeline verbatim:
-    `sub_06E36` effect roll (25% special, `0x200` flag),
-    `sub_06C82` all three arms (plain margin, `0x200` save vs
-    survival, `0xE00` item-fumble with `fn_0AEE9` die),
-    `fn_08172` applier (SFX-once guard, `0x600`/`0x180`/plain
-    dispatch, portrait blits, double present), `sub_082E2`
-    HP (signed wrap, `0x40` death, highlight clear),
-    `sub_08300` SP, `sub_082BD` purse drain, `sub_0830F`
-    router, `sub_083FA` status save, `sub_0849C` randomizer,
-    `sub_08386` stat arm, `sub_08253`/`fn_0AACC` equipment
-    arm (bonus legs read NULL: the def+2 EMS table has no
-    WORLD mapping yet; B1-identical for legless items).
-    Effect table frozen (DGROUP `0x90AB`, 50 x 12 bytes,
-    boot-identical). Member death flows to portraits, skill
-    flags, and `fn_15FBC` wipe check: death screen (`fn_1B382`:
-    SFX 19, chrome) plus `death_pending`, caller runs menu
-    `0x70` (load/newgame/quit) and re-embarks (B2's menu
-    already bitmasks; load reuses the explore entry).
-  - **weapon fixes** (latent, B1-verified while here):
-    `fn_0AD9D` returns v_50CC codes (S fires on exactly 1,
-    melee swings on nonzero incl. silent fists on 4),
-    breakage stages the `sub_0AF12` fumble effect (was
-    skipped), spell cap `0x14` (was `0x20`), spell slot 3
-    (was 4), signed breakage compare. Also fixed the formal
-    loop serving two members per key (B1 polls between).
-  - **missiles**: S-round flight verbatim (`fn_1C10F` staging
-    onto the 210x105 canvas from group-1 pics 80/81 by the
-    542-547 window, `fn_1C0DA` per-band faces-blit at M7
-    perspective over columns `0x31/0x2E/0x2B/0x28/0x24/0x19`,
-    `fn_1C250` viewport erase, hit-band extra present; B1's
-    band delays are pacing). New `yt2_room_draw_missiles`;
-    B2 snapshots canvas/bg in malloc (EMS-equivalent). Stone
-    bboxes bbox-exact vs B1's flight frames both bands (y
-    exact, x exact, counts within 1%). One deliberate
-    deviation: the pre-flight gather is an icon overpaint
-    (no 3D render), because a B2 gather would advance sprite
-    animation a second time and break quiescence; B1's icon
+  - **trigger**: live play still diverged (enemy never acted, no missile
+    animation). Both systems ported whole from B1, no deferred holes inside
+    them.
+  - **monster melee**: `sub_0690D` complete (single arm via `sub_06DD9` resolve,
+    `0x1000` multi arm over live members, miss leg, spell-slot wear tail).
+    Damage pipeline verbatim: `sub_06E36` effect roll (25% special, `0x200`
+    flag), `sub_06C82` all three arms (plain margin, `0x200` save vs survival,
+    `0xE00` item-fumble with `fn_0AEE9` die), `fn_08172` applier (SFX-once
+    guard, `0x600`/`0x180`/plain dispatch, portrait blits, double present),
+    `sub_082E2` HP (signed wrap, `0x40` death, highlight clear), `sub_08300` SP,
+    `sub_082BD` purse drain, `sub_0830F` router, `sub_083FA` status save,
+    `sub_0849C` randomizer, `sub_08386` stat arm, `sub_08253`/`fn_0AACC`
+    equipment arm (bonus legs read NULL: the def+2 EMS table has no WORLD
+    mapping yet; B1-identical for legless items). Effect table frozen (DGROUP
+    `0x90AB`, 50 x 12 bytes, boot-identical). Member death flows to portraits,
+    skill flags, and `fn_15FBC` wipe check: death screen (`fn_1B382`: SFX 19,
+    chrome) plus `death_pending`, caller runs menu `0x70` (load/newgame/quit)
+    and re-embarks (B2's menu already bitmasks; load reuses the explore entry).
+  - **weapon fixes** (latent, B1-verified while here): `fn_0AD9D` returns v_50CC
+    codes (S fires on exactly 1, melee swings on nonzero incl. silent fists on
+    4), breakage stages the `sub_0AF12` fumble effect (was skipped), spell cap
+    `0x14` (was `0x20`), spell slot 3 (was 4), signed breakage compare. Also
+    fixed the formal loop serving two members per key (B1 polls between).
+  - **missiles**: S-round flight verbatim (`fn_1C10F` staging onto the 210x105
+    canvas from group-1 pics 80/81 by the 542-547 window, `fn_1C0DA` per-band
+    faces-blit at M7 perspective over columns `0x31/0x2E/0x2B/0x28/0x24/0x19`,
+    `fn_1C250` viewport erase, hit-band extra present; B1's band delays are
+    pacing). New `yt2_room_draw_missiles`; B2 snapshots canvas/bg in malloc
+    (EMS-equivalent). Stone bboxes bbox-exact vs B1's flight frames both bands
+    (y exact, x exact, counts within 1%). One deliberate deviation: the
+    pre-flight gather is an icon overpaint (no 3D render), because a B2 gather
+    would advance sprite animation a second time and break quiescence; B1's icon
     states (pressed one frame, normal through flight) match.
-  - **gates**: units (new: exact-pin monster-damage test
-    incl. multi-round wipe with SFX 19, plus `YT2_COMBAT_SAVE`
-    fixture), `port-combat`, `port-cancel`, `port-input`,
-    `port-live`, `live_combat`, `live_chest` green.
-  - **dialogue map** (next slice, fully scouted): talk cells
-    (`0x1000`, 105 in world, garden cluster incl. governor
-    w2=1 at (165,36)); SPACE opens the portrait+text+keyword
-    modal (B1 frames captured); text is 34-byte lines with
-    `%` block separators/quotes and `~` apostrophes; NPC
-    records live in WORLD file 15 (40-byte header at block
-    w2: counts + block indices; 58-byte keyword records:
-    13-char name + links; 34-byte text lines; traced: 15
-    keywords + 90 lines for NPC 1); dispatch is `fn_07C4A`
-    (type arms `fn_0C05A/0C1E9/0C64F/0BF67/0BCB3/0BC0E`,
-    object arms `fn_0CB2A/0A6BC/0B383/0B30B/0B7A4`:
-    talk/shop/train/special). T key is NPC info (`fn_18709`,
-    side panel text), not the modal. Formal S is the cast
+  - **gates**: units (new: exact-pin monster-damage test incl. multi-round wipe
+    with SFX 19, plus `YT2_COMBAT_SAVE` fixture), `port-combat`, `port-cancel`,
+    `port-input`, `port-live`, `live_combat`, `live_chest` green.
+  - **dialogue map** (next slice, fully scouted): talk cells (`0x1000`, 105 in
+    world, garden cluster incl. governor w2=1 at (165,36)); SPACE opens the
+    portrait+text+keyword modal (B1 frames captured); text is 34-byte lines with
+    `%` block separators/quotes and `~` apostrophes; NPC records live in WORLD
+    file 15 (40-byte header at block w2: counts + block indices; 58-byte keyword
+    records: 13-char name + links; 34-byte text lines; traced: 15 keywords + 90
+    lines for NPC 1); dispatch is `fn_07C4A` (type arms
+    `fn_0C05A/0C1E9/0C64F/0BF67/0BCB3/0BC0E`, object arms
+    `fn_0CB2A/0A6BC/0B383/0B30B/0B7A4`: talk/shop/train/special). T key is NPC
+    info (`fn_18709`, side panel text), not the modal. Formal S is the cast
     pipeline, correctly ignored as a direct key.
-  - **known gaps**: dialogue/NPC engine (modal, pager,
-    keywords, shops/train, effects), monster missile flight
-    (same machinery, bit-8 branch staged), C cast UI, P
-    sheet UI, 1-4/portrait inspect, inter-round
-    `fn_13056`/`fn_12A96` in formal, item bonus legs (def+2
-    EMS table unmapped), transfer/stairs SPACE arms;
+  - **known gaps**: dialogue/NPC engine (modal, pager, keywords, shops/train,
+    effects), monster missile flight (same machinery, bit-8 branch staged), C
+    cast UI, P sheet UI, 1-4/portrait inspect, inter-round `fn_13056`/`fn_12A96`
+    in formal, item bonus legs (def+2 EMS table unmapped), transfer/stairs SPACE
+    arms;
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - M8/B2 verb-row restore after nested menu (disk stuck fix):
-  - **found**: menu base paints group-8 pic 10 over the disk cell
-    (B1-faithful, v_0CCC=0x80/v_0CCA=0x0A at (296,67)); after nested
-    menu close B2 ran only stale ticks, which never repaint the verb
-    row, so pic 10 persisted (209/256 indices vs pre-menu, proven in
-    live RETURN-close frames). B1 restores (pre==post modulo cursor).
-  - **fix**: full `yt2_combat_repaint` after nested-menu CONTINUE
-    (matches B1 loc_00614 re-render); post-close disk now 0/256 vs
-    pre-menu. Wipe/main paths already re-render (re-embark/title).
+  - **found**: menu base paints group-8 pic 10 over the disk cell (B1-faithful,
+    v_0CCC=0x80/v_0CCA=0x0A at (296,67)); after nested menu close B2 ran only
+    stale ticks, which never repaint the verb row, so pic 10 persisted (209/256
+    indices vs pre-menu, proven in live RETURN-close frames). B1 restores
+    (pre==post modulo cursor).
+  - **fix**: full `yt2_combat_repaint` after nested-menu CONTINUE (matches B1
+    loc_00614 re-render); post-close disk now 0/256 vs pre-menu. Wipe/main paths
+    already re-render (re-embark/title).
   - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-20 - M8/B2 S-flinch (enemy wounded pose on shoot, reporter
-  was right; earlier "no S-flinch" note reversed):
-  - **found**: B1 sets bit 1 per S-hit (sub_0DB4D `or 3`) and the
-    first hit gathers + flushes the +9 pose before clearing it
-    (loc_0D814 fn_10E42 + fn_1A6B5); spider hit art differs from
-    idle by 2604 px (group-3 pic 39 vs 30, prior "0px" was wrong).
-    B1's sampler gap drops the ~1 ms no-sound flush, so present-dir
-    never shows it; vanilla holds it ~1 s via SFX busy-delays
-    (sub_0DBAA: back-to-back SFX idle 6 ticks and drop), caught in
-    vanilla frames sn_r1_04-06. B2 skipped the gather entirely.
-  - **fix**: first S-hit repaints (pose) before the bit-1 clear; a
-    per-round busy flag idles 6 ticks and drops back-to-back member
-    SFX (sound-aligned hold); kills re-gather the cleared scene
-    (loc_0D852) so post-kill delays hold it, not the pose.
-  - **goldens**: port-combat/cancel `-sfx.txt` regenerated (busy
-    drops: S#1 `[29,13]`, S#2 `+[29,30]`); state/palette/video
-    unchanged.
+- 2026-11-20 - M8/B2 S-flinch (enemy wounded pose on shoot, reporter was right;
+  earlier "no S-flinch" note reversed):
+  - **found**: B1 sets bit 1 per S-hit (sub_0DB4D `or 3`) and the first hit
+    gathers + flushes the +9 pose before clearing it (loc_0D814 fn_10E42 +
+    fn_1A6B5); spider hit art differs from idle by 2604 px (group-3 pic 39 vs
+    30, prior "0px" was wrong). B1's sampler gap drops the ~1 ms no-sound flush,
+    so present-dir never shows it; vanilla holds it ~1 s via SFX busy-delays
+    (sub_0DBAA: back-to-back SFX idle 6 ticks and drop), caught in vanilla
+    frames sn_r1_04-06. B2 skipped the gather entirely.
+  - **fix**: first S-hit repaints (pose) before the bit-1 clear; a per-round
+    busy flag idles 6 ticks and drops back-to-back member SFX (sound-aligned
+    hold); kills re-gather the cleared scene (loc_0D852) so post-kill delays
+    hold it, not the pose.
+  - **goldens**: port-combat/cancel `-sfx.txt` regenerated (busy drops: S#1
+    `[29,13]`, S#2 `+[29,30]`); state/palette/video unchanged.
   - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - M8/B2 S-kill blink (regression from the flinch fix):
-  - **found**: the kill repaint shows the cleared scene, but later
-    bands erased from the stale pre-round stash, flashing the dead
-    enemy back for a frame. B1 re-stashes the cleared viewport
-    after the kill gather (fn_1C1D1); B2 stashed once per round.
-  - **fix**: re-stash the viewport after the kill repaint (B1
-    fn_1C1D1 mirror); verified by frame inspection (alive, stones,
-    erased, pose, cleared, stones, loot; monotonic, no
-    resurrection). No committed pixel test: mid-round transients
-    are render-count-timing, suite-masked by design.
-  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`
-    (quiescent bytes unchanged).
+  - **found**: the kill repaint shows the cleared scene, but later bands erased
+    from the stale pre-round stash, flashing the dead enemy back for a frame. B1
+    re-stashes the cleared viewport after the kill gather (fn_1C1D1); B2 stashed
+    once per round.
+  - **fix**: re-stash the viewport after the kill repaint (B1 fn_1C1D1 mirror);
+    verified by frame inspection (alive, stones, erased, pose, cleared, stones,
+    loot; monotonic, no resurrection). No committed pixel test: mid-round
+    transients are render-count-timing, suite-masked by design.
+  - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK` (quiescent
+    bytes unchanged).
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - formal starts a keypress late; arrows walk in formal:
-  - **found**: B1 enters the formal loop on the engaging S/step
-    (border + leading monster turns at once, no extra key) and
-    re-polls arrows in formal (F-keys select, rest is not
-    movement). The port showed no border until the next A and
-    let arrows step/turn in formal.
-  - **fix**: yt2_combat_formal_entry (queue build, leading monster
-    turns, first member waiting) at S-round end and after every
-    step (keys, letters, clicks); session arrows silently
-    ignored in formal. Walk-in now borders on the engaging step
-    (was: never until A); pre/post live contrast confirms both.
-  - **gates**: `yt2p-tests: OK` (entry/prefix/guard pins),
-    `port-combat: OK`, `live-chest: OK` (setup kill now melees
-    to victory: the entry prefix consumes RNG like B1's, so
-    fixed S/A counts went seed-fragile).
-  - **noted, not ported**: ranged-informal flush (marks set, never
-    fired - ranged types only), monster stat derivation, formal
-    C/F-key verb select, modal + second-engager pack flows.
+  - **found**: B1 enters the formal loop on the engaging S/step (border +
+    leading monster turns at once, no extra key) and re-polls arrows in formal
+    (F-keys select, rest is not movement). The port showed no border until the
+    next A and let arrows step/turn in formal.
+  - **fix**: yt2_combat_formal_entry (queue build, leading monster turns, first
+    member waiting) at S-round end and after every step (keys, letters, clicks);
+    session arrows silently ignored in formal. Walk-in now borders on the
+    engaging step (was: never until A); pre/post live contrast confirms both.
+  - **gates**: `yt2p-tests: OK` (entry/prefix/guard pins), `port-combat: OK`,
+    `live-chest: OK` (setup kill now melees to victory: the entry prefix
+    consumes RNG like B1's, so fixed S/A counts went seed-fragile).
+  - **noted, not ported**: ranged-informal flush (marks set, never fired -
+    ranged types only), monster stat derivation, formal C/F-key verb select,
+    modal + second-engager pack flows.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-19 - M8/B2 animation timing plus side panel exclusion (holds, idle, caps):
-  - **trigger**: live play felt broken (invisible button
-    presses, frozen monsters, instant rounds, loot plus enemy
-    name together). Root causes: B2 fired every animation
-    present back-to-back (B1 holds flashes and paces bands
-    over ticks; B1's S takes 1.6 s, B2's took 150 ms), never
-    re-rendered idle sprites, and stacked side panel writers.
-  - **pacing**: new `yt2_room_delay_fn` (B1's `fn_DelayTicks`
-    in BIOS ticks; live sleeps 55 ms/tick, batch NULL-skips
-    so gates stay instant). Explicit delays verbatim:
-    missile 2/band, melee post 3, monster ack 10, silent
-    apply 12. Implicit holds (B1 render-bound) use
-    principled 2-tick beats: campfire/swords flash, blood,
-    pose frames, explore step (blocked paths restore
-    instantly like B1). S rounds now span ~800 ms, melee
-    ~400 ms live. Proven by mock-delay tick counts in the
-    unit tests (S 14, A 13 over the fixtures).
-  - **idle animation**: live explore re-renders stale on
-    tick-dirty in explore (B1's per-poll `fn_10E6A`), so
-    ranged monsters advance phases under the palette;
-    formal and modal idle keep the settled frame
-    (B1-identical: engaged never advance, modals don't
-    tick). Unit test pins the ping-pong advance plus pixel
-    change.
-  - **side panel exclusion** (B1's `0x100` consume; no key-wait
-    exists in the victory tail - the perceived block is
-    post-victory activity plus timing): formal repaints,
-    searches, the currency pane and the award itself now
-    clear the competing pending side panel, so loot, names, search
-    text and currency never paint together. Unit test pins
-    all three exclusions.
-  - **gates**: units (pacing counts, idle phases, exclusion),
-    `port-combat`, `port-cancel`, `port-live`,
-    `live_combat`, `live_chest` green.
-  - **known gaps**: dialogue/NPC engine, monster missile
-    flight, C cast UI, P sheet UI, 1-4/portrait inspect,
-    inter-round formal missiles, bonus legs, transfer/stairs
-    arms, member-turn `0x20` tick abort;
+- 2026-11-19 - M8/B2 animation timing plus side panel exclusion (holds, idle,
+  caps):
+  - **trigger**: live play felt broken (invisible button presses, frozen
+    monsters, instant rounds, loot plus enemy name together). Root causes: B2
+    fired every animation present back-to-back (B1 holds flashes and paces bands
+    over ticks; B1's S takes 1.6 s, B2's took 150 ms), never re-rendered idle
+    sprites, and stacked side panel writers.
+  - **pacing**: new `yt2_room_delay_fn` (B1's `fn_DelayTicks` in BIOS ticks;
+    live sleeps 55 ms/tick, batch NULL-skips so gates stay instant). Explicit
+    delays verbatim: missile 2/band, melee post 3, monster ack 10, silent apply
+    12. Implicit holds (B1 render-bound) use principled 2-tick beats:
+    campfire/swords flash, blood, pose frames, explore step (blocked paths
+    restore instantly like B1). S rounds now span ~800 ms, melee ~400 ms live.
+    Proven by mock-delay tick counts in the unit tests (S 14, A 13 over the
+    fixtures).
+  - **idle animation**: live explore re-renders stale on tick-dirty in explore
+    (B1's per-poll `fn_10E6A`), so ranged monsters advance phases under the
+    palette; formal and modal idle keep the settled frame (B1-identical: engaged
+    never advance, modals don't tick). Unit test pins the ping-pong advance plus
+    pixel change.
+  - **side panel exclusion** (B1's `0x100` consume; no key-wait exists in the
+    victory tail - the perceived block is post-victory activity plus timing):
+    formal repaints, searches, the currency pane and the award itself now clear
+    the competing pending side panel, so loot, names, search text and currency
+    never paint together. Unit test pins all three exclusions.
+  - **gates**: units (pacing counts, idle phases, exclusion), `port-combat`,
+    `port-cancel`, `port-live`, `live_combat`, `live_chest` green.
+  - **known gaps**: dialogue/NPC engine, monster missile flight, C cast UI, P
+    sheet UI, 1-4/portrait inspect, inter-round formal missiles, bonus legs,
+    transfer/stairs arms, member-turn `0x20` tick abort;
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - M8/B2 melee animation plus sprite scale (fangs, mode):
-  - **trigger**: live formal showed a frozen, distant spider.
-    B1 proof (parked formal with frame dumps): the engaged
-    spider ping-pongs (pic 34 -> 33 over 15 idle ticks,
-    fangs/mandibles region) through the shared `sub_11078`
-    path, and spawns with mode `0x0A` (large close-up).
-  - **animation**: removed the engaged pic save/restore (it
-    froze B1's `fn_1596C` ping-pong); live formal idle now
-    re-renders stale every 3rd rotation-dirty (B1-observed
-    ~15 ticks vs ranged ~5). Live formal runs show 6 phases
-    across pure idle (no verbs). Fixed the idle path
-    painting the explore plaque plus compass over the formal
-    panel (plaque arm now tests `f5064`, compass suppressed
-    in formal idle).
-  - **scale**: `fn_12D72` sets mode `0x0A` when group bit 0
-    is set (B2 had it inverted: live spiders spawned
-    `0x0D`/small while the matrix transplant masked it with
-    `0x0A`). Live formal now shows B1's large close-up.
-  - **gates**: engaged anim phase is render-count timing, so
-    actions 2-3 mask the B1-observed motion union (x 37-202,
-    y 29-121; HP/pos/flags still pin via state, panel via
-    `formal-panel.bin`); `02/03-video.sha` recomputed under
-    the wider mask in both combat gates (sound: B2==B1
-    outside it, proven by the passing regions). Units,
-    `port-combat`, `port-cancel`, `port-input`, `port-live`,
-    `live_combat`, `live_chest` green (`live_combat` flaked
-    once on RNG knife's-edge, re-run passes).
-  - **known gaps**: dialogue/NPC engine, monster missile
-    flight, C cast UI, P sheet UI, 1-4/portrait inspect,
-    inter-round formal missiles, bonus legs, transfer/stairs
-    arms, member-turn `0x20` tick abort;
+  - **trigger**: live formal showed a frozen, distant spider. B1 proof (parked
+    formal with frame dumps): the engaged spider ping-pongs (pic 34 -> 33 over
+    15 idle ticks, fangs/mandibles region) through the shared `sub_11078` path,
+    and spawns with mode `0x0A` (large close-up).
+  - **animation**: removed the engaged pic save/restore (it froze B1's
+    `fn_1596C` ping-pong); live formal idle now re-renders stale every 3rd
+    rotation-dirty (B1-observed ~15 ticks vs ranged ~5). Live formal runs show 6
+    phases across pure idle (no verbs). Fixed the idle path painting the explore
+    plaque plus compass over the formal panel (plaque arm now tests `f5064`,
+    compass suppressed in formal idle).
+  - **scale**: `fn_12D72` sets mode `0x0A` when group bit 0 is set (B2 had it
+    inverted: live spiders spawned `0x0D`/small while the matrix transplant
+    masked it with `0x0A`). Live formal now shows B1's large close-up.
+  - **gates**: engaged anim phase is render-count timing, so actions 2-3 mask
+    the B1-observed motion union (x 37-202, y 29-121; HP/pos/flags still pin via
+    state, panel via `formal-panel.bin`); `02/03-video.sha` recomputed under the
+    wider mask in both combat gates (sound: B2==B1 outside it, proven by the
+    passing regions). Units, `port-combat`, `port-cancel`, `port-input`,
+    `port-live`, `live_combat`, `live_chest` green (`live_combat` flaked once on
+    RNG knife's-edge, re-run passes).
+  - **known gaps**: dialogue/NPC engine, monster missile flight, C cast UI, P
+    sheet UI, 1-4/portrait inspect, inter-round formal missiles, bonus legs,
+    transfer/stairs arms, member-turn `0x20` tick abort;
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-20 - M8/B2 new-game reset + map shortcut + loot compass (vanilla-observed):
-  - **new-game (B1 fn_0D36C/fn_1B9D0)**: title entry reloads the WORLD
-    roster template (created chars wiped, SQUIRE/DIANA/YENDOR restored),
-    clears the assignment, and rewrites CURGAME fresh; B2's boot already
-    did this but menu EXIT_MENU (NEWGAME) never re-ran it, so created
-    parties persisted (B1 probed: post-NEWGAME DGROUP has assigned 0,
-    slot 0 zeroed, slots 5-7 defaults). B2 now re-runs `yt2_save_start`
-    on both EXIT_MENU paths (main menu + explore/wipe unwind); unit pins
-    re-run (CONAN wiped, SQUIRE back, assigned 0), live probe verifies
-    the trigger plus fresh CURGAME bytes.
-  - **map shortcut (B1 M/L/U)**: explore ate M/L/U ("unported"); B1's M/L/U
-    open fixed maps 31/47/7 (U=7 is filler, never shows). B2 gains a modal
-    map (render + legend clicks stay open, any key closes to explore,
-    base palette, frozen idle like fn_123E9 WaitKey). B1 gates on 0x9569
-    map-UI state (empty fresh, so B1's M no-ops early); B2 shows ungated
-    so the shortcut works (noted in code). Unit pins 31/47 render,
-    live probe verifies open/legend-miss/close plus opaque frames.
-  - **loot compass**: B2 painted SOUTH over the award while B1's loot has
-    no compass (frames compared); `award_pending` now suppresses the
-    compass. Neither game blocks on awards (both return; loot persists
-    until next action). Verified faithful, no gate churn.
+- 2026-11-20 - M8/B2 new-game reset + map shortcut + loot compass
+  (vanilla-observed):
+  - **new-game (B1 fn_0D36C/fn_1B9D0)**: title entry reloads the WORLD roster
+    template (created chars wiped, SQUIRE/DIANA/YENDOR restored), clears the
+    assignment, and rewrites CURGAME fresh; B2's boot already did this but menu
+    EXIT_MENU (NEWGAME) never re-ran it, so created parties persisted (B1
+    probed: post-NEWGAME DGROUP has assigned 0, slot 0 zeroed, slots 5-7
+    defaults). B2 now re-runs `yt2_save_start` on both EXIT_MENU paths (main
+    menu + explore/wipe unwind); unit pins re-run (CONAN wiped, SQUIRE back,
+    assigned 0), live probe verifies the trigger plus fresh CURGAME bytes.
+  - **map shortcut (B1 M/L/U)**: explore ate M/L/U ("unported"); B1's M/L/U open
+    fixed maps 31/47/7 (U=7 is filler, never shows). B2 gains a modal map
+    (render + legend clicks stay open, any key closes to explore, base palette,
+    frozen idle like fn_123E9 WaitKey). B1 gates on 0x9569 map-UI state (empty
+    fresh, so B1's M no-ops early); B2 shows ungated so the shortcut works
+    (noted in code). Unit pins 31/47 render, live probe verifies
+    open/legend-miss/close plus opaque frames.
+  - **loot compass**: B2 painted SOUTH over the award while B1's loot has no
+    compass (frames compared); `award_pending` now suppresses the compass.
+    Neither game blocks on awards (both return; loot persists until next
+    action). Verified faithful, no gate churn.
   - **also verified faithful (no change)**: S-flight stones, A-melee blood,
     death/loot, spider approach (all match B1 live); near-spider scale/pose
-    within 1.5% px; menu/title/roster buttons act without press-flash like
-    B1; combat campfire icon flashes 1 frame live.
+    within 1.5% px; menu/title/roster buttons act without press-flash like B1;
+    combat campfire icon flashes 1 frame live.
   - **intro ESC (needs direction)**: B1 polls ESC only at sparse sub_050DF
     checkpoints (taps at 100/800 ignored, 300/1400 skip); B2 polls per-tick
-    (taps always skip). Parity means hold-to-skip floppiness; keeping B2
-    crisp is better UX. User chose crisp (no change).
+    (taps always skip). Parity means hold-to-skip floppiness; keeping B2 crisp
+    is better UX. User chose crisp (no change).
   - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
     OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - M8/B2 explore clicks (campfire S, arrow flash, sun/disk menu):
-  - **found**: explore icon row was deferred (campfire/sun/ZZZ/disk clicks
-    dead) and arrow clicks stepped with `present=NULL` (no flash). B1's
-    0x5B2E verbs (dumped: campfire 239-254, sun 258-273, ZZZ 277-292,
-    disk 296-311) fire S (loc_0073C), D-menu (loc_00758), rest (fn_0E7B2),
-    menu (loc_005E4); arrow clicks inject KeyCodes (shared flash+step).
+  - **found**: explore icon row was deferred (campfire/sun/ZZZ/disk clicks dead)
+    and arrow clicks stepped with `present=NULL` (no flash). B1's 0x5B2E verbs
+    (dumped: campfire 239-254, sun 258-273, ZZZ 277-292, disk 296-311) fire S
+    (loc_0073C), D-menu (loc_00758), rest (fn_0E7B2), menu (loc_005E4); arrow
+    clicks inject KeyCodes (shared flash+step).
   - **fix**: `chest_explore_click` takes present/context (arrows flash),
-    campfire runs the S round (shared icon flash/stones/SFX/damage),
-    sun/disk set `menu_requested` (caller nests menu 0xFE like D);
-    formal disk likewise (0x5E). ZZZ rest stays deferred (unported slice).
-    Verb-box comment corrected (explore campfire/S, formal swords/A).
-  - **verify**: unit pins campfire SFX 29, arrow turn, sun/disk/formal-disk
-    menu flags; live click probe (fixed mouse wire format: family 3,
-    BUTTON=2/QUIT+coords=ABS) verifies campfire stones+SFX, arrow
-    flash+step, disk menu frames. Shot wounds now show (stones touch at
-    hit band like B1 2301, SFX, HP damage, blood/kill/loot); B1 has no
-    S-flinch/blood overlay (code clears bit 1, frames confirm), so no
-    further reaction to port.
+    campfire runs the S round (shared icon flash/stones/SFX/damage), sun/disk
+    set `menu_requested` (caller nests menu 0xFE like D); formal disk likewise
+    (0x5E). ZZZ rest stays deferred (unported slice). Verb-box comment corrected
+    (explore campfire/S, formal swords/A).
+  - **verify**: unit pins campfire SFX 29, arrow turn, sun/disk/formal-disk menu
+    flags; live click probe (fixed mouse wire format: family 3,
+    BUTTON=2/QUIT+coords=ABS) verifies campfire stones+SFX, arrow flash+step,
+    disk menu frames. Shot wounds now show (stones touch at hit band like B1
+    2301, SFX, HP damage, blood/kill/loot); B1 has no S-flinch/blood overlay
+    (code clears bit 1, frames confirm), so no further reaction to port.
   - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
     OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - M8/B2 verb fixes (sun deferred, bow terms, DoT pose cut):
-  - **sun (user catch)**: explore verb 2 is the spell button (fn_0DE48
-    cast UI, unported), not menu; reverted sun→menu to silent deferred
-    (cast slice, same as C/Z). B1 explore D is cast too; B2's D-menu is
-    kept as shipped convenience until cast ships (noted in code). Disk
-    (verb 4 → loc_005E4 menu) and bow S (verb 1 → loc_0073C) confirmed
-    against the dumped 0x5B2E table + dispatch.
-  - **terms (user catch)**: verb 1 is the bow-and-arrow icon (not
-    campfire); verb 2 is spell (not sun). Comments fixed; ammo is
-    unlimited (wear/breakage only, no depletion).
-  - **disk "stuck"**: reproduced as post-menu S silence with
-    f5064=0xD019 (formal engaged); S is unbound in formal in B1 too
-    (no 0x53 in fn_06382, no fn_1C0DA callers there), so nothing to
-    fix — melee (A/swords) is the formal verb (verified blood/loot).
-    Nested menu itself opens/closes cleanly (live probe).
-  - **S-flinch (disputed, evidence)**: B1 explore S-hit (loc_0D814)
-    clears pose bit 1 and calls only SFX/HP/counter/gather/award —
-    no pose/blood/flash/overlay on wound or kill (fn_12EA0 is
-    BCD/drops only); renderer poses on bit-1-set one-shot, which S
-    clears. Spider +9 art equals idle (group-3 pics 32/39 identical,
-    0px), S1/S2 frames px-identical pre/post (no pose (3px), no blood
-    (scan), no flash (palette normal)). B2 matches on all counts, so
-    no S-flinch to port; asking for the reporter's B1 frame
+  - **sun (user catch)**: explore verb 2 is the spell button (fn_0DE48 cast UI,
+    unported), not menu; reverted sun→menu to silent deferred (cast slice, same
+    as C/Z). B1 explore D is cast too; B2's D-menu is kept as shipped
+    convenience until cast ships (noted in code). Disk (verb 4 → loc_005E4 menu)
+    and bow S (verb 1 → loc_0073C) confirmed against the dumped 0x5B2E table +
+    dispatch.
+  - **terms (user catch)**: verb 1 is the bow-and-arrow icon (not campfire);
+    verb 2 is spell (not sun). Comments fixed; ammo is unlimited (wear/breakage
+    only, no depletion).
+  - **disk "stuck"**: reproduced as post-menu S silence with f5064=0xD019
+    (formal engaged); S is unbound in formal in B1 too (no 0x53 in fn_06382, no
+    fn_1C0DA callers there), so nothing to fix — melee (A/swords) is the formal
+    verb (verified blood/loot). Nested menu itself opens/closes cleanly (live
+    probe).
+  - **S-flinch (disputed, evidence)**: B1 explore S-hit (loc_0D814) clears pose
+    bit 1 and calls only SFX/HP/counter/gather/award — no
+    pose/blood/flash/overlay on wound or kill (fn_12EA0 is BCD/drops only);
+    renderer poses on bit-1-set one-shot, which S clears. Spider +9 art equals
+    idle (group-3 pics 32/39 identical, 0px), S1/S2 frames px-identical pre/post
+    (no pose (3px), no blood (scan), no flash (palette normal)). B2 matches on
+    all counts, so no S-flinch to port; asking for the reporter's B1 frame
     (tick/enemy/mode/screenshot) to compare against.
-  - **pose trigger**: B2 posed on 0x3010 (DoT/pic2, spurious — B1
-    poses only on bits 1/2, DoT is damage-only per fn_12FF7, pic2 is
-    a second layer); cut to bit1/bit2 only (already correct above).
+  - **pose trigger**: B2 posed on 0x3010 (DoT/pic2, spurious — B1 poses only on
+    bits 1/2, DoT is damage-only per fn_12FF7, pic2 is a second layer); cut to
+    bit1/bit2 only (already correct above).
   - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - exit-to-DOS hang (watchdog + stale link):
-  - **found**: the server exits cleanly on quit (title, embark,
-    nested explore via keys and clicks all verified headless), but
-    the client follows the dead link forever. The first watchdog
-    spun on the unreaped zombie (kill -0 succeeds) and a subshell
-    wait cannot reap a sibling under set -e, so it never fired.
-    Also: stale INPUT.BIN replays the previous session's keys on
+  - **found**: the server exits cleanly on quit (title, embark, nested explore
+    via keys and clicks all verified headless), but the client follows the dead
+    link forever. The first watchdog spun on the unreaped zombie (kill -0
+    succeeds) and a subshell wait cannot reap a sibling under set -e, so it
+    never fired. Also: stale INPUT.BIN replays the previous session's keys on
     restart (a leftover quit exits the boot).
-  - **fix**: play.sh polls /proc states (zombie-aware, POSIX sh)
-    and stops the surviving side either way; the link files are
-    removed per run. Verified end-to-end with the real client:
-    quit-to-DOS exits play.sh 0 with nothing left, and killing the
-    client takes the server and play.sh down.
+  - **fix**: play.sh polls /proc states (zombie-aware, POSIX sh) and stops the
+    surviving side either way; the link files are removed per run. Verified
+    end-to-end with the real client: quit-to-DOS exits play.sh 0 with nothing
+    left, and killing the client takes the server and play.sh down.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - exit-to-DOS hang via play-port.sh (user runs this script):
-  - **found**: the server always exited cleanly (title, embark, nested
-    explore via keys and clicks, loot-then-quit, real-client e2e all
-    verified); the client froze on the dead link because play-port.sh
-    still ran it in the foreground with no watchdog.
-  - **fix**: same /proc-state watchdog as play.sh (either side may
-    exit first). Verified: play-port.sh exits 0 with nothing left.
+  - **found**: the server always exited cleanly (title, embark, nested explore
+    via keys and clicks, loot-then-quit, real-client e2e all verified); the
+    client froze on the dead link because play-port.sh still ran it in the
+    foreground with no watchdog.
+  - **fix**: same /proc-state watchdog as play.sh (either side may exit first).
+    Verified: play-port.sh exits 0 with nothing left.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - loot vs quit-dialog message conflict:
-  - **found**: opening the nested menu with loot pending painted
-    the award under the menu/dialog. B1's nested menu opens with
-    fn_06EA4 (side panels wipe); the port never consumed.
+  - **found**: opening the nested menu with loot pending painted the award under
+    the menu/dialog. B1's nested menu opens with fn_06EA4 (side panels wipe);
+    the port never consumed.
   - **fix**: nested/wipe menu open consumes the side panels (flags via
-    yt2_combat_menu_open plus a pixel wipe); title menus do not
-    wipe, per B1. Live-verified: loot up at menu-open frame,
-    panel clean from the next frame.
+    yt2_combat_menu_open plus a pixel wipe); title menus do not wipe, per B1.
+    Live-verified: loot up at menu-open frame, panel clean from the next frame.
   - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - current-member highlight lost mid-combat:
-  - **found**: the damage applier repaints portraits bare and B1
-    restores the color-219 border at every member turn handoff
-    (sub_06493); the port never did, so the highlight vanished
-    after the first damage and stayed gone.
-  - **fix**: repaint the border + present on both handoffs,
-    gated on member fitness like B1. Present count 10 -> 11;
-    committed pixel probe asserts the border on the last two
-    presents (fails without the fix).
+  - **found**: the damage applier repaints portraits bare and B1 restores the
+    color-219 border at every member turn handoff (sub_06493); the port never
+    did, so the highlight vanished after the first damage and stayed gone.
+  - **fix**: repaint the border + present on both handoffs, gated on member
+    fitness like B1. Present count 10 -> 11; committed pixel probe asserts the
+    border on the last two presents (fails without the fix).
   - **gates**: `yt2p-tests: OK`, `port-combat/cancel/input/live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-20 - current-member border lost at round end (highlight fix part 2):
-  - **found**: the handoff restore covered mid-round, but the formal
-    tail repaint redrew bare portraits once the queue emptied, so the
-    border vanished at every round end and stayed gone while waiting.
-    B1 waits on the last handoff frame (no repaint there).
-  - **fix**: skip the tail repaint when still formal with an empty
-    queue; victory (disengaged) still repaints. The committed probe
-    now drives to round end and asserts the full border on the last
-    present (fails without the fix).
-  - **gates**: `yt2p-tests: OK`, `port: OK`,
-    `port-combat/cancel/input/live: OK`.
+  - **found**: the handoff restore covered mid-round, but the formal tail
+    repaint redrew bare portraits once the queue emptied, so the border vanished
+    at every round end and stayed gone while waiting. B1 waits on the last
+    handoff frame (no repaint there).
+  - **fix**: skip the tail repaint when still formal with an empty queue;
+    victory (disengaged) still repaints. The committed probe now drives to round
+    end and asserts the full border on the last present (fails without the fix).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
+    OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - dead members act their turns (formal handoff skips no one):
-  - **found**: B1 hands member turns through sub_06493, which skips
-    attackers with status 0x1C40 (dead/out) silently; the port
-    handed every queued member, so the dead kept attacking. Formal
-    S confirmed a no-op both sides (gate pins no state/sfx delta).
-  - **fix**: one handoff helper (fitness gate + fresh portraits +
-    border + present, fn_171AE mirror) at all three handoff points;
-    unfit members advance the queue without acting. Committed probe
-    latches any handoff-while-dead across 6 rounds (fails with the
-    gate neutered).
-  - **gates**: `yt2p-tests: OK`, `port: OK`,
-    `port-combat/cancel/input/live: OK`.
+  - **found**: B1 hands member turns through sub_06493, which skips attackers
+    with status 0x1C40 (dead/out) silently; the port handed every queued member,
+    so the dead kept attacking. Formal S confirmed a no-op both sides (gate pins
+    no state/sfx delta).
+  - **fix**: one handoff helper (fitness gate + fresh portraits + border +
+    present, fn_171AE mirror) at all three handoff points; unfit members advance
+    the queue without acting. Committed probe latches any handoff-while-dead
+    across 6 rounds (fails with the gate neutered).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat/cancel/input/live:
+    OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
-- 2026-11-21 - active-combatant border disappears live (7 bordered
-  frames/run, 16-frame gap mid-formal):
-  - **found**: B1's idle poll (fn_10E6A via fn_1755C) never paints
-    portraits, so the handoff border survives ticks; the port's
-    idle-formal tick called render_stale (portraits=1), wiping the
-    border ~55 ms after every turn. Same class: S pose/kill and
-    menu/map-close repaints used full gathers (B1's gather never
-    touches portraits).
-  - **fix**: portraits-retained repaint variants
-    (yt2_room_render_keep_portraits /
-    yt2_room_render_stale_keep_portraits /
-    yt2_combat_repaint_keep_portraits) at the S repaints, menu/map
-    close, and the idle-formal tick. Live drive now shows one
-    unbroken bordered run (22 frames, 0 gap) vs 7 + 16-frame gap.
-  - **gates**: `yt2p-tests: OK` (new stale-keep pin, fails wired to
-    plain stale), `port: OK`, `port-combat: OK`, `replay: OK`.
+- 2026-11-21 - active-combatant border disappears live (7 bordered frames/run,
+  16-frame gap mid-formal):
+  - **found**: B1's idle poll (fn_10E6A via fn_1755C) never paints portraits, so
+    the handoff border survives ticks; the port's idle-formal tick called
+    render_stale (portraits=1), wiping the border ~55 ms after every turn. Same
+    class: S pose/kill and menu/map-close repaints used full gathers (B1's
+    gather never touches portraits).
+  - **fix**: portraits-retained repaint variants (yt2_room_render_keep_portraits
+    / yt2_room_render_stale_keep_portraits / yt2_combat_repaint_keep_portraits)
+    at the S repaints, menu/map close, and the idle-formal tick. Live drive now
+    shows one unbroken bordered run (22 frames, 0 gap) vs 7 + 16-frame gap.
+  - **gates**: `yt2p-tests: OK` (new stale-keep pin, fails wired to plain
+    stale), `port: OK`, `port-combat: OK`, `replay: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - enemy name missing in melee (formal without names):
-  - **found**: the user's recording shows formal frames (border,
-    rotating handoffs) with "NOTHING HERE" over the panel and no
-    ant name. A search side panel stuck before the fight (their arrows
-    never clear it - only F/B/L/R letters and click steps do) is
-    resurrected by every formal repaint, burying the names B1
-    paints. B1 keeps no side panel retention (fn_135B2's fn_06EA4 wipes
-    for the names; gathers clear VRAM) and paints names at every
-    handoff (6x fn_135B2 in sub_06493).
-  - **fix**: gathers consume the side panel (stale/modal repaints still
-    retain), arrow steps wipe it like the other step paths, and
-    handoffs clear+paint names. Same-drive contrast: pre-fix
-    formal shows NOTHING HERE with no name; post-fix shows
-    SPIDER with a clean side panel. Unit test pins per-present name
-    ink (11 failures with the fix neutered).
-  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`
-    (B1-compared video still matches), `live-chest: OK`.
+  - **found**: the user's recording shows formal frames (border, rotating
+    handoffs) with "NOTHING HERE" over the panel and no ant name. A search side
+    panel stuck before the fight (their arrows never clear it - only F/B/L/R
+    letters and click steps do) is resurrected by every formal repaint, burying
+    the names B1 paints. B1 keeps no side panel retention (fn_135B2's fn_06EA4
+    wipes for the names; gathers clear VRAM) and paints names at every handoff
+    (6x fn_135B2 in sub_06493).
+  - **fix**: gathers consume the side panel (stale/modal repaints still retain),
+    arrow steps wipe it like the other step paths, and handoffs clear+paint
+    names. Same-drive contrast: pre-fix formal shows NOTHING HERE with no name;
+    post-fix shows SPIDER with a clean side panel. Unit test pins per-present
+    name ink (11 failures with the fix neutered).
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK` (B1-compared
+    video still matches), `live-chest: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - enhanced boot flag (YT2_MODE) with intro skip:
-  - **added**: YT2_MODE=enhanced resumes past the intro when the game
-    dir holds prior state (any SAVGAME slot: session plus the
-    in-game menu; lone CURGAME: the title with the resumed roster);
-    unset boots vanilla. The pre-game menu has no Continue over a
-    resumed save (mask 0x71), so LOAD skips it and opens the
-    in-game menu on session entry instead. Unloadable state falls
-    back to a vanilla fresh boot. play-port.sh and port bundles
-    export enhanced; B1/play-c untouched.
-  - **proof**: unit-tested decision (yt2_boot_decide + pure mode
-    match) and a six-way live drive (vanilla/enhanced x
-    empty/curgame/saves/corrupt-slot/garbage) with log + replay
-    frames, including title/menu/explore screenshots.
-  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`,
-    `replay: OK`.
+  - **added**: YT2_MODE=enhanced resumes past the intro when the game dir holds
+    prior state (any SAVGAME slot: session plus the in-game menu; lone CURGAME:
+    the title with the resumed roster); unset boots vanilla. The pre-game menu
+    has no Continue over a resumed save (mask 0x71), so LOAD skips it and opens
+    the in-game menu on session entry instead. Unloadable state falls back to a
+    vanilla fresh boot. play-port.sh and port bundles export enhanced; B1/play-c
+    untouched.
+  - **proof**: unit-tested decision (yt2_boot_decide + pure mode match) and a
+    six-way live drive (vanilla/enhanced x
+    empty/curgame/saves/corrupt-slot/garbage) with log + replay frames,
+    including title/menu/explore screenshots.
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`, `replay: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-22 - enhanced embark skips the pre-game menu (deviation):
-  - **asked**: after assembling the party, start in the 3D view
-    instead of the in-game menu (UX + testing).
-  - **change**: `YT2_MODE=enhanced` treats the pre-embark menu as
-    CONTINUE (vanilla keeps it, so existing live scripts run
-    unmodified); loads move to the D menu, which now re-embarks
-    room+combat from the loaded save via a new menu did_load
-    flag (before: the room ran on stale state after a D-menu
-    load). Fresh embark lands in the tavern, D-load lands facing
-    the spider (screenshot-verified).
+  - **asked**: after assembling the party, start in the 3D view instead of the
+    in-game menu (UX + testing).
+  - **change**: `YT2_MODE=enhanced` treats the pre-embark menu as CONTINUE
+    (vanilla keeps it, so existing live scripts run unmodified); loads move to
+    the D menu, which now re-embarks room+combat from the loaded save via a new
+    menu did_load flag (before: the room ran on stale state after a D-menu
+    load). Fresh embark lands in the tavern, D-load lands facing the spider
+    (screenshot-verified).
   - **gates**: `yt2p-tests: OK`, `live-chest: OK` (unmodified).
-- 2026-11-21 - chest prompt/modal does not pause the port (walks,
-  menus, rounds and ticks leak through):
-  - **found**: B1's modal loop (fn_073E3) has no movement, monster,
-    menu or round calls (arrows run the anim tick only; F-keys
-    select), and the prompt picker (fn_0A834) repolls with no
-    ticks at all. The port stepped the party on arrows (plus
-    monster turns/engagement), opened the menu on D, ran formal
-    rounds on A, and advanced clock/sky/rotation on the wall
-    clock through both.
-  - **fix**: prompt arrows consumed silently (no present), modal
-    arrows run one anim-tick repaint, D ignored, formal keys
-    return with rounds waiting, wall ticks frozen like the map.
-    B1 behavior leg: saveload surgery with probe keys inside the
-    prompt/modal passes unchanged (exact 4-step walk pin proves
-    no movement). live_chest pins silence + present deltas (fails
-    pre-fix on the first probe); unit test pins the formal guard.
-  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`,
-    `live-chest: OK`, `live-explore: OK`. `live_combat.py` fails
-    identically pre/post (`S1 burst [29, 13]`) - pre-existing,
-    unwired to any runner, left alone.
+- 2026-11-21 - chest prompt/modal does not pause the port (walks, menus, rounds
+  and ticks leak through):
+  - **found**: B1's modal loop (fn_073E3) has no movement, monster, menu or
+    round calls (arrows run the anim tick only; F-keys select), and the prompt
+    picker (fn_0A834) repolls with no ticks at all. The port stepped the party
+    on arrows (plus monster turns/engagement), opened the menu on D, ran formal
+    rounds on A, and advanced clock/sky/rotation on the wall clock through both.
+  - **fix**: prompt arrows consumed silently (no present), modal arrows run one
+    anim-tick repaint, D ignored, formal keys return with rounds waiting, wall
+    ticks frozen like the map. B1 behavior leg: saveload surgery with probe keys
+    inside the prompt/modal passes unchanged (exact 4-step walk pin proves no
+    movement). live_chest pins silence + present deltas (fails pre-fix on the
+    first probe); unit test pins the formal guard.
+  - **gates**: `yt2p-tests: OK`, `port: OK`, `port-combat: OK`, `live-chest:
+    OK`, `live-explore: OK`. `live_combat.py` fails identically pre/post (`S1
+    burst [29, 13]`) - pre-existing, unwired to any runner, left alone.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - black screen on enhanced TITLE boot (late joiners):
-  - **found**: the skipping paths emit no mode change, so a client
-    joining after the first frame misses the only set_mode; the
-    idle title menu never answered its keyframe requests (reshow
-    was consumed only by the logo hold), leaving it black until
-    the 12 s attract fuse.
-  - **fix**: the menu loop honors reshow (drop dedup, flush; the
-    bridge force makes it a keyframe). Verified with a real
-    client on Xvfb (title visible, no set_mode wait).
+  - **found**: the skipping paths emit no mode change, so a client joining after
+    the first frame misses the only set_mode; the idle title menu never answered
+    its keyframe requests (reshow was consumed only by the logo hold), leaving
+    it black until the 12 s attract fuse.
+  - **fix**: the menu loop honors reshow (drop dedup, flush; the bridge force
+    makes it a keyframe). Verified with a real client on Xvfb (title visible, no
+    set_mode wait).
 - 2026-11-21 - ESC anywhere skips the intro (intentional deviation):
-  - **found**: B1 polls ESC only at phase checks, so taps during
-    long unpolled fade/wait stretches (measured 23 s) sit until
-    the next check. The port mirrored this (ESC at 45 s never
-    landed on the menu).
-  - **fix**: sticky ESC latch (B1's sticky KeyCode cascades the
-    same way) plus early-out polls in fades and frame waits;
-    one tap reaches the menu from any point (45 s attract skips
-    with visible response under a second; the rest is the vanilla
-    fade cascade). Pinned by fade/wait/menu unit tests.
+  - **found**: B1 polls ESC only at phase checks, so taps during long unpolled
+    fade/wait stretches (measured 23 s) sit until the next check. The port
+    mirrored this (ESC at 45 s never landed on the menu).
+  - **fix**: sticky ESC latch (B1's sticky KeyCode cascades the same way) plus
+    early-out polls in fades and frame waits; one tap reaches the menu from any
+    point (45 s attract skips with visible response under a second; the rest is
+    the vanilla fade cascade). Pinned by fade/wait/menu unit tests.
   - **gates**: `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-21 - enhanced TITLE boot inherited the old roster (regression):
-  - **found**: the TITLE path loaded CURGAME, so the assemble screen
-    showed the previous session (reproduced with a ZZZZZ-marked
-    save) instead of vanilla's fresh template. B1 clobbers CURGAME
-    at every boot (fn_1B9D0).
-  - **fix**: TITLE is now a vanilla fresh boot that only skips the
-    cutscene (template written back, intro jumped to the menu);
-    only LOAD resumes, and unloadable files fall back to TITLE.
-    Verified: marked CURGAME boots to the template roster and is
-    clobbered; the six-way boot matrix matches the new rules.
+  - **found**: the TITLE path loaded CURGAME, so the assemble screen showed the
+    previous session (reproduced with a ZZZZZ-marked save) instead of vanilla's
+    fresh template. B1 clobbers CURGAME at every boot (fn_1B9D0).
+  - **fix**: TITLE is now a vanilla fresh boot that only skips the cutscene
+    (template written back, intro jumped to the menu); only LOAD resumes, and
+    unloadable files fall back to TITLE. Verified: marked CURGAME boots to the
+    template roster and is clobbered; the six-way boot matrix matches the new
+    rules.
   - **gates**: `yt2p-tests: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-22 - explore top-right panel (minimap/quick access/chapter) vs B1:
   - **found**: the port never left the chapter state (F5 and the
     quick-access-grid click were unported/miswired, the minimap a stub,
-    modal/combat residue never restored), so the panel disagreed
-    with B1 everywhere except fresh boot.
-  - **fix**: B1's fn_117AC/fn_11836/fn_1270C/fn_1755C/fn_1765A/
-    fn_176EC ported nearly verbatim - state painter (chapter /
-    quick access + currency pane / 9x7 minimap with facing marker) on a
-    room gather callback, F5 toggle (QUICK ACCESS<->MAP with the skill,
-    QUICK ACCESS<->CHAPTER else), region-2 click open/select/close,
-    panel-bit save/restore across modal and formal fight, icon
-    tables byte-verbatim from a DGROUP dump (terrain 60 reads
-    24, was wrongly zeroed). Flag writes sit at entry points
-    only (a per-repaint write broke the combat gate's A04/A05).
-  - **gates**: `yt2p-tests: OK` (toggle branches, marker facings),
-    `port-combat: OK`, `replay: OK`, `live-chest: OK`,
-    `live-explore: OK` (+ resume); B1-vs-port frames match per
-    state (chapter bare, map tiles + marker, quick access + GOLD COINS:).
-  - **noted, not ported**: explore-quick-access item pick/drop/swap
-    shares the modal code path untouched (works, unpinned live);
-    minimap out-of-window cells read void (B1 reads blind).
+    modal/combat residue never restored), so the panel disagreed with B1
+    everywhere except fresh boot.
+  - **fix**: B1's fn_117AC/fn_11836/fn_1270C/fn_1755C/fn_1765A/ fn_176EC ported
+    nearly verbatim - state painter (chapter / quick access + currency pane /
+    9x7 minimap with facing marker) on a room gather callback, F5 toggle (QUICK
+    ACCESS<->MAP with the skill, QUICK ACCESS<->CHAPTER else), region-2 click
+    open/select/close, panel-bit save/restore across modal and formal fight,
+    icon tables byte-verbatim from a DGROUP dump (terrain 60 reads 24, was
+    wrongly zeroed). Flag writes sit at entry points only (a per-repaint write
+    broke the combat gate's A04/A05).
+  - **gates**: `yt2p-tests: OK` (toggle branches, marker facings), `port-combat:
+    OK`, `replay: OK`, `live-chest: OK`, `live-explore: OK` (+ resume);
+    B1-vs-port frames match per state (chapter bare, map tiles + marker, quick
+    access + GOLD COINS:).
+  - **noted, not ported**: explore-quick-access item pick/drop/swap shares the
+    modal code path untouched (works, unpinned live); minimap out-of-window
+    cells read void (B1 reads blind).
 - 2026-11-22 — member inspect pages (fn_16044):
-  - **ask**: per-character inventory and stat screens; B1 has no
-    worn-equipment list (the modal quick access panel covers inventory),
-    so the five side panel pages are the feature: afflictions,
-    training, protections, transports, stats.
-  - **port**: strip-cell dispatch (cells 0-2/3/4/5/6, portrait
-    rect silent), keys 1-4 (stats, explore+formal), formal F1-F4
-    (sub_09A1D), modal cells (fn_073E3); painters mirror
-    sub_16292/fn_16171/sub_164DD/fn_1620A/sub_16420 incl. the
-    comma/dot number formats, transport time windows and the
-    f5062 quick-access-open quirk; pages are paint-only (next repaint
-    wipes them, no new state); transport words +0xB6 parsed.
-  - **fixed on the way**: values column is x 241 (0x0F is ink,
-    caught by B1 pixels); click trailing repaint wiped pages
-    (member_page flag); explore idle repainted the compass row
-    over page names (now skipped like formal, B1's fn_10E6A
-    never paints it).
-  - **gates**: `yt2p-tests: OK` (strip hit, transport roundtrip,
-    formal key/click/explore click paints), `port-combat: OK`,
-    `replay: OK`, `live-chest: OK`, `live-member: OK` (explore
-    13 pages, formal stats, doctored values); B1-vs-B2 side panel
-    pixels index-identical (stats1/2, training, protections,
-    transports-blank, afflictions, formal body).
+  - **ask**: per-character inventory and stat screens; B1 has no worn-equipment
+    list (the modal quick access panel covers inventory), so the five side panel
+    pages are the feature: afflictions, training, protections, transports,
+    stats.
+  - **port**: strip-cell dispatch (cells 0-2/3/4/5/6, portrait rect silent),
+    keys 1-4 (stats, explore+formal), formal F1-F4 (sub_09A1D), modal cells
+    (fn_073E3); painters mirror sub_16292/fn_16171/sub_164DD/fn_1620A/sub_16420
+    incl. the comma/dot number formats, transport time windows and the f5062
+    quick-access-open quirk; pages are paint-only (next repaint wipes them, no
+    new state); transport words +0xB6 parsed.
+  - **fixed on the way**: values column is x 241 (0x0F is ink, caught by B1
+    pixels); click trailing repaint wiped pages (member_page flag); explore idle
+    repainted the compass row over page names (now skipped like formal, B1's
+    fn_10E6A never paints it).
+  - **gates**: `yt2p-tests: OK` (strip hit, transport roundtrip, formal
+    key/click/explore click paints), `port-combat: OK`, `replay: OK`,
+    `live-chest: OK`, `live-member: OK` (explore 13 pages, formal stats,
+    doctored values); B1-vs-B2 side panel pixels index-identical (stats1/2,
+    training, protections, transports-blank, afflictions, formal body).
 - 2026-11-22 — stat sheet (fn_09619):
-  - **ask**: the side panel pages were not the requested screens; B1's
-    real per-character stats are F1-F4 + portrait-hold: side panel
-    stats plus bare attribute/combat/skill numbers over the
-    scene, with party highlight toggles (no labels in B1).
+  - **ask**: the side panel pages were not the requested screens; B1's real
+    per-character stats are F1-F4 + portrait-hold: side panel stats plus bare
+    attribute/combat/skill numbers over the scene, with party highlight toggles
+    (no labels in B1).
   - **port**: sheet modal (open/switch/toggle/close), F1-F4 in
-    explore/formal/modal, portrait hold latch (6+ ticks),
-    highlight boxes + portrait switching, close leaves numbers
-    stale like B1; idle retains numbers over scene repaints.
-  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`,
-    `live-chest: OK`, `live-member: OK` (+ sheet open/switch/
-    toggle/close/hold); B1-vs-B2 sheet ink index-identical
-    (0/539).
+    explore/formal/modal, portrait hold latch (6+ ticks), highlight boxes +
+    portrait switching, close leaves numbers stale like B1; idle retains numbers
+    over scene repaints.
+  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`, `live-chest:
+    OK`, `live-member: OK` (+ sheet open/switch/ toggle/close/hold); B1-vs-B2
+    sheet ink index-identical (0/539).
 - 2026-11-22 — pack/inventory UI (fn_08763):
-  - **ask**: inventory screens had no entry; B1 opens them via P,
-    portrait right-press, strip right-hold and formal P.
-  - **port**: pack modal (member panes with portrait/equipment/
-    pack/effects, pool grid, F-key/pane switching, pane pickup,
-    portrait drops, close with pool writeback); shared pool
-    header words +0x11A parsed; idle retains panes; item-use
-    verbs, count splits and containers deferred.
-  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`,
-    `live-chest: OK`, `live-member: OK` (+ pack open/nested
-    sheet/close/press/hold); B1-vs-B2 panes and quick access pane
-    index-identical (0 diffs).
+  - **ask**: inventory screens had no entry; B1 opens them via P, portrait
+    right-press, strip right-hold and formal P.
+  - **port**: pack modal (member panes with portrait/equipment/ pack/effects,
+    pool grid, F-key/pane switching, pane pickup, portrait drops, close with
+    pool writeback); shared pool header words +0x11A parsed; idle retains panes;
+    item-use verbs, count splits and containers deferred.
+  - **gates**: `yt2p-tests: OK`, `port-combat: OK`, `replay: OK`, `live-chest:
+    OK`, `live-member: OK` (+ pack open/nested sheet/close/press/hold); B1-vs-B2
+    panes and quick access pane index-identical (0 diffs).
 - 2026-11-22 — hold timing + evidence decode fixes:
-  - **holds**: B1 fires holds while the button stays down (6+
-    ticks); the port fired on release, so held buttons did
-    nothing. Now tick-based at the current cursor (B1's poll);
-    live_chest releases buttons per burst (a stuck down is a
+  - **holds**: B1 fires holds while the button stays down (6+ ticks); the port
+    fired on release, so held buttons did nothing. Now tick-based at the current
+    cursor (B1's poll); live_chest releases buttons per burst (a stuck down is a
     real hold now).
-  - **evidence**: B1 reference PNGs rendered 6-bit DAC palettes
-    as 8-bit (4x too dark); re-rendered with proper expansion.
-    Title 0/64000 vs B1; camp chrome matches (cursor/shading
-    aside).
+  - **evidence**: B1 reference PNGs rendered 6-bit DAC palettes as 8-bit (4x too
+    dark); re-rendered with proper expansion. Title 0/64000 vs B1; camp chrome
+    matches (cursor/shading aside).
 - 2026-11-22 — paired screenshot gate green (17/17 UI-identical):
-  - **harness** (`tests/sshot/`): B1 captures a deterministic
-    save + settled frames per step; B2 loads the save and
-    captures live; `compare.py` requires byte-identical
-    framebuffer indices over UI rects (scene excluded as
-    time-drifted). b1.py link-checks every input (fails loudly
-    on a lost press); clicks use press trains, toggles single
-    presses with phase calibration, the portrait sheet uses
-    double-presses (yt2game's transition-only seam reports
-    HELD only when a second edge re-latches inside the poll's
-    6-tick window; a wall-time hold is one edge).
-  - **input model** (all code-read from B1): fn_PollInput
-    classifies press-vs-held via the 6-tick re-test; explore
-    left-press routes regions (viewport search, chapter, icons,
-    side panel link, arrows, strip pages via fn_16044); portrait
-    presses are silent; portrait holds open the sheet
-    (fn_09619); right-press picks single pack panes (fn_085CA);
-    right-hold opens all panes. Sheet/pack/chest modal loops
-    ported incl. nested sheet-in-pack, pane toggles,
-    held-close, 1-4/F-keys and C-to-close.
-  - **port**: sheet panel art reconstructed from four B1 sheet
-    frames (zero-inpaint) + title row (tiered class, level,
-    BCD experience); 505E-bit side panel gate with the key-path
-    always-wipe vs mouse-path gated asymmetry; pack close
-    ends explore+WEST; sheet close erases via the caller's
-    stale repaint; room frozen under sheet/pack like B1's
-    modal loops; pages are silent (SFX 9 is a countdown blip,
-    never set by page paints); P-open plays SFX 1 (loc_0061C).
-  - **gates**: `sh tests/sshot/run.sh` all 17 steps
-    UI-identical; `yt2p-tests: OK`, `port-combat: OK`,
-    `replay: OK`, `live-chest: OK`, `live-member: OK`.
-  - **open**: vanilla hold semantics need a DOSBox-X check
-    (wall-time level-INT33 vs double-press transition-INT33);
-    B2 implements wall-time holds. Countdown SFX 9 wiring
-    (room tick 0x40 bit) deferred. Chest right-viewport-close
-    and strip single-pane pick ported; chapter-examine
+  - **harness** (`tests/sshot/`): B1 captures a deterministic save + settled
+    frames per step; B2 loads the save and captures live; `compare.py` requires
+    byte-identical framebuffer indices over UI rects (scene excluded as
+    time-drifted). b1.py link-checks every input (fails loudly on a lost press);
+    clicks use press trains, toggles single presses with phase calibration, the
+    portrait sheet uses double-presses (yt2game's transition-only seam reports
+    HELD only when a second edge re-latches inside the poll's 6-tick window; a
+    wall-time hold is one edge).
+  - **input model** (all code-read from B1): fn_PollInput classifies
+    press-vs-held via the 6-tick re-test; explore left-press routes regions
+    (viewport search, chapter, icons, side panel link, arrows, strip pages via
+    fn_16044); portrait presses are silent; portrait holds open the sheet
+    (fn_09619); right-press picks single pack panes (fn_085CA); right-hold opens
+    all panes. Sheet/pack/chest modal loops ported incl. nested sheet-in-pack,
+    pane toggles, held-close, 1-4/F-keys and C-to-close.
+  - **port**: sheet panel art reconstructed from four B1 sheet frames
+    (zero-inpaint) + title row (tiered class, level, BCD experience); 505E-bit
+    side panel gate with the key-path always-wipe vs mouse-path gated asymmetry;
+    pack close ends explore+WEST; sheet close erases via the caller's stale
+    repaint; room frozen under sheet/pack like B1's modal loops; pages are
+    silent (SFX 9 is a countdown blip, never set by page paints); P-open plays
+    SFX 1 (loc_0061C).
+  - **gates**: `sh tests/sshot/run.sh` all 17 steps UI-identical; `yt2p-tests:
+    OK`, `port-combat: OK`, `replay: OK`, `live-chest: OK`, `live-member: OK`.
+  - **open**: vanilla hold semantics need a DOSBox-X check (wall-time
+    level-INT33 vs double-press transition-INT33); B2 implements wall-time
+    holds. Countdown SFX 9 wiring (room tick 0x40 bit) deferred. Chest
+    right-viewport-close and strip single-pane pick ported; chapter-examine
     (fn_1789B) mapped, item verbs deferred.
 - 2026-11-23 — pack verbs + sheet/pack layering + containers:
-  - **input**: exclusive press/hold driver (330 ms window,
-    latched press position); modal time-unfreeze (ticks run,
-    only sheet/pack repaint idle; prompt/map/bare chest hold).
-  - **pack**: take/drop/swap/equip with weight/compat/buzz,
-    equip bonuses incl. effect cells, wear clear, trinket
-    alt icons, silent pickup, pool-take icon/weight; cursor
-    (not carried) dispatch like B1 incl. the icon-0 and
+  - **input**: exclusive press/hold driver (330 ms window, latched press
+    position); modal time-unfreeze (ticks run, only sheet/pack repaint idle;
+    prompt/map/bare chest hold).
+  - **pack**: take/drop/swap/equip with weight/compat/buzz, equip bonuses incl.
+    effect cells, wear clear, trinket alt icons, silent pickup, pool-take
+    icon/weight; cursor (not carried) dispatch like B1 incl. the icon-0 and
     currency-take quirks, both pinned.
-  - **examine**: B1 fn_16925 tree (plain gear silent,
-    socket/readable arms); stats receipt is enhanced-only
-    (`YT2_MODE=enhanced`); the 19B42 use modals stay deferred.
-  - **layering**: sheet owns input over pack (B1 nested
-    loops); pack-entry viewport snapshot restores on
-    toggle-off and nested close (B1 sub_092F2/091AF/092C2);
-    v_505E boots zero (first-P WEST survives).
-  - **containers**: 3 staging slots per char (0x17C/1A2/1C8),
-    file stores at 0x4BC8+index*0x22 (levels head, verified
-    live), right-click stage (pack/cell-11), cell-9 close,
-    grid redirect + open-bag indicators, drop-onto-bag
-    insert with size gates, mint-on-drop allocator (boot
-    0/0, new-game 2/0), verbatim weight cascades incl.
-    magic-container weightlessness; cell 11/12 compat fixed
-    to B1 (empty-11 takes only bags; text-bit armor needs
-    cell 13 empty).
-  - **evidence**: 23-step B1/B2 layering matrix identical;
-    5-step cell-11 + 5-step pack-bag container matrices
-    identical; bit-exact play-port session replay drove the
-    backdrop fix; unit, port-combat, replay, live-member,
+  - **examine**: B1 fn_16925 tree (plain gear silent, socket/readable arms);
+    stats receipt is enhanced-only (`YT2_MODE=enhanced`); the 19B42 use modals
+    stay deferred.
+  - **layering**: sheet owns input over pack (B1 nested loops); pack-entry
+    viewport snapshot restores on toggle-off and nested close (B1
+    sub_092F2/091AF/092C2); v_505E boots zero (first-P WEST survives).
+  - **containers**: 3 staging slots per char (0x17C/1A2/1C8), file stores at
+    0x4BC8+index*0x22 (levels head, verified live), right-click stage
+    (pack/cell-11), cell-9 close, grid redirect + open-bag indicators,
+    drop-onto-bag insert with size gates, mint-on-drop allocator (boot 0/0,
+    new-game 2/0), verbatim weight cascades incl. magic-container
+    weightlessness; cell 11/12 compat fixed to B1 (empty-11 takes only bags;
+    text-bit armor needs cell 13 empty).
+  - **evidence**: 23-step B1/B2 layering matrix identical; 5-step cell-11 +
+    5-step pack-bag container matrices identical; bit-exact play-port session
+    replay drove the backdrop fix; unit, port-combat, replay, live-member,
     live-chest, sshot 17/17 green.
-  - **open**: fn_19B42 use modals, keyring consume (v_9471),
-    roster-delete store free (leak-only; saves stay valid).
-    No separate gem system exists (0x2000 is containers only).
+  - **open**: fn_19B42 use modals, keyring consume (v_9471), roster-delete store
+    free (leak-only; saves stay valid). No separate gem system exists (0x2000 is
+    containers only).
 - 2026-11-24 — creation equipment shares the paperdoll verbs (paperdoll.c):
-  - **roll report unreproduced**: R/r/row-2-click all reroll +
-    repaint in probes (B1 + B2), dispatch + RNG + client ASCII
-    path all check out; awaiting the reporter's repro steps.
-  - **shared core**: fn_1672C/16925/0B3D2/16532 extracted
-    from combat.c into engine/port/src/paperdoll.c (yt2_paperdoll_ctx);
-    pack panes and the creation items stage run the same
-    verbs B1 runs (sub_148C4 calls fn_1672C/16925 directly).
-  - **creation fixes**: full 21-cell 0x60F4 table (was 14;
-    E5 + effect cells were dead), right-click wired
-    (was a stub; opens/closes the bag), effect-cell compat,
-    container insert/stage/mint, staged-grid + effect paint.
-  - **latent bugs exposed + fixed**: record never wiped at
-    alloc (sub_146D9) nor ACC bases on roll (sub_15605 head);
-    drop/swap/insert skipped the fn_0B3D2 recompute B1's
-    sub_16BE4 runs (stale ACC on equip; no combat test
-    asserted it); insert skipped the fn_1658F pane repaint.
-  - **allocator**: v_95FD/v_95FF live in yt2_save (RAM-only),
-    shared by creation + play; start 2/0, load 0/0 like B1.
+  - **roll report unreproduced**: R/r/row-2-click all reroll + repaint in probes
+    (B1 + B2), dispatch + RNG + client ASCII path all check out; awaiting the
+    reporter's repro steps.
+  - **shared core**: fn_1672C/16925/0B3D2/16532 extracted from combat.c into
+    engine/port/src/paperdoll.c (yt2_paperdoll_ctx); pack panes and the creation
+    items stage run the same verbs B1 runs (sub_148C4 calls fn_1672C/16925
+    directly).
+  - **creation fixes**: full 21-cell 0x60F4 table (was 14; E5 + effect cells
+    were dead), right-click wired (was a stub; opens/closes the bag),
+    effect-cell compat, container insert/stage/mint, staged-grid + effect paint.
+  - **latent bugs exposed + fixed**: record never wiped at alloc (sub_146D9) nor
+    ACC bases on roll (sub_15605 head); drop/swap/insert skipped the fn_0B3D2
+    recompute B1's sub_16BE4 runs (stale ACC on equip; no combat test asserted
+    it); insert skipped the fn_1658F pane repaint.
+  - **allocator**: v_95FD/v_95FF live in yt2_save (RAM-only), shared by creation
+    + play; start 2/0, load 0/0 like B1.
   - **evidence**: 5 B1/B2 creation pairs 0-diff on the paperdoll
-    (drop/insert/open/close/effect); live KEEP persists the
-    bag store + effect; unit, port-combat, replay, sshot
-    green. B1 oracle note: scripted `move`+park clicks
-    flake; `abs` clicks + roll-prefix timing are reliable.
+    (drop/insert/open/close/effect); live KEEP persists the bag store + effect;
+    unit, port-combat, replay, sshot green. B1 oracle note: scripted `move`+park
+    clicks flake; `abs` clicks + roll-prefix timing are reliable.

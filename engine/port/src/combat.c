@@ -4136,7 +4136,7 @@ static void combat_item_bonus_apply(yt2_combat *combat, unsigned int slot,
         return;
     }
     adds = yt2_item_adds(combat->items, def);
-    
+
     if (adds == NULL) {
         return;
     }

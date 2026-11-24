@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# .githooks/commit-msg - thin launcher for tools/check-commit-msg.sh.
+# Commit messages must be one Conventional Commits line with a valid type.
+# Install once per clone:  git config core.hooksPath .githooks
+# Pure ASCII.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)" || exit 1
+cd "$ROOT" || exit 1
+
+if ! bash "$ROOT/tools/check-commit-msg.sh" "$1"; then
+    echo "Refusing commit: run 'git commit' again with a valid message, or bypass with --no-verify."
+    exit 1
+fi
+
+exit 0

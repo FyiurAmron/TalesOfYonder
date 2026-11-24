@@ -1,10 +1,9 @@
 # Yt2Client
 
-Development client for the seam build of `SWREG.EXE`: it decodes the
-protocol-v0 VIDEO and AUDIO streams the engine appends to the folder link
-(`OUTPUT.BIN`, input back through `INPUT.BIN`), renders the picture with SDL3
-(via P/Invoke - no NuGet packages) and plays the FM music through its own OPL2
-synth.
+Development client for the seam build of `SWREG.EXE`: it decodes the protocol-v0
+VIDEO and AUDIO streams the engine appends to the folder link (`OUTPUT.BIN`,
+input back through `INPUT.BIN`), renders the picture with SDL3 (via P/Invoke -
+no NuGet packages) and plays the FM music through its own OPL2 synth.
 
     sh engine/asm/swreg/tools/build.sh --variant file   # build the engine side (folder seam)
     dotnet run --project client -c Release -- \
@@ -32,14 +31,14 @@ fixtures are decoded without pacing. The folder link writes timestamps into
 
 `--help` lists every option (`--dump`, `--scale`, `--stats`, `--raw`,
 `--no-keyframe`, `--no-audio`, `--dro`/`--wav` for an offline OPL capture, ...;
-`--tcp` is the obsolete serial link). With a live link the window captures the mouse;
-`Ctrl+M` releases it and `Ctrl+Q` quits, so does closing the window (which
-also cancels a connect still waiting for the server).  If the server goes
+`--tcp` is the obsolete serial link). With a live link the window captures the
+mouse; `Ctrl+M` releases it and `Ctrl+Q` quits, so does closing the window
+(which also cancels a connect still waiting for the server). If the server goes
 away, the window stays and the client reconnects when it comes back.
 
 Windows bundle (self-contained exe + SDL3 + the game side, ready to copy):
 
     sh tools/publish-win.sh --server asm  # -> build/dist/yt2-win-x64.zip
 
-Details — the link, the nullmodem `0xFF` escape, verification numbers, debugging recipe — are in
-[`docs/client.md`](../docs/client.md).
+Details — the link, the nullmodem `0xFF` escape, verification numbers, debugging
+recipe — are in [`docs/client.md`](../docs/client.md).

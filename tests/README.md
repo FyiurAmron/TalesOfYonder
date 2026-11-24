@@ -1,8 +1,8 @@
 # Tests
 
-Ten checks pin the link and the client; nine cover the folder transport,
-the client and the C seam, and `tests/link` covers the obsolete serial one
-(kept for fun). All are ordinary shell scripts; artifacts land under
+Ten checks pin the link and the client; nine cover the folder transport, the
+client and the C seam, and `tests/link` covers the obsolete serial one (kept for
+fun). All are ordinary shell scripts; artifacts land under
 `build/runs/<kind>/<stamp>/`.
 
 ## `tests/replay/run.sh`
@@ -11,22 +11,23 @@ Offline and hermetic (no DOSBox-X, no game): replays the recordings in
 `tests/data/` through the C# client and through the Python reference decoder
 (`tools/stream/replay.py`, `--ppm` in both) and compares the final frames with
 `cmp`. Same framing, same palette expansion, same state, byte for byte. The
-recordings cover mode 13h raw, the VBE intro raw, both modes with the
-run-length row codec (codec 1), the same twelve-picture camera pan encoded
-once as rows and once as `scroll` messages, a small stream that interleaves AUDIO messages
-with video (`sample-audio.bin`), and the timed `.BIN` sample built from the raw fixture.
+recordings cover mode 13h raw, the VBE intro raw, both modes with the run-length
+row codec (codec 1), the same twelve-picture camera pan encoded once as rows and
+once as `scroll` messages, a small stream that interleaves AUDIO messages with
+video (`sample-audio.bin`), and the timed `.BIN` sample built from the raw
+fixture.
 
     sh tests/replay/run.sh [RECORDING]
 
 ## `tests/audio/run.sh`
 
-The client's OPL2 synthesis and SDL3 output.  `client --dro
+The client's OPL2 synthesis and SDL3 output. `client --dro
 tests/data/music-walk.dro --wav ...` renders a DOSBox-X raw OPL capture of a
-real `WORLD.DAT` music block through the same `Opl2` core the live client
-uses; the WAV must be 12.7 s of signal (peak near 41% FS, RMS near 2260) and
-the Goertzel checks pin the first bars' pitches.  The second half opens SDL
-audio with the dummy drivers and requires the client to push frames from a
-recording, which catches the binding and the stream plumbing.
+real `WORLD.DAT` music block through the same `Opl2` core the live client uses;
+the WAV must be 12.7 s of signal (peak near 41% FS, RMS near 2260) and the
+Goertzel checks pin the first bars' pitches. The second half opens SDL audio
+with the dummy drivers and requires the client to push frames from a recording,
+which catches the binding and the stream plumbing.
 
     sh tests/audio/run.sh
 
@@ -38,9 +39,9 @@ Runs a small fake full-duplex server through the live client: optional YT2S
 capture must contain both directions on a monotonic nanosecond timeline;
 `--file` must pace both YT2S and the default timed `OUTPUT.BIN` format; the
 Python tools must unwrap timed records; replaying either YT2S or timed
-`INPUT.BIN` must write the key frame into a fresh timed input transport; and
-the input clock must keep one epoch when the first server frame arrives after
-the handshake. The sample `.BIN` is also checked against its deterministic
+`INPUT.BIN` must write the key frame into a fresh timed input transport; and the
+input clock must keep one epoch when the first server frame arrives after the
+handshake. The sample `.BIN` is also checked against its deterministic
 generator. This pins the timed folder-link boundary without requiring DOSBox-X.
 
     sh tests/session/run.sh
@@ -49,36 +50,37 @@ Needs `dotnet` and Python 3.
 
 ## `tests/c/run.sh`
 
-The B1 pseudo-port gate (the executable-spec/oracle build). It builds `engine/c/` with
-warnings as errors, runs the memory/data-model/ALU/
-framing/service/video unit tests, then re-emits `tests/data/sample-video.bin` through the C folder
-backend and requires every unwrapped v0 frame to match the asm recording byte for byte (483
-frames, 150,360 bytes). The deterministic stub scene must render identically through the C#
-client and `tools/stream/replay.py`; scripted timed `INPUT.BIN` files exercise the keyframe
-path, a partial key-driven row delta, quit handling and a live append after start; the raw
-stream and null backends are checked as well. It also runs `tests/c/link-resync.sh`, the
-save/load and M5 gates, and the Windows x64 cross-build when its toolchain is present.
-These are oracle gates: the B2 real C port must pass the same routes without B1 linked in.
+The B1 pseudo-port gate (the executable-spec/oracle build). It builds
+`engine/c/` with warnings as errors, runs the memory/data-model/ALU/
+framing/service/video unit tests, then re-emits `tests/data/sample-video.bin`
+through the C folder backend and requires every unwrapped v0 frame to match the
+asm recording byte for byte (483 frames, 150,360 bytes). The deterministic stub
+scene must render identically through the C# client and
+`tools/stream/replay.py`; scripted timed `INPUT.BIN` files exercise the keyframe
+path, a partial key-driven row delta, quit handling and a live append after
+start; the raw stream and null backends are checked as well. It also runs
+`tests/c/link-resync.sh`, the save/load and M5 gates, and the Windows x64
+cross-build when its toolchain is present. These are oracle gates: the B2 real C
+port must pass the same routes without B1 linked in.
 
     sh tests/c/run.sh [--no-build]
 
 ## `engine/port/tests/run.sh`
 
 The B2 real C port gate. `engine/port/` is the hand-written, idiomatic C engine
-(the C deliverable); it never links the B1 pseudo-port. The gate builds it
-with warnings as errors, runs its unit tests, and on a real 77509-byte save
-compares `yt2p-info` with B1's `yt2saveinfo` byte for byte, requires the
-load/write round trip to be byte-identical, and moves the party to prove the
-writer applies live state without touching other bytes. It also loads the
-shipped `WORLD.DAT` and `PICTURES.VGA`, pinning the map grid, descriptor types,
-known map names, the nine palette checksums and every picture group's bounds
-and checksum. The renderer blits the title picture with palette 0 and requires
-the original's exact frame hash (`09BEC5E9162924EF`) and palette hash
-(`E3275EE3AE459FB5`), then the main-menu picture with frame hash
-`6ADE1397DAE95BC0`. The first slice covers the typed live party model, the
-`CURGAME`/`SAVEGAMEn` container, the `WORLD.DAT` map/palette data, the picture
-groups and the indexed surface; the later slices add the same differential
-checks for services and scripted routes.
+(the C deliverable); it never links the B1 pseudo-port. The gate builds it with
+warnings as errors, runs its unit tests, and on a real 77509-byte save compares
+`yt2p-info` with B1's `yt2saveinfo` byte for byte, requires the load/write round
+trip to be byte-identical, and moves the party to prove the writer applies live
+state without touching other bytes. It also loads the shipped `WORLD.DAT` and
+`PICTURES.VGA`, pinning the map grid, descriptor types, known map names, the
+nine palette checksums and every picture group's bounds and checksum. The
+renderer blits the title picture with palette 0 and requires the original's
+exact frame hash (`09BEC5E9162924EF`) and palette hash (`E3275EE3AE459FB5`),
+then the main-menu picture with frame hash `6ADE1397DAE95BC0`. The first slice
+covers the typed live party model, the `CURGAME`/`SAVEGAMEn` container, the
+`WORLD.DAT` map/palette data, the picture groups and the indexed surface; the
+later slices add the same differential checks for services and scripted routes.
 
     sh engine/port/tests/run.sh [--no-build]
 
@@ -86,14 +88,15 @@ Artifacts land in `build/runs/port/<stamp>/`.
 
 ## `tests/c/link-resync.sh`
 
-The live-file recovery check: a followed `INPUT.BIN` can be recreated under the engine (a new
-client session truncates it, a pseudo-ring wraps), so a read offset taken from the old size can
-land inside a record. The engine must scan to the next plausible record and keep presenting
-instead of dropping the link and freezing the client on its last frame. The first phase appends
-junk plus a valid key record to a header+record input file and requires the resync line, the key
-event, no `link lost` and at least 50 frames. The second phase joins a header-only `OUTPUT.BIN`,
-appends junk plus a `set_mode`/`frame_end`, and requires the client to recover and decode one
-320x200 frame.
+The live-file recovery check: a followed `INPUT.BIN` can be recreated under the
+engine (a new client session truncates it, a pseudo-ring wraps), so a read
+offset taken from the old size can land inside a record. The engine must scan to
+the next plausible record and keep presenting instead of dropping the link and
+freezing the client on its last frame. The first phase appends junk plus a valid
+key record to a header+record input file and requires the resync line, the key
+event, no `link lost` and at least 50 frames. The second phase joins a
+header-only `OUTPUT.BIN`, appends junk plus a `set_mode`/`frame_end`, and
+requires the client to recover and decode one 320x200 frame.
 
     sh tests/c/link-resync.sh [--no-build] [--ticks N]
 
@@ -106,8 +109,8 @@ checkpoint frames and the settled globals with the original's recording.
 
 ## `tests/c/audio.py`
 
-Compares a `yt2game --audio-log` capture with `tests/data/music-walk.dro`.
-The register state at the first note must match the capture's snapshot, every
+Compares a `yt2game --audio-log` capture with `tests/data/music-walk.dro`. The
+register state at the first note must match the capture's snapshot, every
 effective OPL write after it must match (both streams go through the DRO's
 last-value cache), and the note-ons must land on the driver's 96 Hz tick grid;
 the block duration and note count come from the capture. `tests/c/run.sh` runs
@@ -118,11 +121,11 @@ it on a 700-tick game run.
 ## `tests/c/sfx.sh`
 
 The sound-effect boundary check: runs the scripted opening with the resident
-driver on, then requires every `fn_PlaySFX` request in the audio log (`P pit
-id offset`, the seam's AUDIO sample pair) to point at a Creative Voice File
-record in WORLD.DAT.  This pins the emitted `fn_PlaySFX` hook, which is what
-puts the game's authored effects on the client; without it the C server only
-beeped for effect 3.
+driver on, then requires every `fn_PlaySFX` request in the audio log (`P pit id
+offset`, the seam's AUDIO sample pair) to point at a Creative Voice File record
+in WORLD.DAT. This pins the emitted `fn_PlaySFX` hook, which is what puts the
+game's authored effects on the client; without it the C server only beeped for
+effect 3.
 
     sh tests/c/sfx.sh [--no-build] [--ticks N]
 
@@ -130,17 +133,17 @@ beeped for effect 3.
 
 ## `tests/c/saveload.sh`
 
-The save/load button check: the M5 opening reaches the chest, then the
-game's own disk panel saves the state to slot 1 (`SAVGAME1`), the party
-walks four steps back and saves again to slot 2, the slot-1 save is loaded
-back and the restored state is saved to slot 3.  The checker requires the
-walk in slot 2, the whole party blob in slot 3 to match slot 1 from the
-first party record on, and the live `--dump` position to be the saved one.
-This exercises the game's serialization and the disk menu rather than the
-engine's file service alone; `CURGAME` is the same 77509-byte blob.  The gate
-also runs `build/c/yt2saveinfo` on slot 1, which parses the file through the
-typed model in `engine/c/include/yt2/data.h` (all seven chunks and every
-non-empty roster slot) rather than through the Python checker's offsets.
+The save/load button check: the M5 opening reaches the chest, then the game's
+own disk panel saves the state to slot 1 (`SAVGAME1`), the party walks four
+steps back and saves again to slot 2, the slot-1 save is loaded back and the
+restored state is saved to slot 3. The checker requires the walk in slot 2, the
+whole party blob in slot 3 to match slot 1 from the first party record on, and
+the live `--dump` position to be the saved one. This exercises the game's
+serialization and the disk menu rather than the engine's file service alone;
+`CURGAME` is the same 77509-byte blob. The gate also runs `build/c/yt2saveinfo`
+on slot 1, which parses the file through the typed model in
+`engine/c/include/yt2/data.h` (all seven chunks and every non-empty roster slot)
+rather than through the Python checker's offsets.
 
     sh tests/c/saveload.sh [--no-build] [--ticks N]
 
@@ -149,13 +152,13 @@ non-empty roster slot) rather than through the Python checker's offsets.
 ## `tests/c/windows.sh`
 
 The Windows x64 packaging check: `engine/c/tools/build-mingw.sh` cross-builds
-all five programs with MinGW-w64, the gate verifies that each is a PE32+
-x86-64 image, runs the two unit binaries under Wine, and runs a deterministic
-700-tick game slice through both the Linux and Windows executables.  stdout,
-stderr, the audio log, the present log and the checkpoint dump must be
-byte-identical; `yt2saveinfo` must print the same thing from both builds on a
-real save.  `--full` also drives the whole M5 + save/load script through both
-binaries and compares `SAVGAME1..3` and the end dump.
+all five programs with MinGW-w64, the gate verifies that each is a PE32+ x86-64
+image, runs the two unit binaries under Wine, and runs a deterministic 700-tick
+game slice through both the Linux and Windows executables. stdout, stderr, the
+audio log, the present log and the checkpoint dump must be byte-identical;
+`yt2saveinfo` must print the same thing from both builds on a real save.
+`--full` also drives the whole M5 + save/load script through both binaries and
+compares `SAVGAME1..3` and the end dump.
 
     sh tests/c/windows.sh [--no-build] [--full]
 
@@ -164,10 +167,10 @@ either is missing, so `tests/c/run.sh` stays runnable without them.
 
 ## `tests/c/intro.sh`
 
-The intro presentation check: the logo fades must be ramps (one palette step
-per DAC write), the title star must twinkle through the DAC, and the story
-text must keep the full palette instead of a stale `4124h` block. Without
-those presents the logos cut and the story picture goes mostly black.
+The intro presentation check: the logo fades must be ramps (one palette step per
+DAC write), the title star must twinkle through the DAC, and the story text must
+keep the full palette instead of a stale `4124h` block. Without those presents
+the logos cut and the story picture goes mostly black.
 
     sh tests/c/intro.sh [--no-build]
 
@@ -175,13 +178,13 @@ Needs a C11 compiler and `dotnet`; artifacts land in `build/runs/c/<stamp>/`.
 
 ## `tests/c/live.sh`
 
-The live presentation check: the C engine runs the intro to the title star
-(320 ticks, about 18 s), the C# client follows `OUTPUT.BIN` headless, and the
-final stats must show `shown >= frames`, `dropped=0` and at least 100 frames.
-The engine writes several complete frames inside one BIOS tick during the
-fades and the star twinkle; a client with only one pending present flag
-collapses that burst into its last frame and fails this gate. The queue keeps
-every frame and the windowed path spreads them over display slots.
+The live presentation check: the C engine runs the intro to the title star (320
+ticks, about 18 s), the C# client follows `OUTPUT.BIN` headless, and the final
+stats must show `shown >= frames`, `dropped=0` and at least 100 frames. The
+engine writes several complete frames inside one BIOS tick during the fades and
+the star twinkle; a client with only one pending present flag collapses that
+burst into its last frame and fails this gate. The queue keeps every frame and
+the windowed path spreads them over display slots.
 
     sh tests/c/live.sh [--no-build] [--ticks N]
 
@@ -189,11 +192,11 @@ every frame and the windowed path spreads them over display slots.
 
 Guards the one thing the pixel gates cannot see: that the client's window is
 actually *on screen*. It starts the client on a private Xvfb display, replays
-`tests/data/sample-video.bin` with `--hold`, and requires a window titled
-`YT2 client` with `Map State: IsViewable`, the expected 960x600 geometry and at
-least one presented frame. A window created with `SDL_WINDOW_HIDDEN` satisfies
-every other gate (the renderer works, frames are uploaded) while the user sees
-only a console, so this check is not redundant.
+`tests/data/sample-video.bin` with `--hold`, and requires a window titled `YT2
+client` with `Map State: IsViewable`, the expected 960x600 geometry and at least
+one presented frame. A window created with `SDL_WINDOW_HIDDEN` satisfies every
+other gate (the renderer works, frames are uploaded) while the user sees only a
+console, so this check is not redundant.
 
     sh tests/window/run.sh
 
@@ -201,14 +204,13 @@ Needs `Xvfb` and `xwininfo`; skips (exit 0) when either is missing.
 
 ## `tests/seam-rle/run.sh`
 
-The row encoder of VIDEO codec 1 is assembly inside the seam, so it is tested
-as assembly: the routines are extracted verbatim from `seam.asm`, built into a
-.COM with a harness and run under DOSBox-X, and the encoded output is decoded
-here in Python and compared with the source rows. Six 640-pixel rows cover one
-long run (counts above 255), all-distinct and checkerboard rows (literal
-chunks), noise, two long runs, and runs mixed with singles. This is the check
-that catches an encoder regression, because `tests/replay` only replays
-recordings.
+The row encoder of VIDEO codec 1 is assembly inside the seam, so it is tested as
+assembly: the routines are extracted verbatim from `seam.asm`, built into a .COM
+with a harness and run under DOSBox-X, and the encoded output is decoded here in
+Python and compared with the source rows. Six 640-pixel rows cover one long run
+(counts above 255), all-distinct and checkerboard rows (literal chunks), noise,
+two long runs, and runs mixed with singles. This is the check that catches an
+encoder regression, because `tests/replay` only replays recordings.
 
     sh tests/seam-rle/run.sh
 
@@ -218,32 +220,32 @@ Needs `uasm`, `dosbox-x` and `Xvfb`; skips (exit 0) when one is missing.
 
 The whole-screen pan detector (VIDEO `scroll`) is assembly inside the seam, so
 it gets the same treatment: extracted verbatim, built into a .COM, run under
-DOSBox-X, and compared against a Python model of the protocol rules. Ten
-cases: pans of -1, -3, -2, +2, -5 and +8 rows (one with a row that changes on
-its own), a pan past the +-8 range, a repaint, and two still pictures whose
-changed rows must not be read as a shift. The same script also builds the pan
-fixtures (`sample-pan-rows.bin`, `sample-pan-scroll.bin`), requires the
-committed copies to match the generator, and checks that the two recordings
-decode to identical pictures — the format half needs only `python3` and runs
-even where DOSBox-X is missing.
+DOSBox-X, and compared against a Python model of the protocol rules. Ten cases:
+pans of -1, -3, -2, +2, -5 and +8 rows (one with a row that changes on its own),
+a pan past the +-8 range, a repaint, and two still pictures whose changed rows
+must not be read as a shift. The same script also builds the pan fixtures
+(`sample-pan-rows.bin`, `sample-pan-scroll.bin`), requires the committed copies
+to match the generator, and checks that the two recordings decode to identical
+pictures — the format half needs only `python3` and runs even where DOSBox-X is
+missing.
 
     sh tests/seam-scroll/run.sh
 
-Needs `uasm`, `dosbox-x` and `Xvfb` for the assembly half; skips that part
-(exit 0) when one is missing.
+Needs `uasm`, `dosbox-x` and `Xvfb` for the assembly half; skips that part (exit
+0) when one is missing.
 
 ## `tests/seam-pace/run.sh`
 
-The presentation budget decides how often the game's screen goes to the
-client (`SEAM_PASSES_PER_TICK` passes per BIOS tick, with forced passes
-ignoring it). It is assembly inside the seam and it has broken before - an
-earlier attempt paced passes off the PIT counter, which SBFMDRV has already
-reprogrammed to ~64 Hz, and presented nothing at all in a tight poll loop - so
-it is tested against the real BIOS tick under DOSBox-X, not against a model of
-it: five calls inside one tick must give exactly `[1, 1, 1, 0, 0]`, a forced
-pass on an exhausted budget must still run and clear its flag, and the first
-call of the next tick must start the budget over. The harness retries a group
-if a tick boundary falls inside it.
+The presentation budget decides how often the game's screen goes to the client
+(`SEAM_PASSES_PER_TICK` passes per BIOS tick, with forced passes ignoring it).
+It is assembly inside the seam and it has broken before - an earlier attempt
+paced passes off the PIT counter, which SBFMDRV has already reprogrammed to ~64
+Hz, and presented nothing at all in a tight poll loop - so it is tested against
+the real BIOS tick under DOSBox-X, not against a model of it: five calls inside
+one tick must give exactly `[1, 1, 1, 0, 0]`, a forced pass on an exhausted
+budget must still run and clear its flag, and the first call of the next tick
+must start the budget over. The harness retries a group if a tick boundary falls
+inside it.
 
     sh tests/seam-pace/run.sh
 
@@ -252,11 +254,10 @@ Needs `uasm`, `dosbox-x` and `Xvfb`; skips (exit 0) when one is missing.
 ## `tests/xbrz/run.sh`
 
 The xBRZ filter must produce exactly the pixels the reference implementation
-produces.  The client replays `tests/data/sample-video.bin` with
-`--filter xbrz`, which scales the last frame by the window scale (3) and
-writes the filtered pixels; the check compares them with
-`tests/data/sample-video-xbrz3.bin`, the reference implementation's output for
-the same frame, byte for byte.
+produces. The client replays `tests/data/sample-video.bin` with `--filter xbrz`,
+which scales the last frame by the window scale (3) and writes the filtered
+pixels; the check compares them with `tests/data/sample-video-xbrz3.bin`, the
+reference implementation's output for the same frame, byte for byte.
 
     sh tests/xbrz/run.sh
 
@@ -264,21 +265,22 @@ Needs `dotnet` only.
 
 ## `tests/link/run.sh`
 
-**Obsolete** - the folder link is the product transport; this drives the COM1/nullmodem link,
-kept for fun (and because it is the only socket-level live check). Live: builds the tee variant
-of the engine (`-DSEAM -DSEAM_FILE -DSEAM_TEE`,
-which writes `OUTPUT.BIN` *and* mirrors every message to COM1), runs it under
-DOSBox-X on a private Xvfb display with COM1 bridged to TCP, connects the C#
-client with `--dump`, and verifies with `tools/stream/compare_streams.py` that
-every received message is byte-identical to the seam's own `OUTPUT.BIN` from
-the same session. Messages sent before the client connected are expected and
-reported, not failures: the client asks for a keyframe and resynchronises.
+**Obsolete** - the folder link is the product transport; this drives the
+COM1/nullmodem link, kept for fun (and because it is the only socket-level live
+check). Live: builds the tee variant of the engine (`-DSEAM -DSEAM_FILE
+-DSEAM_TEE`, which writes `OUTPUT.BIN` *and* mirrors every message to COM1),
+runs it under DOSBox-X on a private Xvfb display with COM1 bridged to TCP,
+connects the C# client with `--dump`, and verifies with
+`tools/stream/compare_streams.py` that every received message is byte-identical
+to the seam's own `OUTPUT.BIN` from the same session. Messages sent before the
+client connected are expected and reported, not failures: the client asks for a
+keyframe and resynchronises.
 
 The comparison is by sequence number. The file backend batches its writes, so
-the file copy lags the wire by the frame that is still in flight; those
-messages are reported as in flight, not as a mismatch. A gap in the received
-stream (a message that never arrived) and a message that is in both streams but
-differs are failures.
+the file copy lags the wire by the frame that is still in flight; those messages
+are reported as in flight, not as a mismatch. A gap in the received stream (a
+message that never arrived) and a message that is in both streams but differs
+are failures.
 
 The emulated serial link is lossy in its own right: when the host's TCP thread
 stalls, the emulator's nullmodem buffer overflows and a chunk of the stream is

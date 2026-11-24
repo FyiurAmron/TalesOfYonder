@@ -124,7 +124,7 @@ def main(argv):
             missing = sorted(want_rows - got_rows)[:6]
             problems.append(f"rows sent {len(got_rows)}, expected {len(want_rows)}"
                             f" (extra {extra}, missing {missing})")
-        tag = f"case {n} (mode {mode}, step {step:+d}, anim {anim})" 
+        tag = f"case {n} (mode {mode}, step {step:+d}, anim {anim})"
         if problems:
             bad += 1
             print(f"  FAIL {tag}: " + "; ".join(problems))
