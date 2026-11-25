@@ -3308,4 +3308,10 @@ WATCHDOG-ENTRY-STAGED-SEPARATELY
     slot 0 zeroed, slots 5-7 defaults). B2 now re-runs `yt2_save_start`
     on both EXIT_MENU paths (main menu + explore/wipe unwind); unit pins
     re-run (CONAN wiped, SQUIRE back, assigned 0), live probe verifies
-    the trigger plus fresh CURGAME bytes.
+    the trigger plus fresh CURGAME bytes.  - **map shortcut (B1 M/L/U)**: explore ate M/L/U ("unported"); B1's M/L/U
+    open fixed maps 31/47/7 (U=7 is filler, never shows). B2 gains a modal
+    map (render + legend clicks stay open, any key closes to explore,
+    base palette, frozen idle like fn_123E9 WaitKey). B1 gates on 0x9569
+    map-UI state (empty fresh, so B1's M no-ops early); B2 shows ungated
+    so the shortcut works (noted in code). Unit pins 31/47 render,
+    live probe verifies open/legend-miss/close plus opaque frames.

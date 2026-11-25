@@ -88,6 +88,14 @@ int test_mapview(void)
     CHECK(palette != NULL);
     CHECK(checksum(palette->rgb, YT2_PALETTE_SIZE) ==
           UINT64_C(0xE3275EE3AE459FB5));
+    /* In-game map shortcuts (M=31, L=47, B1 fixed). U=7 is filler
+       in WORLD.DAT (type 0), so B1's U never shows either. */
+    CHECK(yt2_map_view_render(&surface, &world, &pictures, 31u) ==
+          YT2_STATUS_OK);
+    CHECK(yt2_map_view_render(&surface, &world, &pictures, 47u) ==
+          YT2_STATUS_OK);
+    CHECK(yt2_map_view_render(&surface, &world, &pictures, 7u) ==
+          YT2_STATUS_ERROR);
     CHECK(yt2_map_view_render(&surface, &world, &pictures, 0u) ==
           YT2_STATUS_ERROR);
     CHECK(yt2_map_view_render(&surface, &world, &pictures,

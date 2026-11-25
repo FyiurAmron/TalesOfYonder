@@ -154,6 +154,8 @@ typedef struct play_state {
     int ingametitlemenu_requested; /* explore D: run the in-game menu nested */
     int ingamemenu_formal; /* formal D: mask 0x5E + combat wide clear */
     int titlemenu_requested; /* N: unwind to the title menu loop */
+    int map_open; /* M/L/U: modal overhead map (fn_0CE82/fn_123E9) */
+    unsigned int map_id; /* M=31, L=47, U=7 filler (B1 fixed) */
     yt2_save save;
     int have_save;
     char save_path[1024];
@@ -1245,7 +1247,7 @@ static int session_present(play_state *state, yt2_folder_out *out,
                         state->cursor_x, state->cursor_y) != YT2_STATUS_OK) {
         return YT2_STATUS_ERROR;
     }
-    if (state->session_mode == 3) {
+    if (state->session_mode == 3 && !state->map_open) {
         /* Explore owns rotation phase and the E0-FF sky window. */
         if (yt2_room_palette(&state->room, &state->palette) !=
             YT2_STATUS_OK) {
@@ -1342,6 +1344,67 @@ static void explore_flush_save(play_state *state)
     }
 }
 
+/* Overhead map modal (M/L/U: fn_0CE82 + fn_123E9 WaitKey). Renders the
+   fixed map (M=31, L=47, U=7 filler) plus the selected legend line;
+   any key closes back to explore, marker clicks select legend lines
+   (sub_03F6B) and stay open. Palette is the world base. */
+static int play_map_render(play_state *state)
+{
+    memset(state->surface.pixels, 0,
+           (size_t)state->surface.width * state->surface.height);
+    if (yt2_map_view_render(&state->surface, &state->world,
+                            &state->pictures, state->map_id) !=
+        YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    if (state->legend_line >= 0 &&
+        state->legend_map == state->map_id &&
+        yt2_map_view_draw_legend(&state->surface, &state->pictures,
+                                 &state->world,
+                                 (unsigned int)state->legend_line) !=
+            YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    return YT2_STATUS_OK;
+}
+
+static void play_map_open(play_state *state, unsigned int map)
+{
+    unsigned int saved_id = state->map_id;
+    int saved_line = state->legend_line;
+    unsigned int saved_map = state->legend_map;
+
+    /* B1 shows nothing when the map lookup fails (v_5110 == 0);
+       render first and open only on success. B1 also gates on the
+       0x9569 map-UI state (empty on a fresh game, so M no-ops
+       there); B2 shows ungated so the shortcut works. */
+    state->map_id = map;
+    state->legend_line = -1;
+    state->legend_map = map;
+    if (play_map_render(state) != YT2_STATUS_OK) {
+        state->map_id = saved_id;
+        state->legend_line = saved_line;
+        state->legend_map = saved_map;
+        if (state->have_combat) {
+            yt2_combat_repaint(&state->combat, explore_present, state);
+        }
+        return;
+    }
+    state->map_open = 1;
+    explore_present(state);
+    printf("play: map %u\n", map);
+}
+
+static void play_map_close(play_state *state)
+{
+    state->map_open = 0;
+    state->legend_line = -1;
+    if (state->have_combat) {
+        yt2_combat_repaint(&state->combat, explore_present, state);
+    }
+    printf("play: map done\n");
+}
+
 static void session_key(play_state *state, const yt2_input_event *event,
                         int *dirty)
 {
@@ -1370,6 +1433,12 @@ static void session_key(play_state *state, const yt2_input_event *event,
         /* Main-loop dispatch (tbl_KeyDispatch/tbl_ScanDispatch): arrows
            move, D opens the in-game menu, R opens the game menu (unported),
            everything else is silent (loc_00817 ignores ESC/Q/junk). */
+        if (state->map_open) {
+            /* fn_123E9 WaitKey: any key closes the map (consumed). */
+            play_map_close(state);
+            session_drain_sfx(state);
+            return;
+        }
         if (event->scancode == PLAY_SCAN_UP ||
             event->scancode == PLAY_SCAN_DOWN ||
             event->scancode == PLAY_SCAN_LEFT ||
@@ -1442,8 +1511,19 @@ static void session_key(play_state *state, const yt2_input_event *event,
             session_drain_sfx(state);
             return;
         }
+        if ((ascii == 'M' || ascii == 'L' || ascii == 'U') &&
+            state->have_combat && !state->combat.chest_open &&
+            !state->combat.chest_prompt &&
+            (state->room.f5064 & 0x1000u) == 0u) {
+            /* Overhead map (M=31, L=47, U=7); the modal owns input
+               while open, like vanilla's fn_073E3 loop. */
+            play_map_open(state, ascii == 'M' ? 31u : ascii == 'L' ? 47u :
+                                                               7u);
+            session_drain_sfx(state);
+            return;
+        }
         if (ascii == 'R' ||
-            ascii == 'M' || ascii == 'P' || ascii == 'S' ||
+            ascii == 'P' || ascii == 'S' ||
             ascii == 'T' || ascii == 'W' || ascii == 'C' ||
             ascii == 'A' || ascii == 'K' || ascii == 'V' ||
             ascii == ' ' || (ascii >= '1' && ascii <= '4')) {
@@ -1499,6 +1579,22 @@ static void session_click(play_state *state, int x, int y, int right,
         /* Modal/prompt clicks (loot, pack, portraits, opener pick).
            Explore clicks (arrows, portraits, viewport) land in
            later slices; the combat layer ignores them. */
+        if (state->map_open && !right) {
+            unsigned int line;
+
+            /* Marker legend (sub_03F6B); misses change nothing. */
+            if (yt2_map_view_legend_at(&state->world, state->map_id, x,
+                                       y, &line) == YT2_STATUS_OK) {
+                state->legend_line = (int)line;
+                state->legend_map = state->map_id;
+                if (play_map_render(state) == YT2_STATUS_OK) {
+                    explore_present(state);
+                }
+                *dirty = 1;
+            }
+            session_drain_sfx(state);
+            return;
+        }
         if (state->have_combat) {
             /* Presents happen inside (arrows flash/step); the room
                SFX logs like the key path. */
@@ -1853,6 +1949,12 @@ static int run_session(play_state *state, yt2_folder_out *out,
             int idle_explore;
             int idle_formal;
 
+            /* Map modal (fn_123E9 WaitKey): frozen (no ticks,
+               repaints, or presents); input still polls above and
+               presents on open/legend/close. */
+            if (state->map_open) {
+                continue;
+            }
             /* The room ticks its own clock/sky/rotation countdowns.
                Idle explore re-renders stale (B1's per-poll fn_10E6A:
                sprites advance under the palette); formal and modal
