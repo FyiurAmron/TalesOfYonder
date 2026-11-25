@@ -134,6 +134,268 @@ int yt2_video_encode_frame_end(uint8_t *out, size_t capacity)
     return 1;
 }
 
+/* Emit one `02` literal chunk; `pending` is 1..255. */
+static int flush_runs_literals(uint8_t *out, size_t capacity, size_t *length,
+                               const uint8_t *literals, unsigned int pending)
+{
+    if (*length + 2u + pending > capacity) {
+        return -1;
+    }
+    out[(*length)++] = 0x02u;
+    out[(*length)++] = (uint8_t)pending;
+    for (unsigned int i = 0u; i < pending; i++) {
+        out[(*length)++] = literals[i];
+    }
+    return 0;
+}
+
+/* One codec-1 row: runs of 3+ pixels as 00/01 split at 255, the rest merged
+ * into literal chunks of at most 255.  Returns the encoded length. */
+static int encode_runs_row(const uint8_t *pixels, unsigned int w, uint8_t *out,
+                           size_t capacity)
+{
+    uint8_t literals[255];
+    unsigned int pending = 0u;
+    unsigned int at = 0u;
+    size_t length = 0u;
+    uint8_t last = 0u;
+    int have_last = 0;
+
+    while (at < w) {
+        unsigned int run = 1u;
+
+        while (at + run < w && pixels[at + run] == pixels[at]) {
+            run++;
+        }
+        if (run < 3u) {
+            for (unsigned int i = 0u; i < run; i++) {
+                literals[pending++] = pixels[at];
+                if (pending == 255u) {
+                    if (flush_runs_literals(out, capacity, &length, literals,
+                                            pending) != 0) {
+                        return -1;
+                    }
+                    last = literals[254];
+                    have_last = 1;
+                    pending = 0u;
+                }
+            }
+            at += run;
+            continue;
+        }
+        if (pending > 0u) {
+            if (flush_runs_literals(out, capacity, &length, literals, pending) !=
+                0) {
+                return -1;
+            }
+            last = literals[pending - 1u];
+            have_last = 1;
+            pending = 0u;
+        }
+        {
+            unsigned int total = run;
+
+            while (run > 0u) {
+                unsigned int chunk = run > 255u ? 255u : run;
+
+                if (have_last && pixels[at] == last) {
+                    if (length + 2u > capacity) {
+                        return -1;
+                    }
+                    out[length++] = 0x00u;
+                    out[length++] = (uint8_t)chunk;
+                } else {
+                    if (length + 3u > capacity) {
+                        return -1;
+                    }
+                    out[length++] = 0x01u;
+                    out[length++] = (uint8_t)chunk;
+                    out[length++] = pixels[at];
+                }
+                last = pixels[at];
+                have_last = 1;
+                run -= chunk;
+            }
+            at += total;
+        }
+    }
+    if (pending > 0u &&
+        flush_runs_literals(out, capacity, &length, literals, pending) != 0) {
+        return -1;
+    }
+    if (length + 1u > capacity) {
+        return -1;
+    }
+    out[length++] = 0x03u;
+    return (int)length;
+}
+
+int yt2_video_encode_scroll(uint8_t *out, size_t capacity, int dy)
+{
+    if (out == NULL || capacity < 2u || dy < -128 || dy > 127) {
+        return -1;
+    }
+    out[0] = YT2_VIDEO_SCROLL;
+    out[1] = (uint8_t)(int8_t)dy;
+    return 2;
+}
+
+int yt2_tick_encode_tick(uint8_t *out, size_t capacity, uint32_t n)
+{
+    if (out == NULL || capacity < 5u) {
+        return -1;
+    }
+    out[0] = YT2_TICK_TICK;
+    put_le32(out + 1, n);
+    return 5;
+}
+
+int yt2_tick_encode_pace(uint8_t *out, size_t capacity, unsigned int ms)
+{
+    if (out == NULL || capacity < 3u || ms > 0xFFFFu) {
+        return -1;
+    }
+    out[0] = YT2_TICK_PACE;
+    put_le16(out + 1, ms);
+    return 3;
+}
+
+int yt2_video_encode_rect_runs(uint8_t *out, size_t capacity, unsigned int x,
+                               unsigned int y, unsigned int w, unsigned int h,
+                               const uint8_t *pixels)
+{
+    size_t length;
+
+    if (out == NULL || pixels == NULL || w == 0u || h == 0u || w > 0xFFFFu ||
+        h > 0xFFFFu || x > 0xFFFFu || y > 0xFFFFu ||
+        (size_t)w > (SIZE_MAX - 9u) / (size_t)h) {
+        return -1;
+    }
+    if (capacity < 9u) {
+        return -1;
+    }
+    out[0] = YT2_VIDEO_RECT;
+    put_le16(out + 1, x);
+    put_le16(out + 3, y);
+    put_le16(out + 5, w);
+    put_le16(out + 7, h);
+    length = 9u;
+    for (unsigned int row = 0u; row < h; row++) {
+        int encoded = encode_runs_row(pixels + (size_t)row * w, w,
+                                      out + length, capacity - length);
+
+        if (encoded < 0 ||
+            length + (size_t)encoded > YT2_PROTOCOL_MAX_FRAME) {
+            return -1;
+        }
+        length += (size_t)encoded;
+    }
+    return (int)length;
+}
+
+int yt2_audio_encode_opl_write(uint8_t *out, size_t capacity, unsigned int port,
+                               unsigned int reg, unsigned int val)
+{
+    if (out == NULL || capacity < 5u || port > 0xFFFFu || reg > 0xFFu ||
+        val > 0xFFu) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_OPL_WRITE;
+    put_le16(out + 1, port);
+    out[3] = (uint8_t)reg;
+    out[4] = (uint8_t)val;
+    return 5;
+}
+
+int yt2_audio_encode_opl_batch(uint8_t *out, size_t capacity,
+                               unsigned int count,
+                               const yt2_opl_write *writes)
+{
+    size_t need;
+
+    if (out == NULL || writes == NULL || count == 0u ||
+        count > YT2_AUDIO_BATCH_MAX) {
+        return -1;
+    }
+    need = 2u + (size_t)count * 4u;
+    if (capacity < need) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_OPL_BATCH;
+    out[1] = (uint8_t)count;
+    for (unsigned int i = 0u; i < count; i++) {
+        put_le16(out + 2u + (size_t)i * 4u, writes[i].port);
+        out[2u + (size_t)i * 4u + 2u] = writes[i].reg;
+        out[2u + (size_t)i * 4u + 3u] = writes[i].val;
+    }
+    return (int)need;
+}
+
+int yt2_audio_encode_ctrl(uint8_t *out, size_t capacity, unsigned int rate,
+                          unsigned int fmt, unsigned int on)
+{
+    if (out == NULL || capacity < 6u || rate > 0xFFFFu || fmt > 0xFFFFu ||
+        on > 0xFFu) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_CTRL;
+    put_le16(out + 1, rate);
+    put_le16(out + 3, fmt);
+    out[5] = (uint8_t)on;
+    return 6;
+}
+
+int yt2_audio_encode_opl_batch_timed(uint8_t *out, size_t capacity,
+                                     unsigned int port, unsigned int count,
+                                     const yt2_opl_timed_write *writes)
+{
+    size_t need;
+
+    if (out == NULL || writes == NULL || port > 0xFFFFu || count == 0u ||
+        count > YT2_AUDIO_BATCH_MAX) {
+        return -1;
+    }
+    need = 4u + (size_t)count * 6u;
+    if (capacity < need) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_OPL_BATCH_TIMED;
+    put_le16(out + 1, port);
+    out[3] = (uint8_t)count;
+    for (unsigned int i = 0u; i < count; i++) {
+        put_le32(out + 4u + (size_t)i * 6u, writes[i].pit);
+        out[4u + (size_t)i * 6u + 4u] = writes[i].reg;
+        out[4u + (size_t)i * 6u + 5u] = writes[i].val;
+    }
+    return (int)need;
+}
+
+int yt2_audio_encode_speaker(uint8_t *out, size_t capacity, unsigned int gate,
+                             unsigned int divisor, uint32_t pit)
+{
+    if (out == NULL || capacity < 8u || gate > 0xFFu || divisor > 0xFFFFu) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_SPEAKER;
+    out[1] = (uint8_t)gate;
+    put_le16(out + 2, divisor);
+    put_le32(out + 4, pit);
+    return 8;
+}
+
+int yt2_audio_encode_sample(uint8_t *out, size_t capacity, unsigned int id,
+                            uint32_t offset, uint32_t pit)
+{
+    if (out == NULL || capacity < 11u || id > 0xFFFFu) {
+        return -1;
+    }
+    out[0] = YT2_AUDIO_SAMPLE;
+    put_le16(out + 1, id);
+    put_le32(out + 3, offset);
+    put_le32(out + 7, pit);
+    return 11;
+}
+
 int yt2_control_encode_hello(uint8_t *out, size_t capacity, unsigned int role,
                              unsigned int version)
 {

@@ -18,6 +18,7 @@ MAGIC = 0x5954
 HDR = struct.Struct("<HBBBBII")
 FAMILY_VIDEO = 1
 FAMILY_AUDIO = 2
+FAMILY_TICK = 4
 FAMILY_CONTROL = 5
 TIMED_HEADER = struct.Struct("<4sHHIB3x")
 TIMED_EVENT = struct.Struct("<II")
@@ -168,6 +169,8 @@ def main():
     audio_controls = 0
     speaker_edges = 0
     sample_messages = 0
+    ticks = 0
+    paces = 0
     opl = {}                    # (port, register) -> value; the FM register file
 
     def save_frame(tag=None):
@@ -188,6 +191,14 @@ def main():
     for family, codec, seq, payload in records:
         if family == FAMILY_CONTROL:
             control += 1
+            continue
+        if family == FAMILY_TICK:
+            if payload[:1] == b"\x00" and len(payload) >= 5:
+                ticks += 1
+            elif payload[:1] == b"\x01" and len(payload) >= 3:
+                paces += 1
+            else:
+                print(f"replay: bad tick at seq {seq}", file=sys.stderr)
             continue
         if family == FAMILY_AUDIO:
             # AUDIO (family 2, docs/protocol.md): OPL register writes plus the
@@ -315,7 +326,8 @@ def main():
         print(f"palette updates: {pal_updates}, rects: {rects}, frames: {frames}, "
               f"control: {control}, audio: {audio_writes}w/{audio_batches}b/{audio_controls}c" +
               (f", speaker: {speaker_edges}" if speaker_edges else "") +
-              (f", samples: {sample_messages}" if sample_messages else ""))
+              (f", samples: {sample_messages}" if sample_messages else "") +
+              (f", ticks: {ticks}t/{paces}p" if ticks + paces else ""))
         print(f"distinct frames saved: {frames_saved} in {args.out}")
         if last_name:
             print(f"final frame: {os.path.join(args.out, last_name)}")

@@ -39,7 +39,7 @@ The first vertical slice is the state core and the save loader:
 | `include/yt2/items.h` | the categories, item details, info screens (F5) |
 | `include/yt2/walkthrough.h` | the 31-page walkthrough (F6) |
 | `include/yt2/cursor.h` | the software mouse cursor overlay |
-| `include/yt2/protocol.h` | companion protocol v0 framing + VIDEO/INPUT/CONTROL |
+| `include/yt2/protocol.h` | companion protocol v0 framing + VIDEO/INPUT/CONTROL/AUDIO |
 | `include/yt2/transport.h` | the YT2B folder link (OUTPUT.BIN/INPUT.BIN) |
 | `include/yt2/present.h` | the engine side of the VIDEO boundary |
 | `include/yt2/clock.h` | host monotonic clock for transport stamps |
@@ -55,7 +55,7 @@ The first vertical slice is the state core and the save loader:
 | `src/cluebook.c` | composes picture, text and the command icon bar |
 | `src/cursor.c` | draws the masked 16x16 cursor at a position |
 | `src/palette.c` | writes one rotation phase over D0h..DFh |
-| `src/protocol.c` | v0 frame/message encode + input decode |
+| `src/protocol.c` | v0 frame/message encode (codec-1 runs, AUDIO) + input decode |
 | `src/transport_folder.c` | timed YT2B writer, input follower |
 | `src/present.c` | presents with palette-span and row diffing |
 | `src/clock.c` | PIT-unit stamps, millisecond sleep |
@@ -133,7 +133,11 @@ click on the overhead map shows its legend.  The scroll icon
 opens the spells, the book the classes, the chest the items, the quill
 the walkthrough, the detail footer returns to the list, the EXIT icon
 quits, the mouse moves the hand cursor, Q quits.  `server-start.sh` and
-`client-start.sh` run either side alone.
+`client-start.sh` run either side alone.  The player emits one TICK pace
+record per session (the frame budget, 55 ms) and a tick counter after
+every frame; the client applies them and echoes `ticks=`/`paces=`, and
+the stream tools (`check_stream.py`, `replay.py`) check tick
+adjacency/monotonicity and replay at the recorded pace.
 
 The gate builds with `-Wall -Wextra -Wpedantic -Werror`, runs the unit tests,
 and on a real save compares `yt2p-info` output byte-for-byte with B1's
@@ -205,7 +209,9 @@ onto a black 320x200 surface and writes a PPM with the 6-bit palette expanded.
 
 1. the animated story cutscene and the boot/menu state machine;
 2. the clue-book list pages (F3-F6; F1 maps and F2 monsters done);
-3. boundary completion: row diffing, codec 1, scroll, AUDIO, TICK;
+3. boundary completion: row diffing (done), codec 1 (done, renders in
+   the C# client), AUDIO encoders (done; no live source yet - M9), scroll
+   (done), TICK (done: monotonic ticks + pace, gated);
 3. exploration, objects and scripted events;
 4. dialogue, combat, training/inventory/shops;
 5. the remaining data loaders and the companion host boundary.

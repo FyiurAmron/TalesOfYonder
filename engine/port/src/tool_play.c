@@ -183,7 +183,7 @@ static int parse_options(int argc, char **argv, play_options *options)
             }
         } else if (strcmp(argv[i], "--tick-ms") == 0 && i + 1 < argc) {
             if (!parse_unsigned(argv[++i], &options->tick_ms) ||
-                options->tick_ms == 0u) {
+                options->tick_ms == 0u || options->tick_ms > 0xFFFFu) {
                 fprintf(stderr, "yt2p-play: bad --tick-ms\n");
                 return 0;
             }
@@ -896,8 +896,10 @@ int main(int argc, char **argv)
     }
     if (render_scene(&state) != YT2_STATUS_OK ||
         yt2_present_hello(&presenter, &out) != YT2_STATUS_OK ||
+        yt2_present_pace(&presenter, &out, options.tick_ms) !=
+            YT2_STATUS_OK ||
         yt2_present_frame(&presenter, &out, &state.surface, &state.palette,
-                          1) != YT2_STATUS_OK) {
+                          1, state.tick) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-play: cannot present the first frame\n");
         goto done;
     }
@@ -960,7 +962,9 @@ int main(int argc, char **argv)
                 if (event.role == YT2_ROLE_CLIENT && event.version == 0 &&
                     !state.hello_sent) {
                     if (yt2_present_hello(&presenter, &out) !=
-                        YT2_STATUS_OK) {
+                            YT2_STATUS_OK ||
+                        yt2_present_pace(&presenter, &out, options.tick_ms) !=
+                            YT2_STATUS_OK) {
                         running = 0;
                     }
                     state.hello_sent = 1;
@@ -1049,7 +1053,8 @@ int main(int argc, char **argv)
             }
             if (render_scene(&state) != YT2_STATUS_OK ||
                 yt2_present_frame(&presenter, &out, &state.surface,
-                                  &state.palette, force) != YT2_STATUS_OK) {
+                                  &state.palette, force,
+                                  state.tick) != YT2_STATUS_OK) {
                 fprintf(stderr, "yt2p-play: cannot present\n");
                 break;
             }

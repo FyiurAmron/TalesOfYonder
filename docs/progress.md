@@ -2605,6 +2605,22 @@ items now live in `docs/roadmap.md`).
     `tools/yt3_spells.py` dumps either copy per file.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: codec 1 + AUDIO encoders:
+  - **codec 1**: the presenter emits run-coded row rects
+    (`yt2_video_encode_rect_runs`, fresh spec implementation); three B1
+    seam rows from `sample-video-rle.bin` (seq 138/139/197) are frozen
+    byte-for-byte, `check_stream.py` decodes runs, and the port gate's own
+    replay step plus `tests/port-live/run.sh` prove the C# client renders
+    the bytes.
+  - **AUDIO**: all six family encoders (opl_write/batch/timed, ctrl,
+    speaker, sample) with spec-pinned unit vectors; a throwaway probe fed
+    them to the headless client (`audio=5w/2b/1c speaker=2 samples=1`,
+    zero unknowns).  No live source yet - that waits for M9's sequencer.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
 - 2026-11-14 - YT2 spell-description patch (official + complete tables):
   - **match**: 97 of 105 YT2 spells name-match YT3's; `REGISTER.EXE` is
     the YT3 game (SW.BAT runs it) pointing at description copy B, and
@@ -2648,5 +2664,29 @@ items now live in `docs/roadmap.md`).
     clean; MINER'S LIGHT control shows effects work).  Grant count w13
     reads 0 in shipped data.  Delivery needs a placement click whose
     target is still unknown.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: scroll detection:
+  - **prescan**: the presenter scores +-8 shifts against the full shadow
+    (exact rows, not checksums; same 32/100 thresholds and tie order as
+    the seam/C detector, at any height) and emits scroll + residue rects;
+    keyframes always go out as rows.  `check_stream.py` applies scroll
+    and reads raw fixtures; the pan fixtures decode to twelve identical
+    frames both ways.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`.
+  - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
+    `c3bdd3054e55a1e0b57c9780654dc982`.
+- 2026-11-14 - M8/B2 boundary: TICK stream (boundary completion done):
+  - **wire**: `tick(n)` after every frame (codec 0, 6B payload, monotonic
+    mod 2^32, gaps allowed only for never-presented composes), `pace(ms)`
+    once per session + after hello re-send; the player paces itself with
+    nanosleep against the 55 ms budget.
+  - **receivers**: the C# client applies ticks in `ApplyTick` (renders
+    unchanged) and echoes `ticks=`/`paces=`; `replay.py` counts and
+    paces; `check_stream.py` checks adjacency, monotonicity and
+    pace-stability.
+  - **gates**: `sh engine/port/tests/run.sh` -> `port: OK`,
+    `sh tests/port-input/run.sh` -> `port-input: OK`,
+    `sh tests/port-live/run.sh` -> `port-live: OK`.
   - **not changed**: no assembly edit; `SWREG.EXE` remains MD5
     `c3bdd3054e55a1e0b57c9780654dc982`.
