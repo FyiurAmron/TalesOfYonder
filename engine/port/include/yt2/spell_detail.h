@@ -81,6 +81,18 @@ int yt2_spell_detail_render(yt2_surface *surface,
                             const yt2_spells *spells, unsigned int rank);
 
 /*
+ * The same page with EFFECT lines read live from WORLD files 6+7
+ * (yt2_spells_effect_lines) instead of the frozen vanilla bytes: the
+ * spelltext patch (tools/yt2_spelltext.py) shows through, while a vanilla
+ * world renders pixel-identical to the frozen table.  Validates the
+ * world bytes like the reader does.
+ */
+int yt2_spell_detail_render_world(yt2_surface *surface,
+                                  const yt2_pictures *pictures,
+                                  const yt2_spells *spells,
+                                  unsigned int rank);
+
+/*
  * Compose the detail page for a file index (the F4 spell lists address
  * spells this way; file 86, BEAM OF DEATH, has no F3 rank).  Nonzero
  * `f4_icons` selects the F4 icon bar, zero the F3 one.
@@ -89,5 +101,12 @@ int yt2_spell_detail_render_index(yt2_surface *surface,
                                   const yt2_pictures *pictures,
                                   const yt2_spells *spells,
                                   unsigned int file_index, int f4_icons);
+
+/* File-index form of yt2_spell_detail_render_world (see above). */
+int yt2_spell_detail_render_index_world(yt2_surface *surface,
+                                        const yt2_pictures *pictures,
+                                        const yt2_spells *spells,
+                                        unsigned int file_index,
+                                        int f4_icons);
 
 #endif /* YT2_SPELL_DETAIL_H */

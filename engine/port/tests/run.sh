@@ -53,10 +53,42 @@ if [ ! -f "$PICTURES" ]; then
     PICTURES=
 fi
 
+SPELLTEXT=
+SPELLTEXT_COMPLETE=
+if [ -n "$WORLD" ] && [ -f "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" ]; then
+    if ! python3 "$ROOT/tools/yt2_spelltext.py" "$WORLD" \
+            "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" \
+            "$RUN/world-spelltext.DAT" --check \
+            >"$RUN/spelltext.log" 2>&1; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: official spelltext patch failed" >&2
+        exit 1
+    fi
+    if ! python3 "$ROOT/tools/yt2_spelltext.py" "$WORLD" \
+            "$ROOT/_ref/orig-bin/YT3/WORLD.DAT" \
+            "$RUN/world-spelltext-complete.DAT" --complete --check \
+            >>"$RUN/spelltext.log" 2>&1; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: complete spelltext patch failed" >&2
+        exit 1
+    fi
+    if ! grep -q "92 spells patched" "$RUN/spelltext.log" || \
+       ! grep -q "105 spells patched" "$RUN/spelltext.log"; then
+        cat "$RUN/spelltext.log" >&2
+        echo "port: spelltext patch counts are wrong" >&2
+        exit 1
+    fi
+    SPELLTEXT="$RUN/world-spelltext.DAT"
+    SPELLTEXT_COMPLETE="$RUN/world-spelltext-complete.DAT"
+    echo "port: spelltext worlds patched (official 92, complete 105)"
+fi
+
 mkdir -p "$RUN/unit-tmp"
 YT2_SAVE="$SAVE" YT2_SAVE_ROUNDTRIP="$RUN/roundtrip.save" \
     YT2_SAVE_MOVED="$RUN/moved.save" YT2_WORLD="$WORLD" \
     YT2_PICTURES="$PICTURES" YT2_PORT_TMP="$RUN/unit-tmp" \
+    YT2_WORLD_SPELLTEXT="$SPELLTEXT" \
+    YT2_WORLD_SPELLTEXT_COMPLETE="$SPELLTEXT_COMPLETE" \
     "$BUILD/yt2p-tests" >"$RUN/tests.log"
 cat "$RUN/tests.log"
 

@@ -592,6 +592,39 @@ static const unsigned int spell_detail_f4_icons[YT2_LIST_ICON_COUNT] = {
 /* First private code; spell_effect_priv holds 18 glyphs of six bytes. */
 #define SPELL_EFFECT_PRIV_FIRST 0x80u
 
+/*
+ * EFFECT byte canonicalization: what the original draws for each raw WORLD
+ * byte, expressed in the port's own face (ASCII through the text face,
+ * 0x80-0x91 through the private glyphs).  Derived by aligning every
+ * vanilla file-7 record with the frozen table: zero conflicts, e.g. the
+ * control bytes render as the private symbols, 0xBC as backslash, 0xFF
+ * as '?', and '~' as an apostrophe.  Identity elsewhere.
+ */
+static const uint8_t spell_effect_canon[256] = {
+    0x00, 0x81, 0x82, 0x83, 0x04, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x0B,
+    0x8A, 0x0D, 0x0E, 0x0F, 0x8B, 0x8C, 0x12, 0x8D, 0x14, 0x15, 0x16, 0x8E,
+    0x18, 0x8F, 0x1A, 0x1B, 0x5C, 0x1D, 0x1E, 0x1F, 0x20, 0x21, 0x22, 0x23,
+    0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2A, 0x2B, 0x2C, 0x2D, 0x2E, 0x2F,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B,
+    0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+    0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53,
+    0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F,
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6A, 0x6B,
+    0x6C, 0x6D, 0x6E, 0x6F, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x78, 0x79, 0x7A, 0x7B, 0x7C, 0x7D, 0x27, 0x7F, 0x20, 0x81, 0x82, 0x83,
+    0x84, 0x85, 0x86, 0x87, 0x28, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,
+    0x90, 0x91, 0x92, 0x93, 0x91, 0x95, 0x96, 0x97, 0x98, 0x99, 0x9A, 0x9B,
+    0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 0x90, 0xA5, 0xA6, 0xA7,
+    0xA8, 0xA9, 0xAA, 0xAB, 0xAC, 0xAD, 0xAE, 0xAF, 0xB0, 0xB1, 0xB2, 0xB3,
+    0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB, 0x5C, 0xBD, 0xBE, 0xBF,
+    0x60, 0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0x68, 0x69, 0xCA, 0xCB,
+    0x6C, 0xCD, 0xCE, 0xCF, 0xD0, 0xD1, 0xD2, 0xD3, 0x74, 0xD5, 0xD6, 0xD7,
+    0x78, 0xD9, 0xDA, 0xDB, 0xDC, 0xDD, 0xDE, 0xDF, 0xE0, 0xE1, 0xE2, 0xE3,
+    0xE4, 0xE5, 0xE6, 0xE7, 0xE8, 0xE9, 0x2A, 0xEB, 0xEC, 0xED, 0x2E, 0xEF,
+    0xF0, 0xF1, 0x80, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB,
+    0xFC, 0xFD, 0xFE, 0x3F,
+};
+
 static void draw_private(yt2_surface *surface, int x, int y,
                          const uint8_t *glyph, uint8_t color)
 {
@@ -616,8 +649,12 @@ static void draw_private(yt2_surface *surface, int x, int y,
     }
 }
 
-/* An EFFECT line: normal bytes go through the text face, bytes at or above
- * SPELL_EFFECT_PRIV_FIRST index the private symbol glyphs. */
+/* Last private code; the table holds 0x80-0x91. */
+#define SPELL_EFFECT_PRIV_LAST 0x91u
+
+/* An EFFECT line: normal bytes go through the text face, bytes 0x80-0x91
+ * index the private symbol glyphs; higher bytes never occur in shipped
+ * data and are skipped (corrupt-data guard). */
 static void draw_effect_line(yt2_surface *surface, int x, int y,
                              const char *text, uint8_t color)
 {
@@ -631,6 +668,9 @@ static void draw_effect_line(yt2_surface *surface, int x, int y,
             if (length + 1u < sizeof(run)) {
                 run[length++] = (char)*at;
             }
+            continue;
+        }
+        if (*at > SPELL_EFFECT_PRIV_LAST) {
             continue;
         }
         if (length > 0u) {
@@ -670,7 +710,9 @@ static int render_index(yt2_surface *surface,
                           const yt2_pictures *pictures,
                           const char *name, const uint8_t *record,
                           const spell_detail_entry *entry,
-                          const unsigned int *icons)
+                          const unsigned int *icons,
+                          const char *const *effect,
+                          unsigned int effect_count)
 {
     const yt2_picture_group *group;
     const uint8_t *image;
@@ -760,15 +802,14 @@ static int render_index(yt2_surface *surface,
     yt2_text_draw(surface, YT2_SPELL_DETAIL_EFFECT_LABEL_X,
                   YT2_SPELL_DETAIL_EFFECT_Y, "EFFECT:",
                   YT2_SPELL_DETAIL_LABEL_COLOR);
-    for (unsigned int slot = 0u; slot < YT2_SPELL_DETAIL_EFFECT_SLOTS;
-         slot++) {
-        if (entry->effect[slot][0] == 0) {
+    for (unsigned int slot = 0u; slot < effect_count; slot++) {
+        if (effect[slot][0] == 0) {
             continue;
         }
         draw_effect_line(surface, YT2_SPELL_DETAIL_EFFECT_X,
                          YT2_SPELL_DETAIL_EFFECT_FIRST_Y +
                              (int)slot * YT2_SPELL_DETAIL_EFFECT_STEP,
-                         entry->effect[slot], YT2_SPELL_DETAIL_TEXT_COLOR);
+                         effect[slot], YT2_SPELL_DETAIL_TEXT_COLOR);
     }
 
     yt2_text_draw(surface, YT2_SPELL_DETAIL_FOOTER_X,
@@ -813,7 +854,9 @@ int yt2_spell_detail_render(yt2_surface *surface,
     }
     return render_index(surface, pictures, name, record,
                         &spell_details[spells->order[rank]],
-                        spell_detail_icons);
+                        spell_detail_icons,
+                        spell_details[spells->order[rank]].effect,
+                        YT2_SPELL_DETAIL_EFFECT_SLOTS);
 }
 
 int yt2_spell_detail_render_index(yt2_surface *surface,
@@ -837,5 +880,71 @@ int yt2_spell_detail_render_index(yt2_surface *surface,
         spells->bytes + YT2_SPELLS_OFFSET +
             (size_t)file_index * YT2_SPELLS_RECORD_SIZE,
         &spell_details[file_index],
+        f4_icons ? spell_detail_f4_icons : spell_detail_icons,
+        spell_details[file_index].effect,
+        YT2_SPELL_DETAIL_EFFECT_SLOTS);
+}
+
+static int render_index_world(yt2_surface *surface,
+                              const yt2_pictures *pictures,
+                              const yt2_spells *spells, unsigned int file_index,
+                              const unsigned int *icons)
+{
+    char name[YT2_SPELLS_NAME_SIZE + 1u];
+    char raw[YT2_SPELLS_EFFECT_MAX_LINES][YT2_SPELLS_EFFECT_REC];
+    char canon[YT2_SPELLS_EFFECT_MAX_LINES][YT2_SPELLS_EFFECT_REC];
+    const char *lines[YT2_SPELLS_EFFECT_MAX_LINES];
+    unsigned int count;
+
+    if (surface == NULL || surface->pixels == NULL || pictures == NULL ||
+        spells == NULL || spells->bytes == NULL ||
+        file_index >= YT2_SPELLS_COUNT) {
+        return YT2_STATUS_ERROR;
+    }
+    if (yt2_spell_name_by_index(spells, file_index, name, sizeof(name)) !=
+        YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    if (yt2_spells_effect_lines(spells, file_index, raw, &count) !=
+        YT2_STATUS_OK) {
+        return YT2_STATUS_ERROR;
+    }
+    for (unsigned int i = 0u; i < count; i++) {
+        size_t at = 0u;
+
+        while (raw[i][at] != '\0') {
+            canon[i][at] =
+                (char)spell_effect_canon[(unsigned char)raw[i][at]];
+            at++;
+        }
+        canon[i][at] = '\0';
+        lines[i] = canon[i];
+    }
+    return render_index(
+        surface, pictures, name,
+        spells->bytes + YT2_SPELLS_OFFSET +
+            (size_t)file_index * YT2_SPELLS_RECORD_SIZE,
+        &spell_details[file_index], icons, lines, count);
+}
+
+int yt2_spell_detail_render_world(yt2_surface *surface,
+                                  const yt2_pictures *pictures,
+                                  const yt2_spells *spells, unsigned int rank)
+{
+    if (spells == NULL || rank >= YT2_SPELLS_COUNT) {
+        return YT2_STATUS_ERROR;
+    }
+    return render_index_world(surface, pictures, spells,
+                              spells->order[rank], spell_detail_icons);
+}
+
+int yt2_spell_detail_render_index_world(yt2_surface *surface,
+                                        const yt2_pictures *pictures,
+                                        const yt2_spells *spells,
+                                        unsigned int file_index,
+                                        int f4_icons)
+{
+    return render_index_world(
+        surface, pictures, spells, file_index,
         f4_icons ? spell_detail_f4_icons : spell_detail_icons);
 }

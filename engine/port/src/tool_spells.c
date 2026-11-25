@@ -42,10 +42,16 @@ static int render_detail(int argc, char **argv)
     yt2_surface surface;
     unsigned long rank;
     int result = 1;
+    int spelltext = 0;
 
+    if (argc > 5 && strcmp(argv[argc - 1], "--spelltext") == 0) {
+        spelltext = 1;
+        argc--;
+    }
     if (argc != 5 && argc != 6) {
         fprintf(stderr,
-                "usage: %s PICTURES.VGA WORLD.DAT detail RANK [OUTDIR]\n",
+                "usage: %s PICTURES.VGA WORLD.DAT detail RANK [OUTDIR] "
+                "[--spelltext]\n",
                 argv[0]);
         return 2;
     }
@@ -71,8 +77,11 @@ static int render_detail(int argc, char **argv)
         fprintf(stderr, "yt2p-spells: cannot allocate the surface\n");
         goto done;
     }
-    if (yt2_spell_detail_render(&surface, &pictures, &spells,
-                                (unsigned int)rank) != YT2_STATUS_OK) {
+    if ((spelltext ? yt2_spell_detail_render_world(
+                           &surface, &pictures, &spells, (unsigned int)rank)
+                       : yt2_spell_detail_render(&surface, &pictures, &spells,
+                                                 (unsigned int)rank)) !=
+        YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-spells: cannot compose detail %lu\n", rank);
         yt2_surface_free(&surface);
         goto done;
@@ -108,10 +117,16 @@ static int render_detail_index(int argc, char **argv)
     yt2_surface surface;
     unsigned long file;
     int result = 1;
+    int spelltext = 0;
 
+    if (argc > 5 && strcmp(argv[argc - 1], "--spelltext") == 0) {
+        spelltext = 1;
+        argc--;
+    }
     if (argc != 5 && argc != 6) {
         fprintf(stderr,
-                "usage: %s PICTURES.VGA WORLD.DAT detail-index FILE [OUTDIR]\n",
+                "usage: %s PICTURES.VGA WORLD.DAT detail-index FILE [OUTDIR] "
+                "[--spelltext]\n",
                 argv[0]);
         return 2;
     }
@@ -137,9 +152,12 @@ static int render_detail_index(int argc, char **argv)
         fprintf(stderr, "yt2p-spells: cannot allocate the surface\n");
         goto done;
     }
-    if (yt2_spell_detail_render_index(&surface, &pictures, &spells,
-                                      (unsigned int)file,
-                                      1) != YT2_STATUS_OK) {
+    if ((spelltext ? yt2_spell_detail_render_index_world(
+                           &surface, &pictures, &spells, (unsigned int)file,
+                           1)
+                       : yt2_spell_detail_render_index(
+                             &surface, &pictures, &spells, (unsigned int)file,
+                             1)) != YT2_STATUS_OK) {
         fprintf(stderr, "yt2p-spells: cannot compose index %lu\n", file);
         yt2_surface_free(&surface);
         goto done;
@@ -184,8 +202,10 @@ int main(int argc, char **argv)
     }
     if (argc != 4 && argc != 5) {
         fprintf(stderr, "usage: %s PICTURES.VGA WORLD.DAT RANK [OUTDIR]\n"
-                        "       %s PICTURES.VGA WORLD.DAT detail RANK [OUTDIR]\n"
-                        "       %s PICTURES.VGA WORLD.DAT detail-index FILE [OUTDIR]\n",
+                        "       %s PICTURES.VGA WORLD.DAT detail RANK [OUTDIR] "
+                        "[--spelltext]\n"
+                        "       %s PICTURES.VGA WORLD.DAT detail-index FILE "
+                        "[OUTDIR] [--spelltext]\n",
                 argv[0], argv[0], argv[0]);
         return 2;
     }

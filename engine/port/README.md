@@ -112,7 +112,12 @@ model yet; they are preserved, not interpreted.
 presents them over the folder link, reads input back and steps the palette
 rotation on the engine tick.  Run it with the client in one command:
 
-    sh tools/play-port.sh
+    sh tools/play-port.sh [--spelltext | --spelltext-complete]
+
+`--spelltext` reads the F3 detail EFFECT lines live from WORLD.DAT, so a
+spelltext-patched world (`tools/yt2_spelltext.py`) shows its descriptions:
+the official 92-spell table, or all 105 with `--spelltext-complete` (13
+curated lines).  A vanilla world renders pixel-identical either way.
 
 (For a redistributable bundle instead: `sh tools/publish-linux.sh --server
 port --build`, then `build/dist/yt2-linux-x64/play.sh`.)
